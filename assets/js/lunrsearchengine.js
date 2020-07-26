@@ -11,7 +11,7 @@ var documents = [{
     "body": "If you are interested in our team, and you want to get information about us at the first time. You can scan the picture below by WeChat. [It’s our WeChat Public Account named chaos-gravity. ] Have Fun! "
     }, {
     "id": 2,
-    "url": "/about",
+    "url": "/authors",
     "title": "A website focus in AI",
     "body": "If you are interested in our team, and you want to get information about us at the first time. You can scan the picture below by WeChat. [It’s our WeChat Public Account named chaos-gravity. ] Have Fun! "
     }, {
@@ -31,7 +31,7 @@ var documents = [{
     "body": "    "
     }, {
     "id": 6,
-    "url": "/about",
+    "url": "/wechat",
     "title": "A website focus in AI",
     "body": "If you are interested in our team, and you want to get information about us at the first time. You can scan the picture below by WeChat. [It’s our WeChat Public Account named chaos-gravity. ] Have Fun! "
     }, {
