@@ -5,9 +5,29 @@
     <description>We are interested in Deep Learning, Machine Learning, Causality, Reinforcement Learning, and any other information or technologies about AI.</description>
     <link>/</link>
     <atom:link href="/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Wed, 29 Jul 2020 10:34:48 +0800</pubDate>
-    <lastBuildDate>Wed, 29 Jul 2020 10:34:48 +0800</lastBuildDate>
+    <pubDate>Wed, 29 Jul 2020 21:25:33 +0800</pubDate>
+    <lastBuildDate>Wed, 29 Jul 2020 21:25:33 +0800</lastBuildDate>
     <generator>Jekyll v3.8.7</generator>
+    
+      <item>
+        <title>Hello, World!</title>
+        <description>&lt;p&gt;现在是2020年2月22日，总觉得该做点什么。&lt;/p&gt;
+
+&lt;p&gt;不如敲行python代码吧！&lt;/p&gt;
+
+&lt;pre&gt;&lt;code class=&quot;language-python&quot;&gt;print(&quot;Hello, World!&quot;)
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;来日方长，请多关照！&lt;/p&gt;
+</description>
+        <pubDate>Sat, 22 Feb 2020 00:00:00 +0800</pubDate>
+        <link>/HelloWorld/</link>
+        <guid isPermaLink="true">/HelloWorld/</guid>
+        
+        
+        <category>HelloWorld</category>
+        
+      </item>
     
   </channel>
 </rss>

@@ -28,7 +28,7 @@ var documents = [{
     "id": 5,
     "url": "/",
     "title": "Home",
-    "body": "    "
+    "body": "                                                                                               Hello, World!              :       现在是2020年2月22日，总觉得该做点什么。:                                                                               Beer                 22 Feb 2020                                "
     }, {
     "id": 6,
     "url": "/wechat",
@@ -39,7 +39,12 @@ var documents = [{
     "url": "/robots.txt",
     "title": "",
     "body": "      Sitemap: {{ “sitemap. xml”   absolute_url }}   "
-    }, ];
+    }, {
+    "id": 8,
+    "url": "/HelloWorld/",
+    "title": "Hello, World!",
+    "body": "2020/02/22 - 现在是2020年2月22日，总觉得该做点什么。 不如敲行python代码吧！ print( Hello, World! )来日方长，请多关照！ "
+    }];
 
 var idx = lunr(function () {
     this.ref('id')
