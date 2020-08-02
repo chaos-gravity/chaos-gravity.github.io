@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Cross Entropy Loss | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Cross Entropy Loss | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Cross Entropy Loss" />
+<meta name="author" content="Beer" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="交叉熵度量的是两个概率分布的差异。" />
+<meta property="og:description" content="交叉熵度量的是两个概率分布的差异。" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="/assets/images/Cross_Entropy_Loss/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-08-03T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"交叉熵度量的是两个概率分布的差异。","url":"/cross-entropy-loss/","image":"/assets/images/Cross_Entropy_Loss/1.png","@type":"BlogPosting","headline":"Cross Entropy Loss","dateModified":"2020-08-03T00:00:00+08:00","datePublished":"2020-08-03T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"/cross-entropy-loss/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"/assets/images/logo.png"},"name":"Beer"},"author":{"@type":"Person","name":"Beer"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Cross Entropy Loss</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Beer.jpg" alt="Beer">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Beer</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-08-03">03 Aug 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Cross_Entropy_Loss/1.png" alt="Cross Entropy Loss">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>交叉熵</strong>度量的是两个概率分布的差异。</p>
+
+<p>要理解交叉熵，有很多小概念需要理解。</p>
+
+<p><strong>信息量</strong>，一个事件发生的概率越大，事件发生携带的信息量越小，发生的概率越小，事件发生携带的信息量越大。比如太阳从东边升起，这个事件如果发生了，我们可以从这个事件中获得的信息几乎是没有的。但是，如果哪天太阳从西边升起了，那么我们从这个事件中获得的信息量是极大的，一定发生了什么，或者即将发生什么，才造成了这个事件发生。</p>
+
+<p>假设X是一个离散型随机变量，概率分布函数为：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_005.png" alt="AltText" width="30%" /></p>
+
+<p>则定义<em>X</em> = <em>x</em>0事件发生携带的信息量为：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_011.png" alt="AltText" width="27%" /></p>
+
+<p>若<em>p</em>(<em>x</em>0)为0，也就是事件<em>x</em>0是不可能发生的事件，但是它却发生了，那么这个事件的信息量是无穷大的，<em>I</em>(<em>x</em>0)的值无穷大，如果<em>p</em>(<em>x</em>0)为1，也就是事件<em>x</em>0是一定会发生的事件，那么这个事件的发生是不带信息量的，<em>I</em>(<em>x</em>0)的值是0。</p>
+
+<p>另外，信息量可以这样理解 [2]：</p>
+
+<p>Information quantifies the number of bits required to encode and transmit an event.</p>
+
+<p>信息量可以被理解为，传输或表达这个信息需要的编码的位数。</p>
+
+<p><strong>信息熵</strong>，则是信息量的期望值：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_007.png" alt="AltText" width="30%" /></p>
+
+<p>参考[3]里给了一个例子：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_010.png" alt="AltText" width="100%" /></p>
+
+<p>每次开电脑，都可能会产生三种状况，电脑正常开机的概率是0.7，电脑无法开机的概率是0.2，电脑爆炸的概率是0.1。那么每次开机，得到的信息量的的期望值是：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_006.png" alt="AltText" width="60%" /></p>
+
+<p>如果是二项分布，那么信息熵的计算可以简化为：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_002.png" alt="AltText" width="55%" /></p>
+
+<p>事件的概率不均，信息熵较小，若各个事件发生的概率一样，信息熵较大。</p>
+
+<p>信息熵在[2]中的描述为：</p>
+
+<p>Entropy is the number of bits required to transmit a randomly selected event from a probability distribution.</p>
+
+<p>熵是表达或者传输一个遵循特定概率分布的随机事件需要的位数，个人觉得the number of应该改成the average number of，位数前面应该有个平均，和期望的概念对应上。但也可能是我哪里理解错了。</p>
+
+<p><strong>相对熵</strong>(<strong>relative entropy</strong>)，又称之为KL散度(Kullback-Leibler (KL) divergence)，公式：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_008.png" alt="AltText" width="40%" /></p>
+
+<p>相对熵的目标是：计算用<em>P</em>描述目标问题，比<em>Q</em>描述目标问题能获得的信息增量。</p>
+
+<p>如果分布<em>P</em>和分布<em>Q</em>是一样的，那么相对熵是0，如果不一样，相对熵大于0，越大，表示两种分布之间的差距越大。</p>
+
+<p>在机器学习的项目中，通常<em>P</em>表示真实的分布，即需要训练模型达到的分布，<em>Q</em>是现在用的模型预测的分布。</p>
+
+<p>相对熵在参考[2]中的描述是：</p>
+
+<p>In other words, the KL divergence is the average number of extra bits  needed to encode the data, due to the fact that we used distribution q  to encode the data instead of the true distribution p.</p>
+
+<p>— Page 58, Machine Learning: A Probabilistic Perspective, 2012.</p>
+
+<p>交叉熵是，当我们用分布q来替代事件真实遵循的分布p时，传输和表达事件时，比使用分布p多需要的平均位数。也就是q是我们用的分布，p是事件真实遵循的分布，用q的话，比用p需要更多的位数来表达和传输这个事件，平均多多少呢，交叉熵就是这个多出来的多少。</p>
+
+<p><strong>交叉熵</strong>(<strong>Cross entropy</strong>)，将相对熵公式变形：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_009.png" alt="AltText" width="60%" /></p>
+
+<p>前半部分是信息熵的负值，后半部分则是交叉熵，交叉熵的公式是：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640.png" alt="AltText" width="40%" /></p>
+
+<p>因为<em>P</em>的信息熵是一定的，那么其实是可以省略这部分计算的，交叉熵和相对熵的意义是一样的。只是最后计算出的值，区间不一样。</p>
+
+<p>交叉熵在参考[2]中的描述是：</p>
+
+<p>…, the cross entropy is the average number of bits needed to encode data  coming from a source with distribution p when we use model q, …
+  — Page 57, Machine Learning: A Probabilistic Perspective, 2012</p>
+
+<p>交叉熵是当你用模型q来预测分布p时，表达和传输事件需要的平均位数。</p>
+
+<p>以下定义来自参考[2]，俺就不翻了:</p>
+
+<p><strong>Cross-Entropy</strong>: Average number of total bits to represent an event from Q instead of P.
+<strong>Relative Entropy</strong> (<em>KL Divergence</em>): Average number of extra bits to represent an event from Q instead of P.</p>
+
+<p><strong>Cross-Entropy Loss 和 Softmax Loss</strong></p>
+
+<p>毫无疑问，交叉熵可以用作损失函数，且比起MSE，MAE，要优秀不少，</p>
+
+<p>… using the cross-entropy error function instead of the sum-of-squares  for a classification problem leads to faster training as well as  improved generalization. — Page 235, Pattern Recognition and Machine Learning, 2006.</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640.jpeg" alt="AltText" width="80%" /></p>
+
+<p>结合上面猫狗分类的案例，假如有一张猫图输入，<em>P</em>是[1, 0], <em>Q</em>是[0.71, 0.29]，交叉熵的计算为：</p>
+
+<p>H(P, Q) = – (P(cat) * log(Q(cat)) + P(dog) * log(Q(dog)))</p>
+
+<p>值得注意的是，在很多多分类问题中，不论有多少类，P不论有多少个元素，都只有一个为1，其他都为0，所以交叉熵的计算可以化简，也就是说如果P(cat)为1，那么交叉熵的结果和Q(dog)，Q(car)，Q(any other)是无关的：</p>
+
+<p>H(P, Q) = – log(Q(cat))</p>
+
+<p>因此，如果Q(cat)是用<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a> Function计算出来的，那么H(P, Q)计算得到的就是该样本在该模型下的Softmax Loss。</p>
+
+<p><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a> Function专门有一篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a></p>
+
+<p><strong>Softmax Loss</strong>的完整公式如下：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_003.png" alt="AltText" width="50%" /></p>
+
+<p>N是样本数量，n是class的数量，特征向量的长度为<em>d</em>，<em>Wj</em>是<em>W</em>的第<em>j</em>列，和<em>b</em>一起是获得特征向量的全连接层，<em>W</em>是<em>d*n</em>，<em>bj</em>的长度是<em>n</em>。log后面则是用Softmax Function计算出的‘Q(cat)’。</p>
+
+<p>因此，其实本来没有什么Softmax Loss的概念，这个公式是在多分类任务中使用Softmax Function+Cross Entropy loss产生的。</p>
+
+<p><strong>Cross Entropy Loss 和 Log Loss [4]</strong></p>
+
+<p>她俩在解决二分类问题的时候，其实是一回事，不服气的看公式：</p>
+
+<p><img src="../assets/images/Cross_Entropy_Loss/640_004.png" alt="AltText" width="70%" /></p>
+
+<p>这个公式既叫Binary Cross-Entropy，也叫Log Loss，y是label，p(y)是预测结果，符号和之前的公式没有一一对应，看的时候注意一下。</p>
+
+<p>Log Loss的推导基于最大似然估计(Maximum Likelihood)和伯努利分布(Bernoulli distribution)，有机会写一篇。</p>
+
+<p>那么<strong>Cross Entropy的值</strong>为多少时，表示预测的结果还挺准确的呢？这里参考[2]给了个一些参考，具体问题还要具体分析。</p>
+
+<p><strong>Cross-Entropy = 0.00</strong>: Perfect probabilities.
+ <strong>Cross-Entropy &lt; 0.02</strong>: Great probabilities.
+ <strong>Cross-Entropy &lt; 0.05</strong>: On the right track.
+ <strong>Cross-Entropy &lt; 0.20</strong>: Fine.
+ <strong>Cross-Entropy &gt; 0.30</strong>: Not great.
+ <strong>Cross-Entropy &gt; 1.00</strong>: Terrible.
+ <strong>Cross-Entropy &gt; 2.00</strong> Something is broken.</p>
+
+<p>参考：</p>
+
+<p>[1] Thomas Wood，Softmax Function Definition, DeepAI</p>
+
+<p>[2] Jason Brownlee，A Gentle Introduction to Cross-Entropy for Machine Learning，2019</p>
+
+<p>[3] 史丹利复合田，一文搞懂交叉熵在机器学习中的使用，透彻理解交叉熵背后的直觉，CSDN，2018</p>
+
+<p>[4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Cross Entropy Loss&url=/cross-entropy-loss/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=/cross-entropy-loss/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=/cross-entropy-loss/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Loss-Function">Loss Function</a>                
+    
+
+    <!-- Tags -->  
+    
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Softmax/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Softmax/softmax" alt="Softmax"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Softmax/">Softmax</a>
+                
+            </h2>
+            <h4 class="card-text">​		Softmax，这个概念参考[1]解释的非常仔细，这里只做简述，先上公式：
+
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Beer.jpg" alt="Beer">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Beer</a></span> 
+                
+                <span class="post-date">09 Jul 2020</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2020 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>
