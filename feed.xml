@@ -3,10 +3,10 @@
   <channel>
     <title>Chaos万有引力</title>
     <description>We are interested in Deep Learning, Machine Learning, Causality, Reinforcement Learning, and any other information or technologies about AI.</description>
-    <link>https://chaos-gravity.github.iohttps://chaos-gravity.github.io/</link>
-    <atom:link href="https://chaos-gravity.github.iohttps://chaos-gravity.github.io/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Mon, 03 Aug 2020 18:47:46 +0800</pubDate>
-    <lastBuildDate>Mon, 03 Aug 2020 18:47:46 +0800</lastBuildDate>
+    <link>https://chaos-gravity.github.io/</link>
+    <atom:link href="https://chaos-gravity.github.io/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Mon, 03 Aug 2020 18:51:45 +0800</pubDate>
+    <lastBuildDate>Mon, 03 Aug 2020 18:51:45 +0800</lastBuildDate>
     <generator>Jekyll v3.8.7</generator>
     
       <item>
@@ -156,8 +156,8 @@
 &lt;p&gt;[4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018&lt;/p&gt;
 </description>
         <pubDate>Mon, 03 Aug 2020 00:00:00 +0800</pubDate>
-        <link>https://chaos-gravity.github.iohttps://chaos-gravity.github.io/cross-entropy-loss/</link>
-        <guid isPermaLink="true">https://chaos-gravity.github.iohttps://chaos-gravity.github.io/cross-entropy-loss/</guid>
+        <link>https://chaos-gravity.github.io/cross-entropy-loss/</link>
+        <guid isPermaLink="true">https://chaos-gravity.github.io/cross-entropy-loss/</guid>
         
         
         <category>Loss Function</category>
@@ -215,8 +215,8 @@
 &lt;p&gt;​&lt;/p&gt;
 </description>
         <pubDate>Thu, 09 Jul 2020 00:00:00 +0800</pubDate>
-        <link>https://chaos-gravity.github.iohttps://chaos-gravity.github.io/Softmax/</link>
-        <guid isPermaLink="true">https://chaos-gravity.github.iohttps://chaos-gravity.github.io/Softmax/</guid>
+        <link>https://chaos-gravity.github.io/Softmax/</link>
+        <guid isPermaLink="true">https://chaos-gravity.github.io/Softmax/</guid>
         
         
         <category>Loss Function</category>
@@ -236,8 +236,8 @@
 
 </description>
         <pubDate>Sat, 22 Feb 2020 00:00:00 +0800</pubDate>
-        <link>https://chaos-gravity.github.iohttps://chaos-gravity.github.io/HelloWorld/</link>
-        <guid isPermaLink="true">https://chaos-gravity.github.iohttps://chaos-gravity.github.io/HelloWorld/</guid>
+        <link>https://chaos-gravity.github.io/HelloWorld/</link>
+        <guid isPermaLink="true">https://chaos-gravity.github.io/HelloWorld/</guid>
         
         
         <category>HelloWorld</category>
