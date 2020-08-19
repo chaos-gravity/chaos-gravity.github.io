@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型" />
+<meta name="author" content="Beer" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型" />
+<meta property="og:description" content="上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型" />
+<link rel="canonical" href="https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/" />
+<meta property="og:url" content="https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="https://chaos-gravity.github.io/assets/images/Causal_Induction_Stanford_2019/Goal_Conditioned_Policy.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-08-19T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型","url":"https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/","image":"https://chaos-gravity.github.io/assets/images/Causal_Induction_Stanford_2019/Goal_Conditioned_Policy.png","@type":"BlogPosting","headline":"换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型","dateModified":"2020-08-19T00:00:00+08:00","datePublished":"2020-08-19T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://chaos-gravity.github.io/assets/images/logo.png"},"name":"Beer"},"author":{"@type":"Person","name":"Beer"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Beer.jpg" alt="Beer">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Beer</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-08-19">19 Aug 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Causal_Induction_Stanford_2019/Goal_Conditioned_Policy.png" alt="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483943&amp;idx=1&amp;sn=e7d03ad7c104d57aabfe2724de320804&amp;chksm=c06760e5f710e9f365a0c2985ca1737a7637ddcd73d0394452c7cdbe95870a5ebdec8312f06f&amp;scene=21#wechat_redirect">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型</a></strong></p>
+
+<p><strong>系列第一篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect"><strong>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</strong></a></p>
+
+<p>今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中策略学习模型的部分。这篇是这篇论文的终篇。终于从坑里爬出来啦。</p>
+
+<p>官方源代码地址：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">StanfordVL</span><span class="o">/</span><span class="n">causal_induction</span>
+</code></pre></div></div>
+
+<p><strong>策略学习模型(Learning Goal-Conditioned Policies)</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">python3</span> <span class="n">learn_planner</span><span class="p">.</span><span class="n">py</span> <span class="o">--</span><span class="n">horizon</span> <span class="mi">7</span> <span class="o">--</span><span class="n">num</span> <span class="mi">7</span> <span class="o">--</span><span class="n">fixed</span><span class="o">-</span><span class="n">goal</span> <span class="mi">0</span> <span class="o">--</span><span class="n">structure</span> <span class="n">one_to_one</span> <span class="o">--</span><span class="n">method</span> <span class="n">trajFi</span> <span class="o">--</span><span class="n">seen</span> <span class="mi">10</span> <span class="o">--</span><span class="n">images</span> <span class="mi">1</span> <span class="o">--</span><span class="n">data</span><span class="o">-</span><span class="nb">dir</span> <span class="n">output</span><span class="o">/</span>
+</code></pre></div></div>
+
+<p>先回顾一下各个参数的意思：</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Causal_Induction_Network.jpeg" alt="AltText" width="90%" /></p>
+
+<p>horizon是上图中<em>H</em>的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal  conditioned，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的控制模式，有如下四类：</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Causal_Structures.png" alt="AltText" width="40%" /></p>
+
+<p>每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，如果有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练因果模型的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数用于设定参与因果归纳模型训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示因果模型训练的输入是场景图片，而如果设为0，则因果模型的训练输入是灯的状态向量。data_dir，数据的存储路径。</p>
+
+<p>method是这篇最重要的一个参数，在这篇，method分三大类，第一类是gt，gt是ground  truth的意思，即参与策略模型训练的因果关系用的是真实的因果关系，而不是通过因果归纳模型得到的因果关系。第二类则有用因果归纳模型，和上篇的对应是，trajF为TCIN，trajFia是ICIN，trajFi为ICIN (No  Attn)，即参与策略模型训练的因果关系是由因果模型推断出来的，而不是绝对正确的。第三类是trajlstm，是2019年在ICLR发表的一篇解决相同问题的方法《Causal Reasoning from Meta-reinforcement  Learning》，用的是lstm网络，基本思路是先将所有开关操作一遍，并将场景图和操作输入网络，期望网络能归纳出因果关系，之后再输入场景图和目标图，得到策略。</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Causal_Reasoning_Deep_Mind_2019.png" alt="AltText" width="80%" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">memsize</span> <span class="o">=</span> <span class="mi">10000</span>
+<span class="n">memory</span> <span class="o">=</span> <span class="p">{</span><span class="s">'state'</span><span class="p">:[],</span> <span class="s">'graph'</span><span class="p">:[],</span> <span class="s">'action'</span><span class="p">:[]}</span>
+</code></pre></div></div>
+
+<p>​    memory是训练过程中记录信息的，其中state记录的是当前场景图和目标场景图，graph记录的是因果向量，action记录的是接下来应该要执行的动作，这里要注意，可以把这里的记录的action看成是ground truth，而这个action并不一定会被策略选中，和下一步真正执行的action又是不同的。而memsize则用来控制memory的长度。</p>
+
+<p>策略学习模型调用：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span>  <span class="n">args</span><span class="p">.</span><span class="n">method</span><span class="o">==</span><span class="s">'trajlstm'</span><span class="p">:</span>
+    <span class="n">pol</span> <span class="o">=</span> <span class="n">BCPolicyMemory</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">pol</span> <span class="o">=</span> <span class="n">BCPolicy</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="bp">True</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">optimizer</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">optim</span><span class="p">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">pol</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>trajlstm用BCPolicyMemory做策略学习模型，其他用BCPolicy做策略学习模型，这两个策略模型相似度高，可以一起看:</p>
+
+<p><strong>1. BCPolicy和BCPolicyMemory</strong>：
+  BCPloclicy要实现的是下面这个策略学习网络，结合了因果归纳和Attention机制，而BCPolicyMemory是一个基于LSTM的策略学习网络。</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Goal_Conditioned_Policy.png" alt="AltText" width="80%" /></p>
+
+<p><strong>1.1 初始化</strong>
+  两个网络初始化部分<strong>不相同</strong>，上图是BCPolicy的网络结构图，有attention机制，BCPolicyMemory没有：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">structure</span><span class="p">,</span> <span class="n">attention</span> <span class="o">=</span> <span class="bp">False</span><span class="p">):</span> <span class="c1">#BCPolicy
+</span><span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">structure</span><span class="p">):</span> <span class="c1">#BCPolicyMemory
+</span></code></pre></div></div>
+
+<p>定义了三个<strong>相同</strong>的卷积池化激励层和一个全连接层，这部分主要用来做图的encoding，将目标场景图和状态场景图转换成一个向量：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">nn</span><span class="p">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="c1"># 32×32×6-&gt;32×32×8    		   
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>  <span class="c1"># 32×32×8-&gt;16×16×8
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">),)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">nn</span><span class="p">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="c1"># 16×16×8-&gt;16×16×16
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>  <span class="c1"># 16×16×16-&gt;8×8×16
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">),)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv3</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span>
+    <span class="n">nn</span><span class="p">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="c1"># 8×8×16-&gt;8×8×32    
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">MaxPool2d</span><span class="p">(</span><span class="n">kernel_size</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">),</span>  <span class="c1"># 8×8×32-&gt;4×4×32    
+</span>    <span class="n">nn</span><span class="p">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">),)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">*</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span> <span class="c1"># 4×4×32-&gt;128
+</span></code></pre></div></div>
+
+<p>BCPolicy的其他部分，不全，只贴有部分：</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">attlayer</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="c1"># 128-&gt;num
+</span><span class="bp">self</span><span class="p">.</span><span class="n">softmax</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Softmax</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>   <span class="c1"># 对最后那个维度做Softmax
+</span><span class="k">if</span> <span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">ins</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span> <span class="o">+</span> <span class="mi">1</span>         <span class="c1"># masterswitch的gt向量比其他结构的gt向量长num,最后num个位置记录的是master switch的位置。
+</span><span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">ins</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span>
+<span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="p">.</span><span class="n">att</span><span class="p">:</span>                    <span class="c1"># 如果没有attention机制
+</span>    <span class="k">if</span> <span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">gfc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">num</span> <span class="o">+</span> <span class="n">num</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span> <span class="c1"># num*(num+1) -&gt; 128
+</span>    <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">gfc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num</span><span class="o">*</span><span class="n">num</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span> <span class="c1"># num*num-&gt;128
+</span><span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gfc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span>  <span class="c1"># num-&gt;128
+</span><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="o">+</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span> <span class="c1"># 256+num -&gt;64
+</span><span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span> <span class="c1"># 256-&gt;64
+</span><span class="bp">self</span><span class="p">.</span><span class="n">fc5</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="c1"># 64 -&gt; num
+</span><span class="bp">self</span><span class="p">.</span><span class="n">softmax</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Softmax</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># 对最后一维做softmax]
+</span></code></pre></div></div>
+<p>masterswitch的gt向量比其他结构的gt向量长num个，记录的是master switch的位置。</p>
+
+<p>BCPolicyMemory其他部分：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">aenc</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">128</span><span class="p">)</span> <span class="c1"># num+1 -&gt; 128
+</span><span class="bp">self</span><span class="p">.</span><span class="n">lstm</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">LSTMCell</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>  
+<span class="bp">self</span><span class="p">.</span><span class="n">fc2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">64</span><span class="p">)</span> <span class="c1"># 256-&gt;64
+</span><span class="bp">self</span><span class="p">.</span><span class="n">fc5</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="n">num</span><span class="p">)</span> <span class="c1"># 64-&gt;num
+</span></code></pre></div></div>
+
+<p>这段代码的核心是lstm的定义，用的是LSTMCell，这篇就不提LSTM的网络结构和特点了，只说一下，pytorch中除了LSTMCell，还有一个LSTM，可以直接构造多层LSTM。那LSTMCell不能直接构造多层结构，即一个Cell，第一个参数是feature的长度，第二个参数是记忆单元和隐藏单元hidden的长度。</p>
+
+<p><strong>1.2 BCPolicy和BCPolicyMemory前向传播forward部分：</strong></p>
+
+<p><strong>不同</strong>：函数入口</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">gr</span><span class="p">):</span>   <span class="c1"># BCPolicy
+</span><span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">hidden</span><span class="p">):</span> <span class="c1"># BCPolicyMemory
+</span></code></pre></div></div>
+
+<p>两个网络的输入x都是goal image和current image组合的32×32×6的tensor。gr是开关和灯的因果关系向量，当method是gt的时候，gr是真实的因果关系向量，是groud  truth。而当method是trajF，trajFia，或trajFi时，gr则是因果归纳模型归纳出的因果关系向量。</p>
+
+<p>当method是trajlstm时，用的策略模型是BCPolicyMemory，其中x是场景图，a是动作，hidden则是LSTM的记忆单元和隐藏单元。</p>
+
+<p><strong>相同</strong>：如网络结构图，goal image和current image组合的32×32×6的tensor x都会经过一个Observation Encoder输出e3,再经过全连接层输出encoding:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">x</span> <span class="o">=</span> <span class="n">x</span><span class="p">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">).</span><span class="n">contiguous</span><span class="p">()</span> <span class="c1"># 维度换位，将通道维度移前
+</span><span class="n">e1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>       <span class="c1"># 32×32×6-&gt;16×16×8
+</span><span class="n">e2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv2</span><span class="p">(</span><span class="n">e1</span><span class="p">)</span>     <span class="c1"># 16×16×8-&gt;8×8×16
+</span><span class="n">e3</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv3</span><span class="p">(</span><span class="n">e2</span><span class="p">)</span>     <span class="c1"># 8×8×16-&gt;4×4×32
+</span><span class="n">e3</span> <span class="o">=</span> <span class="n">e3</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="n">e3</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>    <span class="c1"># 转成一维向量，前面是batchsize, 后面是向量长度
+</span><span class="n">encoding</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">e3</span><span class="p">))</span>   <span class="c1"># 4×4×32-&gt;128
+</span></code></pre></div></div>
+
+<p>BCPolicy的其他部分：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">att</span><span class="p">:</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">softmax</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">attlayer</span><span class="p">(</span><span class="n">encoding</span><span class="p">))</span> <span class="c1"># 128-&gt;num, softmax
+</span>    <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span> <span class="c1"># 将master switch的因果关系与其他因果关系的分开
+</span>        <span class="n">ms</span> <span class="o">=</span> <span class="n">gr</span><span class="p">.</span><span class="n">view</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">ins</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+        <span class="n">gr</span> <span class="o">=</span> <span class="n">gr</span><span class="p">.</span><span class="n">view</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">ins</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">gr</span> <span class="o">=</span> <span class="n">gr</span><span class="p">.</span><span class="n">view</span><span class="p">((</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">ins</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="n">gr_sel</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">bmm</span><span class="p">(</span><span class="n">gr</span><span class="p">,</span> <span class="n">w</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="n">w</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span> <span class="c1"># 因果关系矩阵×状态和目标向量 -&gt;num
+</span>    <span class="n">gr_sel</span> <span class="o">=</span> <span class="n">gr_sel</span><span class="p">.</span><span class="n">squeeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>   <span class="c1"># 若最后一维长度为1,消去
+</span>    <span class="n">g1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">gfc1</span><span class="p">(</span><span class="n">gr_sel</span><span class="p">))</span>  <span class="c1"># num-&gt;128
+</span><span class="k">else</span><span class="p">:</span>
+    <span class="n">g1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">gfc1</span><span class="p">(</span><span class="n">gr</span><span class="p">))</span>    <span class="c1"># num*(num+1)-&gt; 128 或者 num*num-&gt; 128
+</span><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="n">eout</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">g1</span><span class="p">,</span> <span class="n">encoding</span><span class="p">,</span> <span class="n">ms</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># 128 + 128 + num
+</span><span class="k">else</span><span class="p">:</span>
+    <span class="n">eout</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">g1</span><span class="p">,</span> <span class="n">encoding</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>      <span class="c1"># 128 + 128
+</span><span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">eout</span><span class="p">))</span>     <span class="c1"># 256+num -&gt; 64 或者 256 -&gt; 64 
+</span><span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc5</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>    <span class="c1"># 64 -&gt; num
+</span><span class="k">return</span> <span class="n">a</span>
+</code></pre></div></div>
+<p>如果有attention机制，首先会让状态场景图和目标场景图融合生成的encoding经过一个全连接层，生成因果关系图的attention向量，和因果关系相乘，得到需要重点关注的因果关系，然后再转换成因果向量，和encoding融合后通过两层全连接层得到最后的动作向量。
+  归纳为公式，则是：</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Goal_Conditioned_Policy_eq.png" alt="AltText" width="80%" /></p>
+
+<p><em>s</em>是状态场景图，<em>g</em>是目标场景图，<em>E</em>对应的就是网络结构图中的Observation Encoder，<em>φi</em>是全连阶层，<em>α</em>是attention向量，<em>Ĉ</em>是因果归纳模型预测的因果关系，e是selected edges，a是模型提议的策略。</p>
+
+<p>BCPolicyMemory其他部分：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">ae</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">aenc</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c1"># num+1 -&gt; 128
+</span><span class="n">eout</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">ae</span><span class="p">,</span> <span class="n">encoding</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>  <span class="c1"># 128+128-&gt;256
+</span><span class="k">if</span> <span class="n">hidden</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+    <span class="n">hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">lstm</span><span class="p">(</span><span class="n">eout</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">hidden</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">lstm</span><span class="p">(</span><span class="n">eout</span><span class="p">,</span> <span class="n">hidden</span><span class="p">)</span> <span class="c1"># （256，256）
+</span><span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">hidden</span><span class="p">[</span><span class="mi">0</span><span class="p">]))</span> <span class="c1"># 256-&gt;64
+</span><span class="n">a</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">fc5</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>    <span class="c1"># 64 -&gt; num
+</span><span class="k">return</span> <span class="n">a</span><span class="p">,</span> <span class="n">hidden</span>
+</code></pre></div></div>
+
+<p>这里每次都会输入一个action向量，将其转换成128长的向量，然后再和128长的场景图向量拼接在一起组成一个256长的向量，最开始的时候hidden不做输入，之后就用上一次跑lstm产生的hidden来做输入，这里的hidden包含了lstm中的隐藏单元和记忆单元，接下来提取隐藏单元，通过两层全连接网络生成动作向量。</p>
+
+<p><strong>2. 策略训练代码：</strong>
+   method有三大类，gt是一类，gt是ground  truth的意思，也就是说参与策略模型训练的因果关系用的是真实的因果关系，而第二类method，trajF，trajFi，或trajFia，参与训练的因果关系则是因果模型计算得到的因果关系，不是真正的因果关系。第三类method是trajlstm，这个方法没有独立的因果归纳模型，但是其实有因果归纳的步骤。每一类都有一组训练代码，重合度很高，所以一起讲。</p>
+
+<p><strong>2.1 初始化环境：</strong></p>
+
+<p>三类method都是<strong>相同</strong>的</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">l</span> <span class="o">=</span> <span class="n">LightEnv</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="o">*</span><span class="mi">2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="s">"gt"</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="n">gc</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="n">fname</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">seen</span><span class="p">)</span>
+<span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span> <span class="o">=</span> <span class="bp">False</span>
+</code></pre></div></div>
+
+<p>和之前初始化环境不同的是horizon位置上的输入变成了2×args.horizon，决定了l.step()的最长步数。cond的输入变成了”gt”，l._get_obs()函数输出的状态向量o会包含l.gt，即现在这个环境使用的因果向量，而l._get_obs(images=True)只会返回当前因果和开关状态下的场景图。如果l.keep_struct = False，那么每次l.reset()都有可能会改变因果关系</p>
+
+<p>当method是<code class="language-plaintext highlighter-rouge">trajlstm</code>是，memsize设定为了100。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">memsize</span> <span class="o">=</span> <span class="mi">100</span>
+</code></pre></div></div>
+
+<p><strong>2.2 策略训练训练：</strong></p>
+
+<p><strong>相同</strong>的部分：</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">mep</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100000</span><span class="p">):</span>
+    <span class="n">l</span><span class="p">.</span><span class="n">train</span> <span class="o">=</span> <span class="bp">True</span>
+    <span class="n">l</span><span class="p">.</span><span class="n">reset</span><span class="p">()</span>
+    <span class="n">imobs</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+    <span class="n">goalim</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">goalim</span>
+    <span class="n">goal</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">goal</span>
+    <span class="n">obs</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+</code></pre></div></div>
+<p>l.train为真，那么l.reset()的时候，会从训练模型可见的那些因果关系中选择一个因果关系来训练，seen为训练模型过程中可见的因果关系的数量，这部分详细内容请参考换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据。imobs获得的是l在reset之后获得的新的场景图。goalim是目标场景图，goal是灯的状态向量。</p>
+
+<p><strong>不同</strong>的部分：
+  当method是trajF，trajFi，或trajFia时：</p>
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">## Predict Graph
+</span><span class="n">buf</span> <span class="o">=</span> <span class="n">induction</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+<span class="n">traj</span> <span class="o">=</span> <span class="n">buf</span><span class="p">.</span><span class="n">flatten</span><span class="p">()</span>
+<span class="n">pred</span> <span class="o">=</span> <span class="n">predict</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="n">FN</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="n">l</span><span class="p">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>  
+</code></pre></div></div>
+
+<p>induction函数与<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483943&amp;idx=1&amp;sn=e7d03ad7c104d57aabfe2724de320804&amp;chksm=c06760e5f710e9f365a0c2985ca1737a7637ddcd73d0394452c7cdbe95870a5ebdec8312f06f&amp;scene=21#wechat_redirect">因果模型训练</a>的代码重合度很高，就不逐行解析了，这部分主要功能就是将每个开关都开一遍，然后记录下场景图和之后要执行的动作，存入buf中，而当结构是masterswitch的时候，稍微复杂了一些，先将所有开关开一遍并记录下场景图和动作，直到找到master  switch为止，再将剩下的开关逐个开一遍，记录下场景图和之后要执行的动作。predict中输入的FN是之前训练好的因果归纳模型，输出则是因果关系向量。</p>
+
+<p>当method是trajlstm时：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">memory</span> <span class="o">=</span> <span class="p">{</span><span class="s">'state'</span><span class="p">:[],</span> <span class="s">'graph'</span><span class="p">:[],</span> <span class="s">'action'</span><span class="p">:[]}</span>
+<span class="n">hidden</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="c1">## Get interction trajectory
+</span><span class="n">buf</span> <span class="o">=</span> <span class="n">induction</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+<span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">buf</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">w</span><span class="p">,</span> <span class="p">:</span><span class="mi">32</span><span class="o">*</span><span class="mi">32</span><span class="o">*</span><span class="mi">3</span><span class="p">].</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+    <span class="n">sgg</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">states</span><span class="p">)</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">states</span><span class="p">,</span> <span class="n">sgg</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">w</span><span class="p">,</span> <span class="mi">32</span><span class="o">*</span><span class="mi">32</span><span class="o">*</span><span class="mi">3</span><span class="p">:].</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">act</span><span class="p">,</span> <span class="n">hidden</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">states</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">actions</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">hidden</span><span class="p">)</span>
+<span class="n">l</span><span class="p">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+</code></pre></div></div>
+<p>之前说过induction函数，即把所有的开关按顺序开一遍，记录场景图和之后的动作，在trajlstm这个方法中，直接将这样产生的buf存入memeory中的graph部分，意思很明显了，即buf里面有因果图。接下来就是跑lstmcell，将这个开关所有灯的行为依次输入lstm，states是当下的场景图，而actions是接下来要做的动作，输出也是接下来要做的动作。这部分的主要功能应该是让hidden中有灯和开关的因果关系。
+  每个episode:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="o">*</span><span class="mi">2</span><span class="p">):</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nb">abs</span><span class="p">(</span><span class="n">goal</span> <span class="o">-</span> <span class="n">obs</span><span class="p">[:</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">])</span>  <span class="c1"># 目标向量-状态向量
+</span>    <span class="n">st</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">imobs</span><span class="p">,</span> <span class="n">goalim</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>  <span class="c1">#32×32×6
+</span>    <span class="n">sss</span> <span class="o">=</span> <span class="mf">1.0</span><span class="o">*</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">l</span><span class="p">.</span><span class="n">aj</span><span class="p">.</span><span class="n">T</span><span class="p">).</span><span class="n">T</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">)</span> 
+    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+        <span class="n">sss</span><span class="p">[</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">sss</span><span class="p">.</span><span class="nb">max</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>        <span class="c1">#如果没有需要改变的开关，就结束该过程
+</span>            <span class="k">break</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">sss</span><span class="p">)</span>     <span class="c1">#应该要执行的action
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">obs</span><span class="p">[:</span><span class="mi">5</span><span class="p">].</span><span class="nb">max</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>    <span class="c1">#里面的参数5似乎应该改成args.num
+</span>            <span class="n">action</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">ms</span>         <span class="c1">#首先要打开masterswitch的开关    
+</span>    <span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">st</span><span class="p">)</span>
+    <span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>g是目标向量减去状态向量，表示要达到目标向量需要做出的改变。st则融合了当前场景图和目标场景图，在通道维度上融合，因此融合后得到的st是32×32×6的结构。g是需要作出改变的灯向量，sss则是需要做出改变的开关向量。如果是masterswitch的状态，一开始除了master switch之外没有开关再需要改变了，那么过程不需要再进行下去。如果有开关需要改变，则一开始要打开master  switch，否则其他开关开了也没用。这里obs[:5]中的5似乎应该改成args.num。这边的action则是应该要被选择的action。</p>
+
+<p>接下来一段代码，三种方法<strong>不同</strong>：</p>
+
+<ol>
+  <li>method == “gt”:</li>
+</ol>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">gt</span><span class="p">.</span><span class="n">flatten</span><span class="p">())</span>
+<span class="k">if</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">uniform</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.3</span><span class="p">:</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">graph</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">gt</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">act</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">st</span><span class="p">,</span> <span class="mi">0</span><span class="p">)).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">graph</span><span class="p">).</span><span class="n">cuda</span><span class="p">())</span>     <span class="n">action</span> <span class="o">=</span> <span class="n">act</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">argmax</span><span class="p">()</span>    <span class="c1"># 策略选择的action
+</span></code></pre></div></div>
+
+<p>当method是gt时，memory[‘graph’]存的是真实的因果关系向量。st和graph经过pol函数产生action向量，然后再取最佳action。这边是策略选择的最后会被执行的action。</p>
+
+<p>在强化学习模型训练过程中，不会总去执行策略模型当下觉得最优的动作，也会随机选择一些动作，以便最后能找到最优的策略。</p>
+
+<ol>
+  <li>method == “trajF”，”trajFi”，或”trajFia”</li>
+</ol>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">pred</span><span class="p">.</span><span class="n">flatten</span><span class="p">())</span><span class="c1">## Random Noise
+</span><span class="k">if</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">uniform</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.3</span><span class="p">:</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>    <span class="n">graph</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pred</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">act</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">st</span><span class="p">,</span> <span class="mi">0</span><span class="p">)).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">graph</span><span class="p">).</span><span class="n">cuda</span><span class="p">())</span> 
+    <span class="n">action</span> <span class="o">=</span> <span class="n">act</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">argmax</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>这个循环内因果关系并不会变，所以graph可以放在这个循环外生成，没必要每次都产生一遍。</p>
+
+<ol>
+  <li>method = “trajlstm”时：</li>
+</ol>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">## Policy Noise
+</span><span class="k">if</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">uniform</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.3</span><span class="p">:</span>
+	<span class="n">action</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">act</span><span class="p">,</span> <span class="n">s_hidden</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">states</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">actions</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">hidden</span><span class="p">)</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="n">act</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">argmax</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>这段代码应该是写错了，每次都输入states和actions，并没有用到每次l.step之后的状态，也没有用到goal  image，有点不合逻辑。因此，正确的应该是要将states替换成st，而actions替换成都是0的向量，因为这里是要去预测下一步的动作。</p>
+
+<p>接下来一段三种方法<strong>相同</strong>：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">action</span><span class="p">)</span>
+<span class="n">imobs</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">done</span><span class="p">:</span>
+    <span class="k">break</span>
+</code></pre></div></div>
+
+<p>在环境中执行action，返回obs（更新灯的状态向量+目标向量+因果向量），reward（目标和状态的欧几里德距离的负值），done（达到目标或者步数超过限制则结束），info（灯的状态向量是否和目标一致），imobs（更新状态场景图），如果达到目标，或者步数超过限制，则结束该过程。</p>
+
+<p>接下来，<strong>不同</strong>的部分，当method是gt，trajF，trajFi，或trajFia时：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">sss</span><span class="p">[</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">]:</span>
+        <span class="n">st</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">imobs</span><span class="p">,</span> <span class="n">goalim</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">st</span><span class="p">)</span>
+        <span class="c1">#--------------下面代码是method不同，不同的部分-------------        
+</span>        <span class="c1"># 当method是“gt”
+</span>        <span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">gt</span><span class="p">.</span><span class="n">flatten</span><span class="p">())</span>
+        <span class="c1"># 当method是"trajF"，"trajFi"，或"trajFia"时
+</span>        <span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">pred</span><span class="p">.</span><span class="n">flatten</span><span class="p">())</span>
+        <span class="c1">#---------------------------------------------        
+</span>        <span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">)</span>
+        <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">)</span>
+<span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">]</span> <span class="o">=</span> <span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">][</span><span class="o">-</span><span class="n">memsize</span><span class="p">:]</span>
+<span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">]</span> <span class="o">=</span> <span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">][</span><span class="o">-</span><span class="n">memsize</span><span class="p">:]</span>
+<span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">]</span> <span class="o">=</span> <span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">][</span><span class="o">-</span><span class="n">memsize</span><span class="p">:]</span>
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">train_bc</span><span class="p">(</span><span class="n">memory</span><span class="p">,</span> <span class="n">pol</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>这段代码有两点很让人疑惑：</p>
+
+<ol>
+  <li>
+    <p>首先是masterswitch的部分，按照代码的意思是，如果结构是masterswitch且master switch被打开了，那么则需要将主开关关上。</p>
+  </li>
+  <li>
+    <p>不论因果结构是什么样的，在最后一个action之后的状态都没有被记录。可能是没有下一步动作的话，场景图记录下来也没有训练价值。</p>
+  </li>
+</ol>
+
+<p>这部分有个函数train_bc：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">train_bc</span><span class="p">(</span><span class="n">memory</span><span class="p">,</span> <span class="n">policy</span><span class="p">,</span> <span class="n">opt</span><span class="p">):</span>
+    <span class="s">'''Train Imitation policy'''</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">])</span> <span class="o">&lt;</span> <span class="mi">50</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">opt</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span> <span class="c1"># 梯度清零，不清零的话可以写梯度累加的代码，适合GPU配置低，显存小的状况。
+</span>    <span class="n">choices</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">]),</span> <span class="mi">32</span><span class="p">).</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">int32</span><span class="p">).</span><span class="n">tolist</span><span class="p">()</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="p">[</span><span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">][</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">choices</span><span class="p">]</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="p">[</span><span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">][</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">choices</span><span class="p">]</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="p">[</span><span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">][</span><span class="n">c</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">choices</span><span class="p">]</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">states</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+    <span class="n">graphs</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">graphs</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">actions</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>    <span class="c1"># 模型觉得最优的动作
+</span>    <span class="n">pred_acts</span> <span class="o">=</span> <span class="n">policy</span><span class="p">(</span><span class="n">states</span><span class="p">,</span> <span class="n">graphs</span><span class="p">)</span>
+    <span class="c1"># loss = ((pred_acts -actions)**2).sum(1).mean()
+</span>    <span class="n">celoss</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">CrossEntropyLoss</span><span class="p">()</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">celoss</span><span class="p">(</span><span class="n">pred_acts</span><span class="p">,</span> <span class="n">actions</span><span class="p">)</span>
+    <span class="n">l</span> <span class="o">=</span> <span class="n">loss</span><span class="p">.</span><span class="n">cpu</span><span class="p">().</span><span class="n">detach</span><span class="p">().</span><span class="n">numpy</span><span class="p">()</span>
+    <span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="n">opt</span><span class="p">.</span><span class="n">step</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">l</span>
+</code></pre></div></div>
+
+<p>zero_grad()是用于梯度清零，不清零的话梯度就会累加，在一些实验中，batch size设置的大，显存会不够用，所以可以不清零梯度，多累加几个batch size，比如将batch  size设置为100，而梯度累加八次再清零和将batch size直接设置为800，每次都梯度清零，效果是一样的。</p>
+
+<p>在这个实验中，每次从memory中随机选择32个来计算梯度。</p>
+
+<p>当method是”trajlstm”时：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">sss</span><span class="p">[</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">]:</span>
+        <span class="n">st</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">imobs</span><span class="p">,</span> <span class="n">goalim</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">st</span><span class="p">)</span>
+        <span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">].</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">)</span>
+        <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">ms</span><span class="p">)</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">])</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="n">trajs</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">memory</span><span class="p">)</span>
+<span class="n">trajs</span> <span class="o">=</span> <span class="n">trajs</span><span class="p">[</span><span class="o">-</span><span class="n">memsize</span><span class="p">:]</span>
+<span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">train_bclstm</span><span class="p">(</span><span class="n">trajs</span><span class="p">,</span> <span class="n">pol</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>这里依然是，如果结构是masterswitch且主开关开着，就需要多走一步，将主开关关上。接下来看train_bclstm这个函数，trajs是最近的memsize个开关灯的过程，一开始会小于memsize个。pol是生成action的模型。下面贴了一部分代码，掐头去尾。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">choices</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">choice</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">trajs</span><span class="p">),</span> <span class="mi">4</span><span class="p">).</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">int32</span><span class="p">).</span><span class="n">tolist</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">choices</span><span class="p">:</span>
+    <span class="n">memory</span> <span class="o">=</span> <span class="n">trajs</span><span class="p">[</span><span class="n">t</span><span class="p">]</span>
+    <span class="n">hidden</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="c1">## Feed interaction trajectory through policy with memory
+</span>    <span class="n">buf</span> <span class="o">=</span> <span class="n">memory</span><span class="p">[</span><span class="s">'graph'</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">buf</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">w</span><span class="p">,</span> <span class="p">:</span><span class="mi">32</span><span class="o">*</span><span class="mi">32</span><span class="o">*</span><span class="mi">3</span><span class="p">].</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+        <span class="n">sgg</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">states</span><span class="p">)</span>
+        <span class="n">states</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">states</span><span class="p">,</span> <span class="n">sgg</span><span class="p">],</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">actions</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">w</span><span class="p">,</span> <span class="mi">32</span><span class="o">*</span><span class="mi">32</span><span class="o">*</span><span class="mi">3</span><span class="p">:].</span><span class="n">reshape</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">num_acts</span> <span class="o">=</span> <span class="n">actions</span><span class="p">.</span><span class="n">shape</span>
+        <span class="n">act</span><span class="p">,</span> <span class="n">hidden</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">states</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">actions</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">hidden</span><span class="p">)</span>
+    <span class="n">states</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="s">'state'</span><span class="p">])</span>
+    <span class="n">actions</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">array</span><span class="p">(</span><span class="n">memory</span><span class="p">[</span><span class="s">'action'</span><span class="p">])</span>
+    <span class="n">preds</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">w</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">states</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]):</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">num_acts</span><span class="p">)</span>
+        <span class="n">pred_acts</span><span class="p">,</span> <span class="n">hidden</span> <span class="o">=</span> <span class="n">pol</span><span class="p">(</span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">states</span><span class="p">[</span><span class="n">w</span><span class="p">:</span><span class="n">w</span><span class="o">+</span><span class="mi">1</span><span class="p">]).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">a</span><span class="p">).</span><span class="n">cuda</span><span class="p">(),</span> <span class="n">hidden</span><span class="p">)</span>
+        <span class="n">preds</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">pred_acts</span><span class="p">)</span>
+    <span class="n">preds</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">cat</span><span class="p">(</span><span class="n">preds</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="n">celoss</span><span class="p">(</span><span class="n">preds</span><span class="p">,</span> <span class="n">th</span><span class="p">.</span><span class="n">LongTensor</span><span class="p">(</span><span class="n">actions</span><span class="p">).</span><span class="n">cuda</span><span class="p">())</span>
+    <span class="n">totalloss</span> <span class="o">+=</span> <span class="n">loss</span>
+</code></pre></div></div>
+
+<p>前半段代码中的循环，应当是为了得到hidden的值，理想状况，我们期待这个值记录着接下来要做的动作，和灯和开关之间的因果关系。而接下来一个循环，则是要生成理想状况下应当产生的动作组和在该策略模型下产生的动作组的差异。损失函数用的是交叉熵。</p>
+
+<p>接下来是最后一段代码，三个方法有<strong>不同</strong>的部分：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="k">if</span> <span class="n">mep</span> <span class="o">%</span> <span class="mi">1000</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">"Episode"</span><span class="p">,</span> <span class="n">mep</span><span class="p">,</span> <span class="s">"Loss:"</span> <span class="p">,</span> <span class="n">loss</span> <span class="p">)</span>
+        <span class="c1"># method是“gt”时：
+</span>        <span class="n">trainsc</span> <span class="o">=</span> <span class="n">eval_bc</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>           
+        <span class="n">testsc</span> <span class="o">=</span> <span class="n">eval_bc</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>            
+        <span class="c1"># 当method是"trajF"，"trajFi"，或"trajFia"时：
+</span>        <span class="n">trainsc</span> <span class="o">=</span> <span class="n">eval_bc</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="n">f</span><span class="o">=</span><span class="n">FN</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">testsc</span> <span class="o">=</span> <span class="n">eval_bc</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">f</span><span class="o">=</span><span class="n">FN</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>
+        <span class="c1"># 当method是"trajlstm"时：
+</span>        <span class="n">trainsc</span> <span class="o">=</span> <span class="n">eval_bclstm</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">True</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>
+        <span class="n">testsc</span> <span class="o">=</span> <span class="n">eval_bclstm</span><span class="p">(</span><span class="n">pol</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="bp">False</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="n">args</span><span class="p">)</span>
+    <span class="n">successes</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">l</span><span class="p">.</span><span class="n">_is_success</span><span class="p">(</span><span class="n">obs</span><span class="p">))</span>
+<span class="k">print</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">mean</span><span class="p">(</span><span class="n">successes</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>要是之前的代码都看懂了，eval_bc和eval_bclstm很容易懂，就不专门贴出来了，输入pol，用来计算action，而第三个参数输入True，表示用用于训练的因果关系来测试模型效果，输入False，表示用用于测试的因果关系来测试模型效果，用于测试的因果关系是训练模型过程中，模型没有接触过的因果关系。</p>
+
+<p><strong>3. 实验结果</strong></p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Policy_Success_Rates.png" alt="AltText" width="100%" /></p>
+
+<p>这个图表现的是策略学习模型的实验结果，Memory指的是trajlstm，Oracle是gt，其他分别对应不同的因果归纳模型，毫无疑问，所有实验中，Oracle的效果是最好的，因为因果关系用的是ground  truth。接下来就是用ICIN(Ours)了，即带attention的因果归纳模型。值得注意的是，这个实验结果用的是因果归纳模型和策略学习模型没有见过的因果关系来测试的。至于Memory和Memory(RL/Low Dim)的区别，在代码中没有体现出来，trajlstm只有一个版本。</p>
+
+<p>另外，这是当switch的数量是5，训练时可见的因果关系为50时，网络有attention和没有attention的区别。</p>
+
+<p><img src="../assets/images/Causal_Induction_Stanford_2019/Policy_Attention.png" alt="AltText" width="50%" /></p>
+
+<p>记：</p>
+
+<ol>
+  <li>
+    <p>文章并没有把所有代码都贴上了，只贴了觉得有必要说明的，另外代码中有很多不必要的部分，可能是作者测试的时候遗留的，因此有些代码稍作了修改。</p>
+  </li>
+  <li>
+    <p>trajlstm的代码应该是写错了。</p>
+  </li>
+  <li>
+    <p>obs[:5]中的5似乎应该改成args.num。</p>
+  </li>
+</ol>
+
+<p><strong>上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483943&amp;idx=1&amp;sn=e7d03ad7c104d57aabfe2724de320804&amp;chksm=c06760e5f710e9f365a0c2985ca1737a7637ddcd73d0394452c7cdbe95870a5ebdec8312f06f&amp;scene=21#wechat_redirect"><strong>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型</strong></a></p>
+
+<p><strong>系列第一篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect"><strong>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</strong></a></p>
+
+<p>参考论文：</p>
+
+<p>Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford  University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS  FOR GOAL DIRECTED TASKS, 2019</p>
+
+<p>参考代码：</p>
+
+<p>https://github.com/StanfordVL/causal_induction</p>
+
+<p>​</p>
+
+<p>​</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型&url=https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=https://chaos-gravity.github.io/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%AD%96%E7%95%A5%E5%AD%A6%E4%B9%A0%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causal_Induction_Stanford_2019">Causal_Induction_Stanford_2019</a>                
+    
+
+    <!-- Tags -->  
+    
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2020 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>
