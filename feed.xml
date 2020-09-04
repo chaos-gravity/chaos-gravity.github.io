@@ -5,9 +5,174 @@
     <description>We are interested in Deep Learning, Machine Learning, Causality, Reinforcement Learning, and any other information or technologies about AI.</description>
     <link>https://chaos-gravity.github.io/</link>
     <atom:link href="https://chaos-gravity.github.io/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Wed, 19 Aug 2020 22:29:14 +0800</pubDate>
-    <lastBuildDate>Wed, 19 Aug 2020 22:29:14 +0800</lastBuildDate>
+    <pubDate>Sat, 05 Sep 2020 00:32:11 +0800</pubDate>
+    <lastBuildDate>Sat, 05 Sep 2020 00:32:11 +0800</lastBuildDate>
     <generator>Jekyll v3.8.7</generator>
+    
+      <item>
+        <title>MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</title>
+        <description>&lt;p&gt;&lt;strong&gt;系列首篇：&lt;/strong&gt;&lt;a href=&quot;http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;amp;mid=2247483822&amp;amp;idx=1&amp;amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;amp;scene=21#wechat_redirect&quot;&gt;&lt;strong&gt;MIT因果迷你课笔记 —— 相关和因果&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;上篇：&lt;a href=&quot;http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;amp;mid=2247483979&amp;amp;idx=1&amp;amp;sn=8f2c863833e69ec786a4720c59274d88&amp;amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;amp;scene=21#wechat_redirect&quot;&gt;MIT因果迷你课笔记 —— 发现因果关系1&lt;/a&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;上篇中，我们提到了一些方法和假设，可以从数据分布中解析出因果关系，比如&lt;strong&gt;Causal Markov Condition&lt;/strong&gt;和&lt;strong&gt;Faithfulness Assumption&lt;/strong&gt;。但是通过数据分布&lt;em&gt;P&lt;/em&gt;得到的&lt;strong&gt;d-separations&lt;/strong&gt;的状况，可以让我们得到一组&lt;strong&gt;Markov Equivalence&lt;/strong&gt;的因果图，也就是通过这种方法得到的因果图可能不是唯一的。那么接下来一个显而易见的问题是，如何从Markov Equivalence的因果图中得到最终的答案。&lt;/p&gt;
+
+&lt;p&gt;如分布&lt;em&gt;P&lt;/em&gt;是&lt;em&gt;X&lt;/em&gt;⊥&lt;em&gt;Y&lt;/em&gt; | &lt;em&gt;Z&lt;/em&gt;  (vars: &lt;em&gt;X&lt;/em&gt;, &lt;em&gt;Y&lt;/em&gt;, &lt;em&gt;Z&lt;/em&gt;)，那么&lt;em&gt;X&lt;/em&gt;，&lt;em&gt;Y&lt;/em&gt;，&lt;em&gt;Z&lt;/em&gt;之间的因果关系可以是&lt;em&gt;X&lt;/em&gt;-&amp;gt;&lt;em&gt;Z&lt;/em&gt;-&amp;gt;&lt;em&gt;Y&lt;/em&gt;，&lt;em&gt;X&lt;/em&gt;&amp;lt;-&lt;em&gt;Z&lt;/em&gt;&amp;lt;-&lt;em&gt;Y&lt;/em&gt;，或&lt;em&gt;X&lt;/em&gt;&amp;lt;-&lt;em&gt;Z&lt;/em&gt;-&amp;gt;&lt;em&gt;Y&lt;/em&gt;，显然，在同一个现实场景中，这三种因果关系不能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？&lt;/p&gt;
+
+&lt;p&gt;除此之外，根据&lt;strong&gt;d-separation&lt;/strong&gt;建立的&lt;strong&gt;Causal Markov Condition&lt;/strong&gt;和&lt;strong&gt;Faithfulness Assumption&lt;/strong&gt;还有另外一个局限，那就是，如果&lt;em&gt;P&lt;/em&gt;中只有两个变量X，Y，那么这个建立在三个变量以上的推断因果关系的方法就不再适用。只有两个变量的时候，我们怎么判断是X-&amp;gt;Y还是Y-&amp;gt;X，这是我们接下来首先要讨论的问题。&lt;/p&gt;
+
+&lt;p&gt;首先，有个命题：&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Prop&lt;/strong&gt;：对于所有的分布&lt;em&gt;P&lt;/em&gt;，如果P中只有两个变量&lt;em&gt;X&lt;/em&gt;，&lt;em&gt;Y&lt;/em&gt;，那么一定存在&lt;em&gt;f&lt;/em&gt;和&lt;em&gt;Ny&lt;/em&gt;，使得&lt;em&gt;Y&lt;/em&gt; = &lt;em&gt;f&lt;/em&gt;(&lt;em&gt;X&lt;/em&gt;, &lt;em&gt;Ny&lt;/em&gt;)，且&lt;em&gt;Ny&lt;/em&gt;⊥&lt;em&gt;X&lt;/em&gt; (这里用⊥顶替一下独立符号)。反过来也一样，一定存在&lt;em&gt;g&lt;/em&gt;和&lt;em&gt;Nx&lt;/em&gt;，使得&lt;em&gt;X&lt;/em&gt; = &lt;em&gt;g&lt;/em&gt;(&lt;em&gt;Y&lt;/em&gt;, &lt;em&gt;Nx&lt;/em&gt;)，且&lt;em&gt;Nx&lt;/em&gt;⊥&lt;em&gt;Y&lt;/em&gt;。&lt;/p&gt;
+
+&lt;p&gt;这个命题对于因果推断是不友好的，这表示，无论你有一个什么样的&lt;em&gt;P&lt;/em&gt;，你都可以同时用&lt;em&gt;Y&lt;/em&gt;-&amp;gt;&lt;em&gt;X&lt;/em&gt;和&lt;em&gt;X&lt;/em&gt;-&amp;gt;&lt;em&gt;Y&lt;/em&gt;来解释它。另外&lt;em&gt;f&lt;/em&gt;和&lt;em&gt;g&lt;/em&gt;可能会非常复杂，那我们可以做的就是，可以去分析一些&lt;em&gt;f&lt;/em&gt;和&lt;em&gt;g&lt;/em&gt;比较简单的案例。&lt;/p&gt;
+
+&lt;p&gt;这里引入一个新的概念，&lt;strong&gt;restricted structural causal  models&lt;/strong&gt;，接下来，我们就讲&lt;strong&gt;restricted structural causal  models&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;h3 id=&quot;restricted-structural-causal-models&quot;&gt;Restricted Structural Causal Models&lt;/h3&gt;
+
+&lt;p&gt;&lt;strong&gt;&lt;em&gt;1. 假设X和Y之间是一种线性关系&lt;/em&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;先看一种极简的情况，&lt;em&gt;X&lt;/em&gt;和&lt;em&gt;Y&lt;/em&gt;是一种线性关系：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090401.png&quot; alt=&quot;AltText&quot; width=&quot;70%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;如果(&lt;em&gt;X&lt;/em&gt;, &lt;em&gt;Ny&lt;/em&gt;)不是联合高斯分布，那么就不能反推出X被Y线性影响着。也就是说不能通过上面的式子得到下面的式子。这个现象的理论基础是&lt;strong&gt;Darmois–Skitovich theorem&lt;/strong&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090402.png&quot; alt=&quot;AltText&quot; width=&quot;70%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;举个例子，&lt;em&gt;X&lt;/em&gt;, &lt;em&gt;Ny&lt;/em&gt;服从均匀分布(uniform distribution)：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090403.png&quot; alt=&quot;AltText&quot; width=&quot;70%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;以X为自变量，Y为因变量，那么可以拟合出以下的关系图。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090404.png&quot; alt=&quot;AltText&quot; width=&quot;90%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;那么以Y为自变量，X为因变量呢，拟合出的线性关系则如下图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090405.png&quot; alt=&quot;AltText&quot; width=&quot;90%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;但是并不能得到&lt;em&gt;X&lt;/em&gt; = &lt;em&gt;bY&lt;/em&gt;+&lt;em&gt;Nx&lt;/em&gt;，且&lt;em&gt;Nx&lt;/em&gt;⊥&lt;em&gt;Y&lt;/em&gt;，按照上面的拟合结果，来看&lt;em&gt;Nx&lt;/em&gt;是什么样的：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090406.png&quot; alt=&quot;AltText&quot; width=&quot;90%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;非常明显的是，&lt;em&gt;Nx&lt;/em&gt;和&lt;em&gt;Y&lt;/em&gt;不独立。&lt;/p&gt;
+
+&lt;p&gt;接下来插一个没什么用的概念：&lt;strong&gt;arrow of time&lt;/strong&gt; （老师的原话╮(╯3╰)╭），应该是从&lt;strong&gt;Darmois–Skitovich theorem&lt;/strong&gt;衍生出来的，没什么用的话，那应该就是挺有意思的，我们还是看一下。&lt;/p&gt;
+
+&lt;p&gt;我们怎么判断一个序列，是按时间流动的方向收集的，还是被人动过手脚，是逆着时间来的。&lt;/p&gt;
+
+&lt;p&gt;先来看一个时间序列模型：&lt;strong&gt;autoregressive–moving-average&lt;/strong&gt; (&lt;strong&gt;ARMA&lt;/strong&gt;) &lt;strong&gt;models：&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090407.png&quot; alt=&quot;AltText&quot; width=&quot;60%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;t&lt;/em&gt;是当下，这个模型是根据过去的结果和噪声，来预测现在的模型。c是常量，c后面的是白噪声，再后面的是过去的结果和匹配的系数，再后面是过去的白噪声和匹配的系数。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090408.png&quot; alt=&quot;AltText&quot; width=&quot;80%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;这个定理说的是，如果时间序列可以由ARMA(p, q)模型预测，且白噪声是高斯分布的，那么时间序列是可逆的，也就是说时间序列倒过来，也能用一个ARMA(p, q)模型来准确预测。&lt;/p&gt;
+
+&lt;p&gt;这个定理在2014年用在了下面这个研究中，如果你把一个视频倒过来放，你能不能让计算机根据这个定理判断出来这个视频是倒过来放的，除了这个定理，这个研究还试了其他方法，有兴趣的可以看一下：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090409.png&quot; alt=&quot;AltText&quot; width=&quot;100%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;比如下面这个，可以根据之前的定理判断出来：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090410.png&quot; alt=&quot;AltText&quot; width=&quot;100%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;也可以用来判断GDP的变化是不是被动过手脚，在时间线上翻转了：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090411.png&quot; alt=&quot;AltText&quot; width=&quot;100%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;对这个研究也可以做一些延伸的思考，因果和时间是分不开的，果应该是发生在因之后，时间倒过来，也就是因果也倒过来了，如果机器可以用一个理论来区分时间的方向，那么表示这个理论很可能可以用来归纳因果关系。&lt;/p&gt;
+
+&lt;p&gt;上面说了一大堆，都在假设因果之间存在的是线性关系，但现实世界的因果通常都不是线性关系，看下面一些生活中常出现的只有X，Y的数据集：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090412.png&quot; alt=&quot;AltText&quot; width=&quot;100%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;上图中，是各式各样的拥有双变量的数据集的可视化呈现，是研究统计的，现实世界常出现的状况。上图中，所有小图，可能是横轴是因，也可能是纵轴是因。那么看下面42号子图，这个图稍微特别一些：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090413.png&quot; alt=&quot;AltText&quot; width=&quot;30%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;现在来判断一下，对于42号子图，横轴更有可能是因，还是纵轴更有可能是因。我想大多数人都会选横轴，因为横轴为因，同一值对应的是单一结果。若纵轴为因，同一值会对应一到两个结果，这种情况就复杂了。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;2. 假设X和Y是非线性关系&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;对于非线性关系，不管噪音分布为何，都不能逆推。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090414.png&quot; alt=&quot;AltText&quot; width=&quot;80%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;举例，变量&lt;em&gt;X&lt;/em&gt;和噪音都是高斯分布，并和&lt;em&gt;Y&lt;/em&gt;呈以下关系：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090415.png&quot; alt=&quot;AltText&quot; width=&quot;70%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;画出关系图是：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090416.png&quot; alt=&quot;AltText&quot; width=&quot;80%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;那么以Y为自变量，X为因变量呢，拟合出的线性关系则如下图所示：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090417.png&quot; alt=&quot;AltText&quot; width=&quot;80%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;不能得到&lt;em&gt;Nx&lt;/em&gt;⊥&lt;em&gt;Y&lt;/em&gt;，按照上面的拟合结果，来看&lt;em&gt;Nx&lt;/em&gt;是什么样的：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090418.png&quot; alt=&quot;AltText&quot; width=&quot;80%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;非常明显的是，&lt;em&gt;Nx&lt;/em&gt;和&lt;em&gt;Y&lt;/em&gt;不独立。&lt;/p&gt;
+
+&lt;p&gt;现在来看一些现实中的案例，&lt;strong&gt;高度和温度&lt;/strong&gt;：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090419.png&quot; alt=&quot;AltText&quot; width=&quot;100%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;由常识，我们知道高度是温度的因，上面的数据可以做拟合，拟合的p-value是0.024，p-value是假设检验里的概念，这里可以简单的理解为错误的拒绝了假设的概率，即拟合结果正确的概率。p-value forward指拿x作为自变量，p-value backward指拿Y作为自变量得到的p-value的值。可以发现，backward远低于forward，但它们又都非常低。&lt;/p&gt;
+
+&lt;p&gt;再看一个案例，&lt;strong&gt;咖啡和诺贝尔奖&lt;/strong&gt;：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090420.png&quot; alt=&quot;AltText&quot; width=&quot;90%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;咖啡和诺贝尔奖的相关度非常高，如果我们将咖啡作为因变量，那么p-value非常低，如果将诺贝尔作为因变量，p-value会高一点。造成这个结果的原因可能有很多，比如模型不够好，比如我们假设噪声和自变量是独立的，这将模型大大的简化了。比如变量之间其实没有因果关系。有一件事情是很值得思考的，即p-value的值和因果关系的关系是什么？&lt;/p&gt;
+
+&lt;p&gt;接下来看本节最后一张图：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090421.png&quot; alt=&quot;AltText&quot; width=&quot;90%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;图中IGCI，LiNGaM，Additive Noise，PNL均是因果推断的模型，要理解这个这张图，首先得理解横纵坐标的定义，在参考[2]里找到了定义：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090422.png&quot; alt=&quot;AltText&quot; width=&quot;40%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Decision rate&lt;/strong&gt; 是判断了因果的数量/总量，Accuracy是判断对了的数量/总共判断的数量。那么为什么会有一个Decision rate，模型在做因果判断之前，会输出两个值，一个是X是Y的因的自信度，一个是Y是X的因的自信度。让它们做个减法再取绝对值：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&quot;../assets/images/Causality_Course/090423.png&quot; alt=&quot;AltText&quot; width=&quot;30%&quot; /&gt;&lt;/p&gt;
+
+&lt;p&gt;通常会为模型设置一个阈值，绝对差值小于这个阈值的，模型不做判断，或者说不采纳模型的判断。因为有这个阈值，所以不是所有的X，Y都会采纳模型输出的因果关系，这样就有了Decision rate。&lt;/p&gt;
+
+&lt;p&gt;当然，这个阈值可以是按其他逻辑设计的，不一定非得是上面的逻辑。&lt;/p&gt;
+
+&lt;p&gt;由上图可以发现，现在有一些因果推断模型，还是有一定效果的，也许可以提升的空间，还非常非常的大。&lt;/p&gt;
+
+&lt;p&gt;下节继续讲&lt;strong&gt;restricted structural causal model&lt;/strong&gt;，会从两个变量的因果归纳，延伸到多个变量，请继续关注吧！&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;系列首篇：&lt;/strong&gt;&lt;a href=&quot;http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;amp;mid=2247483822&amp;amp;idx=1&amp;amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;amp;scene=21#wechat_redirect&quot;&gt;&lt;strong&gt;MIT因果迷你课笔记 —— 相关和因果&lt;/strong&gt;&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;上篇：&lt;a href=&quot;http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;amp;mid=2247483979&amp;amp;idx=1&amp;amp;sn=8f2c863833e69ec786a4720c59274d88&amp;amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;amp;scene=21#wechat_redirect&quot;&gt;MIT因果迷你课笔记 —— 发现因果关系1&lt;/a&gt;&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;声明：所有图片均来自参考，没有原创图片，公式和定理。&lt;/p&gt;
+
+&lt;p&gt;参考：&lt;/p&gt;
+
+&lt;p&gt;[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp;amp; Decision Systems (LIDS) and Models, Inference &amp;amp; Algorithms of the Broad Institute, MIT, 2017&lt;/p&gt;
+
+&lt;p&gt;[2] Jing Song, Satoshi Oyama, Masahito Kurihara, Tell cause from effect: models and evaluation, 2017&lt;/p&gt;
+</description>
+        <pubDate>Fri, 04 Sep 2020 00:00:00 +0800</pubDate>
+        <link>https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/</link>
+        <guid isPermaLink="true">https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/</guid>
+        
+        
+        <category>Causality_Course</category>
+        
+      </item>
     
       <item>
         <title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——策略学习模型</title>

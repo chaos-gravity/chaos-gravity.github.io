@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)" />
+<meta name="author" content="Beer" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果" />
+<link rel="canonical" href="https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/" />
+<meta property="og:url" content="https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="https://chaos-gravity.github.io/assets/images/Causality_Course/090402.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-09-04T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果","url":"https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/","image":"https://chaos-gravity.github.io/assets/images/Causality_Course/090402.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)","dateModified":"2020-09-04T00:00:00+08:00","datePublished":"2020-09-04T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"https://chaos-gravity.github.io/assets/images/logo.png"},"name":"Beer"},"author":{"@type":"Person","name":"Beer"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Beer.jpg" alt="Beer">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Beer</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-09-04">04 Sep 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Causality_Course/090402.png" alt="MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483979&amp;idx=1&amp;sn=8f2c863833e69ec786a4720c59274d88&amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系1</a></strong></p>
+
+<p>上篇中，我们提到了一些方法和假设，可以从数据分布中解析出因果关系，比如<strong>Causal Markov Condition</strong>和<strong>Faithfulness Assumption</strong>。但是通过数据分布<em>P</em>得到的<strong>d-separations</strong>的状况，可以让我们得到一组<strong>Markov Equivalence</strong>的因果图，也就是通过这种方法得到的因果图可能不是唯一的。那么接下来一个显而易见的问题是，如何从Markov Equivalence的因果图中得到最终的答案。</p>
+
+<p>如分布<em>P</em>是<em>X</em>⊥<em>Y</em> | <em>Z</em>  (vars: <em>X</em>, <em>Y</em>, <em>Z</em>)，那么<em>X</em>，<em>Y</em>，<em>Z</em>之间的因果关系可以是<em>X</em>-&gt;<em>Z</em>-&gt;<em>Y</em>，<em>X</em>&lt;-<em>Z</em>&lt;-<em>Y</em>，或<em>X</em>&lt;-<em>Z</em>-&gt;<em>Y</em>，显然，在同一个现实场景中，这三种因果关系不能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？</p>
+
+<p>除此之外，根据<strong>d-separation</strong>建立的<strong>Causal Markov Condition</strong>和<strong>Faithfulness Assumption</strong>还有另外一个局限，那就是，如果<em>P</em>中只有两个变量X，Y，那么这个建立在三个变量以上的推断因果关系的方法就不再适用。只有两个变量的时候，我们怎么判断是X-&gt;Y还是Y-&gt;X，这是我们接下来首先要讨论的问题。</p>
+
+<p>首先，有个命题：</p>
+
+<p><strong>Prop</strong>：对于所有的分布<em>P</em>，如果P中只有两个变量<em>X</em>，<em>Y</em>，那么一定存在<em>f</em>和<em>Ny</em>，使得<em>Y</em> = <em>f</em>(<em>X</em>, <em>Ny</em>)，且<em>Ny</em>⊥<em>X</em> (这里用⊥顶替一下独立符号)。反过来也一样，一定存在<em>g</em>和<em>Nx</em>，使得<em>X</em> = <em>g</em>(<em>Y</em>, <em>Nx</em>)，且<em>Nx</em>⊥<em>Y</em>。</p>
+
+<p>这个命题对于因果推断是不友好的，这表示，无论你有一个什么样的<em>P</em>，你都可以同时用<em>Y</em>-&gt;<em>X</em>和<em>X</em>-&gt;<em>Y</em>来解释它。另外<em>f</em>和<em>g</em>可能会非常复杂，那我们可以做的就是，可以去分析一些<em>f</em>和<em>g</em>比较简单的案例。</p>
+
+<p>这里引入一个新的概念，<strong>restricted structural causal  models</strong>，接下来，我们就讲<strong>restricted structural causal  models</strong>。</p>
+
+<h3 id="restricted-structural-causal-models">Restricted Structural Causal Models</h3>
+
+<p><strong><em>1. 假设X和Y之间是一种线性关系</em></strong></p>
+
+<p>先看一种极简的情况，<em>X</em>和<em>Y</em>是一种线性关系：</p>
+
+<p><img src="../assets/images/Causality_Course/090401.png" alt="AltText" width="70%" /></p>
+
+<p>如果(<em>X</em>, <em>Ny</em>)不是联合高斯分布，那么就不能反推出X被Y线性影响着。也就是说不能通过上面的式子得到下面的式子。这个现象的理论基础是<strong>Darmois–Skitovich theorem</strong>。</p>
+
+<p><img src="../assets/images/Causality_Course/090402.png" alt="AltText" width="70%" /></p>
+
+<p>举个例子，<em>X</em>, <em>Ny</em>服从均匀分布(uniform distribution)：</p>
+
+<p><img src="../assets/images/Causality_Course/090403.png" alt="AltText" width="70%" /></p>
+
+<p>以X为自变量，Y为因变量，那么可以拟合出以下的关系图。</p>
+
+<p><img src="../assets/images/Causality_Course/090404.png" alt="AltText" width="90%" /></p>
+
+<p>那么以Y为自变量，X为因变量呢，拟合出的线性关系则如下图所示：</p>
+
+<p><img src="../assets/images/Causality_Course/090405.png" alt="AltText" width="90%" /></p>
+
+<p>但是并不能得到<em>X</em> = <em>bY</em>+<em>Nx</em>，且<em>Nx</em>⊥<em>Y</em>，按照上面的拟合结果，来看<em>Nx</em>是什么样的：</p>
+
+<p><img src="../assets/images/Causality_Course/090406.png" alt="AltText" width="90%" /></p>
+
+<p>非常明显的是，<em>Nx</em>和<em>Y</em>不独立。</p>
+
+<p>接下来插一个没什么用的概念：<strong>arrow of time</strong> （老师的原话╮(╯3╰)╭），应该是从<strong>Darmois–Skitovich theorem</strong>衍生出来的，没什么用的话，那应该就是挺有意思的，我们还是看一下。</p>
+
+<p>我们怎么判断一个序列，是按时间流动的方向收集的，还是被人动过手脚，是逆着时间来的。</p>
+
+<p>先来看一个时间序列模型：<strong>autoregressive–moving-average</strong> (<strong>ARMA</strong>) <strong>models：</strong></p>
+
+<p><img src="../assets/images/Causality_Course/090407.png" alt="AltText" width="60%" /></p>
+
+<p><em>t</em>是当下，这个模型是根据过去的结果和噪声，来预测现在的模型。c是常量，c后面的是白噪声，再后面的是过去的结果和匹配的系数，再后面是过去的白噪声和匹配的系数。</p>
+
+<p><img src="../assets/images/Causality_Course/090408.png" alt="AltText" width="80%" /></p>
+
+<p>这个定理说的是，如果时间序列可以由ARMA(p, q)模型预测，且白噪声是高斯分布的，那么时间序列是可逆的，也就是说时间序列倒过来，也能用一个ARMA(p, q)模型来准确预测。</p>
+
+<p>这个定理在2014年用在了下面这个研究中，如果你把一个视频倒过来放，你能不能让计算机根据这个定理判断出来这个视频是倒过来放的，除了这个定理，这个研究还试了其他方法，有兴趣的可以看一下：</p>
+
+<p><img src="../assets/images/Causality_Course/090409.png" alt="AltText" width="100%" /></p>
+
+<p>比如下面这个，可以根据之前的定理判断出来：</p>
+
+<p><img src="../assets/images/Causality_Course/090410.png" alt="AltText" width="100%" /></p>
+
+<p>也可以用来判断GDP的变化是不是被动过手脚，在时间线上翻转了：</p>
+
+<p><img src="../assets/images/Causality_Course/090411.png" alt="AltText" width="100%" /></p>
+
+<p>对这个研究也可以做一些延伸的思考，因果和时间是分不开的，果应该是发生在因之后，时间倒过来，也就是因果也倒过来了，如果机器可以用一个理论来区分时间的方向，那么表示这个理论很可能可以用来归纳因果关系。</p>
+
+<p>上面说了一大堆，都在假设因果之间存在的是线性关系，但现实世界的因果通常都不是线性关系，看下面一些生活中常出现的只有X，Y的数据集：</p>
+
+<p><img src="../assets/images/Causality_Course/090412.png" alt="AltText" width="100%" /></p>
+
+<p>上图中，是各式各样的拥有双变量的数据集的可视化呈现，是研究统计的，现实世界常出现的状况。上图中，所有小图，可能是横轴是因，也可能是纵轴是因。那么看下面42号子图，这个图稍微特别一些：</p>
+
+<p><img src="../assets/images/Causality_Course/090413.png" alt="AltText" width="30%" /></p>
+
+<p>现在来判断一下，对于42号子图，横轴更有可能是因，还是纵轴更有可能是因。我想大多数人都会选横轴，因为横轴为因，同一值对应的是单一结果。若纵轴为因，同一值会对应一到两个结果，这种情况就复杂了。</p>
+
+<p><strong>2. 假设X和Y是非线性关系</strong></p>
+
+<p>对于非线性关系，不管噪音分布为何，都不能逆推。</p>
+
+<p><img src="../assets/images/Causality_Course/090414.png" alt="AltText" width="80%" /></p>
+
+<p>举例，变量<em>X</em>和噪音都是高斯分布，并和<em>Y</em>呈以下关系：</p>
+
+<p><img src="../assets/images/Causality_Course/090415.png" alt="AltText" width="70%" /></p>
+
+<p>画出关系图是：</p>
+
+<p><img src="../assets/images/Causality_Course/090416.png" alt="AltText" width="80%" /></p>
+
+<p>那么以Y为自变量，X为因变量呢，拟合出的线性关系则如下图所示：</p>
+
+<p><img src="../assets/images/Causality_Course/090417.png" alt="AltText" width="80%" /></p>
+
+<p>不能得到<em>Nx</em>⊥<em>Y</em>，按照上面的拟合结果，来看<em>Nx</em>是什么样的：</p>
+
+<p><img src="../assets/images/Causality_Course/090418.png" alt="AltText" width="80%" /></p>
+
+<p>非常明显的是，<em>Nx</em>和<em>Y</em>不独立。</p>
+
+<p>现在来看一些现实中的案例，<strong>高度和温度</strong>：</p>
+
+<p><img src="../assets/images/Causality_Course/090419.png" alt="AltText" width="100%" /></p>
+
+<p>由常识，我们知道高度是温度的因，上面的数据可以做拟合，拟合的p-value是0.024，p-value是假设检验里的概念，这里可以简单的理解为错误的拒绝了假设的概率，即拟合结果正确的概率。p-value forward指拿x作为自变量，p-value backward指拿Y作为自变量得到的p-value的值。可以发现，backward远低于forward，但它们又都非常低。</p>
+
+<p>再看一个案例，<strong>咖啡和诺贝尔奖</strong>：</p>
+
+<p><img src="../assets/images/Causality_Course/090420.png" alt="AltText" width="90%" /></p>
+
+<p>咖啡和诺贝尔奖的相关度非常高，如果我们将咖啡作为因变量，那么p-value非常低，如果将诺贝尔作为因变量，p-value会高一点。造成这个结果的原因可能有很多，比如模型不够好，比如我们假设噪声和自变量是独立的，这将模型大大的简化了。比如变量之间其实没有因果关系。有一件事情是很值得思考的，即p-value的值和因果关系的关系是什么？</p>
+
+<p>接下来看本节最后一张图：</p>
+
+<p><img src="../assets/images/Causality_Course/090421.png" alt="AltText" width="90%" /></p>
+
+<p>图中IGCI，LiNGaM，Additive Noise，PNL均是因果推断的模型，要理解这个这张图，首先得理解横纵坐标的定义，在参考[2]里找到了定义：</p>
+
+<p><img src="../assets/images/Causality_Course/090422.png" alt="AltText" width="40%" /></p>
+
+<p><strong>Decision rate</strong> 是判断了因果的数量/总量，Accuracy是判断对了的数量/总共判断的数量。那么为什么会有一个Decision rate，模型在做因果判断之前，会输出两个值，一个是X是Y的因的自信度，一个是Y是X的因的自信度。让它们做个减法再取绝对值：</p>
+
+<p><img src="../assets/images/Causality_Course/090423.png" alt="AltText" width="30%" /></p>
+
+<p>通常会为模型设置一个阈值，绝对差值小于这个阈值的，模型不做判断，或者说不采纳模型的判断。因为有这个阈值，所以不是所有的X，Y都会采纳模型输出的因果关系，这样就有了Decision rate。</p>
+
+<p>当然，这个阈值可以是按其他逻辑设计的，不一定非得是上面的逻辑。</p>
+
+<p>由上图可以发现，现在有一些因果推断模型，还是有一定效果的，也许可以提升的空间，还非常非常的大。</p>
+
+<p>下节继续讲<strong>restricted structural causal model</strong>，会从两个变量的因果归纳，延伸到多个变量，请继续关注吧！</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483979&amp;idx=1&amp;sn=8f2c863833e69ec786a4720c59274d88&amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系1</a></strong></p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Jing Song, Satoshi Oyama, Masahito Kurihara, Tell cause from effect: models and evaluation, 2017</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)&url=https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=https://chaos-gravity.github.io/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB2(restricted-structural-causal-model)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality_Course">Causality_Course</a>                
+    
+
+    <!-- Tags -->  
+    
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2020 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>
