@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>D-separation，d-connection | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>D-separation，d-connection | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="D-separation，d-connection" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    这篇介绍一个颇复杂的概念，d-separation，关于图和因果关系的一个小概念，逻辑有点绕。     关于这个概念的前因后果可以看这个链接：https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html。这里只描述概念本身。     d-separation和d-connection中的d是dependence的意思，指依赖性。如果两个变量或变量集X, Y可以被有向图中的一组变量Z d-separated，则X，Y在该图可以表达的所有概率分布以Z为独立条件。换句话说，就是一旦你了解了Z，那么你对X的了解就不会再给你任何多的有关Y的信息，那么X, Y则是基于Z独立的。     如果一条路径携带信息，或者存在依赖性，则认为这条路径是活的(active)。一个图中，变量X，Y可能经过多条路径相连，其中可能有路径是活的，也可能没有，如果有，那么X和Y则是d-connected。如果X和Y是d-separated, 那表示连接这两个变量的所有路径都不是活的。     怎么样的路径是活的呢？路径上的所有变量(点, 不包括首尾顶点)和路径(边)是活的。路径和路径上的变量是否是活的是基于一组变量的集合Z的。让我们先考虑Z为空的情况，两个变量A, B经过一个变量C有以下几种方式： 1) A –&gt; C –&gt; B 2) A &lt;– C &lt;– B 3) A &lt;– C –&gt; B 4) A –&gt; C &lt;– B     用因果逻辑来分析上面四个关系，1）A是B的间接因，2）B是A的间接因，3）C是A和B的共同因，4）C是A和B的共同果。前面三种关系都表示A，B存在关联(association)，或依赖性(dependence)，基于d-separation的理论，前面这三种有向路径都是活的。而第四种路径，A和B之间并无关联，所以第四种路径是死的(inactive)。所以当条件集Z是空时，只有能表达因果关系的路径才算活的。     之前说过，按d-separation理论，路径中所有的顶点和路径都是活的，该路径才是活的，上述示例中，C是A，B之间唯一的顶点，所以它在前三个路径中是活的，在第四个路径里是死的(无效的)。     这里引入一个新的概念，如果在图中有两个或以上的顶点是它的因，我们将一个顶点称之为碰撞体(collider)，反之则为非碰撞体(non-collider)。在上面四个示例中，前三个C都是非碰撞体，最后一个C为碰撞体。当条件集为空时，非碰撞体是活的顶点，传输信息(依赖关系)，碰撞体是死的，不传输信息(依赖关系)。     因此，当条件集为空，X和Y是否被条件集d-separated的可以转换成问题：X和Y之间是否存在不含碰撞体的路径。     现在考虑条件集不为空的情况。现在我们重新考虑上面四个路径，只是这次要解的问题是，A和B是否被C d-separated。C为条件集，我们要考虑的即，当C的值确定时，A和B之间是否会存在相关关系或者依赖关系。在头三条路径中，当条件集为空时，C是活的，那么现在C则是死的。即当C的值确定时，你再知道B的值，对解出A毫无帮助，反之亦然。Reichenbach称其为”Principle of the Common Cause”，Markov则形容它为，已知的当下分开了过去和未来，让未来不再依赖过去。     第四条路径中，C是碰撞体，因此在条件集为空时是无效的，现在则是有效的。我们可以这样来看这个问题，如果C的值被确定了，那么必然是A或者B或者它们两个同时造成C这样的结果，如果此时你知道A的值，发现C的结果不是A造成的，或不单单是A造成的，那么就可以推理出B多多少少造成了C现在这样的结果。所以获得A的信息的同时也获得了B的信息。这里有一个Pearl (1988)举的例子，如果一辆车无法发动，那么可能是引擎坏了或者油耗尽了，因此有下面的因果关系： ​ dead battery –&gt; car won’t start &lt;– no gas     如果你获得的信息是引擎是好的，那么这个信息对于推断有没有汽油是没有价值的。但是，如果告诉你车无法发动，但是引擎是好的，那么你是否可以推断，应该是没油了，这个时候，引擎是好的对于推断有没有汽油则是有价值，有信息量的。所以当确定了果，则与这个果关联的原本独立的因也关联了起来。     D-connection则可定义为：如果G是一个有向图，在图中X, Y和Z是三个没有交集的顶点的集合。当且仅当存在一条无向路径U，连接了集合X和Y中的某些结点，U中所有的碰撞体或者其后代在Z中，没有非碰撞体在Z中，则可称之为X和Y在G图中被Z d-connected。X和Y在G图中被Z d-separated当且仅当X和Y在G图中没有被Z d-connected。     接下来，看一个示例：     分析：有两条路径，2-&gt;1&lt;-3&lt;-4-&gt;5，4，3为非碰撞体，4在Z中，另一条路径2-&gt;1-&gt;5，1为非碰撞体，1在Z中，因此，结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5不在Z中，而4-&gt;3-&gt;1中3是非碰撞体，3在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1&lt;-2，5是碰撞体，1不是碰撞体，5不在Z中，而4-&gt;3-&gt;1&lt;-2，1是碰撞体，1不在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5在Z中，因此结论成立。 声明：所有图片均来自Jonas Peters的课件，没有原创图片。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html 以下是[2]中的references, 做个备份 Blalock, H. (Ed.) (1971). Causal Models in the Social Sciences. Aldine-Atherton, Chicago. Blalock, H. (1961). Causal Inferences in Nonexperimental Research. University of North Carolina Press, Chapel Hill, NC. Costner, H. (1971). Theory, deduction and rules of correspondence. Causal Models in the Social Sciences, Blalock, H. (ed.). Aldine, Chicago. Geiger, D. and Pearl, J. (1989b). Axioms and Algorithms for Inferences Involving Conditional Independence. Report CSD 890031, R-119-I, Cognitive Systems Laboratory, University of California, Los Angeles. Geiger, D., Verma, T., and Pearl, J. (1990) Identifying independence in Bayesian Networks. Networks 20, 507-533. Glymour, C., Scheines, R., Spirtes, P., and Kelly, K. (1987). Discovering Causal Structure. Academic Press, San Diego, CA. Kiiveri, H. and Speed, T. (1982). Structural analysis of multivariate data: A review. Sociological Methodology, Leinhardt, S. (ed.). Jossey-Bass, San Francisco. Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems. Morgan and Kaufman, San Mateo. Pearl, J. (1995). Causal diagrams for empirical research. Biometrika, 82, pp. 669-710. Pearl, J. and Dechter, R. (1989). Learning structure from data: A survey.  Proceedings COLT ‘89, 30-244. Pearl, J., Geiger, D. and Verma, T. (1990). The logic of influence diagrams. Influence Diagrams, Belief Nets and Decision Analysis. R. Oliver and J. Smith, editors. John Wiley &amp; Sons Ltd. Pearl, J. and Verma, T. (1991). A theory of inferred causation. Principles of Knowledge Representation and Reasoning: Proceedings of the Second International Conference, Morgan Kaufmann, San Mateo, CA. Pearl, J. and Verma, T. (1990). A Formal Theory of Inductive Causation. Technical Report R-155, Cognitive Systems Labratory, Computer Science Dept. UCLA. Pearl, J. and Verma, T. (1987). The Logic of Representing Dependencies by Directed Graphs. Report CSD 870004, R-79-II, University of California at Los Angeles Cognitive Systems Laboratory. Richardson, T. (1994). Properties of Cyclic Graphical Models. MS Thesis, Carnegie Mellon  University. Richardson (1995). A Polynomial-Time Algorithm for Deciding Markov Equivalence of Directed Cyclic Graphical Models, Technical Report PHIL-63, Philosophy Department, Carnegie Mellon University. Reichenbach, H. (1956). The Direction of Time. Univ. of California Press, Berkeley, CA. Salmon, W. (1980). Probabilistic causality. Pacific Philosophical Quarterly 61, 50-74. Spirtes, P. (1994a). “Conditional Independence in Directed Cyclic Graphical Models for Feedback.” Technical Report CMU-PHIL-54, Department of Philosophy, Carnegie Mellon University, Pittsburgh, PA. Spirtes, P., Glymour, C., &amp; Scheines, R. (1993). Causation, prediction, and search. Springer-Verlag Lecture Notes in Statistics 81,. Springer-Verlag, NY. Spirtes, P., Richardson, T., Meek, C., Scheines, R., and Glymour, C. (1996). Using d-separation to calculate zero partial correlations in linear models with correlated errors.  Technical Report CMU-PHIL-72, Dept. of Philosophy, Carnegie Mellon University, Pittsburgh, PA, 15213. Suppes, P. (1970). A Probabilistic Theory of Causality. North-Holland, Amsterdam." />
+<meta property="og:description" content="    这篇介绍一个颇复杂的概念，d-separation，关于图和因果关系的一个小概念，逻辑有点绕。     关于这个概念的前因后果可以看这个链接：https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html。这里只描述概念本身。     d-separation和d-connection中的d是dependence的意思，指依赖性。如果两个变量或变量集X, Y可以被有向图中的一组变量Z d-separated，则X，Y在该图可以表达的所有概率分布以Z为独立条件。换句话说，就是一旦你了解了Z，那么你对X的了解就不会再给你任何多的有关Y的信息，那么X, Y则是基于Z独立的。     如果一条路径携带信息，或者存在依赖性，则认为这条路径是活的(active)。一个图中，变量X，Y可能经过多条路径相连，其中可能有路径是活的，也可能没有，如果有，那么X和Y则是d-connected。如果X和Y是d-separated, 那表示连接这两个变量的所有路径都不是活的。     怎么样的路径是活的呢？路径上的所有变量(点, 不包括首尾顶点)和路径(边)是活的。路径和路径上的变量是否是活的是基于一组变量的集合Z的。让我们先考虑Z为空的情况，两个变量A, B经过一个变量C有以下几种方式： 1) A –&gt; C –&gt; B 2) A &lt;– C &lt;– B 3) A &lt;– C –&gt; B 4) A –&gt; C &lt;– B     用因果逻辑来分析上面四个关系，1）A是B的间接因，2）B是A的间接因，3）C是A和B的共同因，4）C是A和B的共同果。前面三种关系都表示A，B存在关联(association)，或依赖性(dependence)，基于d-separation的理论，前面这三种有向路径都是活的。而第四种路径，A和B之间并无关联，所以第四种路径是死的(inactive)。所以当条件集Z是空时，只有能表达因果关系的路径才算活的。     之前说过，按d-separation理论，路径中所有的顶点和路径都是活的，该路径才是活的，上述示例中，C是A，B之间唯一的顶点，所以它在前三个路径中是活的，在第四个路径里是死的(无效的)。     这里引入一个新的概念，如果在图中有两个或以上的顶点是它的因，我们将一个顶点称之为碰撞体(collider)，反之则为非碰撞体(non-collider)。在上面四个示例中，前三个C都是非碰撞体，最后一个C为碰撞体。当条件集为空时，非碰撞体是活的顶点，传输信息(依赖关系)，碰撞体是死的，不传输信息(依赖关系)。     因此，当条件集为空，X和Y是否被条件集d-separated的可以转换成问题：X和Y之间是否存在不含碰撞体的路径。     现在考虑条件集不为空的情况。现在我们重新考虑上面四个路径，只是这次要解的问题是，A和B是否被C d-separated。C为条件集，我们要考虑的即，当C的值确定时，A和B之间是否会存在相关关系或者依赖关系。在头三条路径中，当条件集为空时，C是活的，那么现在C则是死的。即当C的值确定时，你再知道B的值，对解出A毫无帮助，反之亦然。Reichenbach称其为”Principle of the Common Cause”，Markov则形容它为，已知的当下分开了过去和未来，让未来不再依赖过去。     第四条路径中，C是碰撞体，因此在条件集为空时是无效的，现在则是有效的。我们可以这样来看这个问题，如果C的值被确定了，那么必然是A或者B或者它们两个同时造成C这样的结果，如果此时你知道A的值，发现C的结果不是A造成的，或不单单是A造成的，那么就可以推理出B多多少少造成了C现在这样的结果。所以获得A的信息的同时也获得了B的信息。这里有一个Pearl (1988)举的例子，如果一辆车无法发动，那么可能是引擎坏了或者油耗尽了，因此有下面的因果关系： ​ dead battery –&gt; car won’t start &lt;– no gas     如果你获得的信息是引擎是好的，那么这个信息对于推断有没有汽油是没有价值的。但是，如果告诉你车无法发动，但是引擎是好的，那么你是否可以推断，应该是没油了，这个时候，引擎是好的对于推断有没有汽油则是有价值，有信息量的。所以当确定了果，则与这个果关联的原本独立的因也关联了起来。     D-connection则可定义为：如果G是一个有向图，在图中X, Y和Z是三个没有交集的顶点的集合。当且仅当存在一条无向路径U，连接了集合X和Y中的某些结点，U中所有的碰撞体或者其后代在Z中，没有非碰撞体在Z中，则可称之为X和Y在G图中被Z d-connected。X和Y在G图中被Z d-separated当且仅当X和Y在G图中没有被Z d-connected。     接下来，看一个示例：     分析：有两条路径，2-&gt;1&lt;-3&lt;-4-&gt;5，4，3为非碰撞体，4在Z中，另一条路径2-&gt;1-&gt;5，1为非碰撞体，1在Z中，因此，结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5不在Z中，而4-&gt;3-&gt;1中3是非碰撞体，3在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1&lt;-2，5是碰撞体，1不是碰撞体，5不在Z中，而4-&gt;3-&gt;1&lt;-2，1是碰撞体，1不在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5在Z中，因此结论成立。 声明：所有图片均来自Jonas Peters的课件，没有原创图片。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html 以下是[2]中的references, 做个备份 Blalock, H. (Ed.) (1971). Causal Models in the Social Sciences. Aldine-Atherton, Chicago. Blalock, H. (1961). Causal Inferences in Nonexperimental Research. University of North Carolina Press, Chapel Hill, NC. Costner, H. (1971). Theory, deduction and rules of correspondence. Causal Models in the Social Sciences, Blalock, H. (ed.). Aldine, Chicago. Geiger, D. and Pearl, J. (1989b). Axioms and Algorithms for Inferences Involving Conditional Independence. Report CSD 890031, R-119-I, Cognitive Systems Laboratory, University of California, Los Angeles. Geiger, D., Verma, T., and Pearl, J. (1990) Identifying independence in Bayesian Networks. Networks 20, 507-533. Glymour, C., Scheines, R., Spirtes, P., and Kelly, K. (1987). Discovering Causal Structure. Academic Press, San Diego, CA. Kiiveri, H. and Speed, T. (1982). Structural analysis of multivariate data: A review. Sociological Methodology, Leinhardt, S. (ed.). Jossey-Bass, San Francisco. Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems. Morgan and Kaufman, San Mateo. Pearl, J. (1995). Causal diagrams for empirical research. Biometrika, 82, pp. 669-710. Pearl, J. and Dechter, R. (1989). Learning structure from data: A survey.  Proceedings COLT ‘89, 30-244. Pearl, J., Geiger, D. and Verma, T. (1990). The logic of influence diagrams. Influence Diagrams, Belief Nets and Decision Analysis. R. Oliver and J. Smith, editors. John Wiley &amp; Sons Ltd. Pearl, J. and Verma, T. (1991). A theory of inferred causation. Principles of Knowledge Representation and Reasoning: Proceedings of the Second International Conference, Morgan Kaufmann, San Mateo, CA. Pearl, J. and Verma, T. (1990). A Formal Theory of Inductive Causation. Technical Report R-155, Cognitive Systems Labratory, Computer Science Dept. UCLA. Pearl, J. and Verma, T. (1987). The Logic of Representing Dependencies by Directed Graphs. Report CSD 870004, R-79-II, University of California at Los Angeles Cognitive Systems Laboratory. Richardson, T. (1994). Properties of Cyclic Graphical Models. MS Thesis, Carnegie Mellon  University. Richardson (1995). A Polynomial-Time Algorithm for Deciding Markov Equivalence of Directed Cyclic Graphical Models, Technical Report PHIL-63, Philosophy Department, Carnegie Mellon University. Reichenbach, H. (1956). The Direction of Time. Univ. of California Press, Berkeley, CA. Salmon, W. (1980). Probabilistic causality. Pacific Philosophical Quarterly 61, 50-74. Spirtes, P. (1994a). “Conditional Independence in Directed Cyclic Graphical Models for Feedback.” Technical Report CMU-PHIL-54, Department of Philosophy, Carnegie Mellon University, Pittsburgh, PA. Spirtes, P., Glymour, C., &amp; Scheines, R. (1993). Causation, prediction, and search. Springer-Verlag Lecture Notes in Statistics 81,. Springer-Verlag, NY. Spirtes, P., Richardson, T., Meek, C., Scheines, R., and Glymour, C. (1996). Using d-separation to calculate zero partial correlations in linear models with correlated errors.  Technical Report CMU-PHIL-72, Dept. of Philosophy, Carnegie Mellon University, Pittsburgh, PA, 15213. Suppes, P. (1970). A Probabilistic Theory of Causality. North-Holland, Amsterdam." />
+<link rel="canonical" href="http://localhost:4000/D-separation-d-connection/" />
+<meta property="og:url" content="http://localhost:4000/D-separation-d-connection/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/D-separation,d-connection/7.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-05-05T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    这篇介绍一个颇复杂的概念，d-separation，关于图和因果关系的一个小概念，逻辑有点绕。     关于这个概念的前因后果可以看这个链接：https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html。这里只描述概念本身。     d-separation和d-connection中的d是dependence的意思，指依赖性。如果两个变量或变量集X, Y可以被有向图中的一组变量Z d-separated，则X，Y在该图可以表达的所有概率分布以Z为独立条件。换句话说，就是一旦你了解了Z，那么你对X的了解就不会再给你任何多的有关Y的信息，那么X, Y则是基于Z独立的。     如果一条路径携带信息，或者存在依赖性，则认为这条路径是活的(active)。一个图中，变量X，Y可能经过多条路径相连，其中可能有路径是活的，也可能没有，如果有，那么X和Y则是d-connected。如果X和Y是d-separated, 那表示连接这两个变量的所有路径都不是活的。     怎么样的路径是活的呢？路径上的所有变量(点, 不包括首尾顶点)和路径(边)是活的。路径和路径上的变量是否是活的是基于一组变量的集合Z的。让我们先考虑Z为空的情况，两个变量A, B经过一个变量C有以下几种方式： 1) A –&gt; C –&gt; B 2) A &lt;– C &lt;– B 3) A &lt;– C –&gt; B 4) A –&gt; C &lt;– B     用因果逻辑来分析上面四个关系，1）A是B的间接因，2）B是A的间接因，3）C是A和B的共同因，4）C是A和B的共同果。前面三种关系都表示A，B存在关联(association)，或依赖性(dependence)，基于d-separation的理论，前面这三种有向路径都是活的。而第四种路径，A和B之间并无关联，所以第四种路径是死的(inactive)。所以当条件集Z是空时，只有能表达因果关系的路径才算活的。     之前说过，按d-separation理论，路径中所有的顶点和路径都是活的，该路径才是活的，上述示例中，C是A，B之间唯一的顶点，所以它在前三个路径中是活的，在第四个路径里是死的(无效的)。     这里引入一个新的概念，如果在图中有两个或以上的顶点是它的因，我们将一个顶点称之为碰撞体(collider)，反之则为非碰撞体(non-collider)。在上面四个示例中，前三个C都是非碰撞体，最后一个C为碰撞体。当条件集为空时，非碰撞体是活的顶点，传输信息(依赖关系)，碰撞体是死的，不传输信息(依赖关系)。     因此，当条件集为空，X和Y是否被条件集d-separated的可以转换成问题：X和Y之间是否存在不含碰撞体的路径。     现在考虑条件集不为空的情况。现在我们重新考虑上面四个路径，只是这次要解的问题是，A和B是否被C d-separated。C为条件集，我们要考虑的即，当C的值确定时，A和B之间是否会存在相关关系或者依赖关系。在头三条路径中，当条件集为空时，C是活的，那么现在C则是死的。即当C的值确定时，你再知道B的值，对解出A毫无帮助，反之亦然。Reichenbach称其为”Principle of the Common Cause”，Markov则形容它为，已知的当下分开了过去和未来，让未来不再依赖过去。     第四条路径中，C是碰撞体，因此在条件集为空时是无效的，现在则是有效的。我们可以这样来看这个问题，如果C的值被确定了，那么必然是A或者B或者它们两个同时造成C这样的结果，如果此时你知道A的值，发现C的结果不是A造成的，或不单单是A造成的，那么就可以推理出B多多少少造成了C现在这样的结果。所以获得A的信息的同时也获得了B的信息。这里有一个Pearl (1988)举的例子，如果一辆车无法发动，那么可能是引擎坏了或者油耗尽了，因此有下面的因果关系： ​ dead battery –&gt; car won’t start &lt;– no gas     如果你获得的信息是引擎是好的，那么这个信息对于推断有没有汽油是没有价值的。但是，如果告诉你车无法发动，但是引擎是好的，那么你是否可以推断，应该是没油了，这个时候，引擎是好的对于推断有没有汽油则是有价值，有信息量的。所以当确定了果，则与这个果关联的原本独立的因也关联了起来。     D-connection则可定义为：如果G是一个有向图，在图中X, Y和Z是三个没有交集的顶点的集合。当且仅当存在一条无向路径U，连接了集合X和Y中的某些结点，U中所有的碰撞体或者其后代在Z中，没有非碰撞体在Z中，则可称之为X和Y在G图中被Z d-connected。X和Y在G图中被Z d-separated当且仅当X和Y在G图中没有被Z d-connected。     接下来，看一个示例：     分析：有两条路径，2-&gt;1&lt;-3&lt;-4-&gt;5，4，3为非碰撞体，4在Z中，另一条路径2-&gt;1-&gt;5，1为非碰撞体，1在Z中，因此，结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5不在Z中，而4-&gt;3-&gt;1中3是非碰撞体，3在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1&lt;-2，5是碰撞体，1不是碰撞体，5不在Z中，而4-&gt;3-&gt;1&lt;-2，1是碰撞体，1不在Z中，因此结论成立。     分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5在Z中，因此结论成立。 声明：所有图片均来自Jonas Peters的课件，没有原创图片。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html 以下是[2]中的references, 做个备份 Blalock, H. (Ed.) (1971). Causal Models in the Social Sciences. Aldine-Atherton, Chicago. Blalock, H. (1961). Causal Inferences in Nonexperimental Research. University of North Carolina Press, Chapel Hill, NC. Costner, H. (1971). Theory, deduction and rules of correspondence. Causal Models in the Social Sciences, Blalock, H. (ed.). Aldine, Chicago. Geiger, D. and Pearl, J. (1989b). Axioms and Algorithms for Inferences Involving Conditional Independence. Report CSD 890031, R-119-I, Cognitive Systems Laboratory, University of California, Los Angeles. Geiger, D., Verma, T., and Pearl, J. (1990) Identifying independence in Bayesian Networks. Networks 20, 507-533. Glymour, C., Scheines, R., Spirtes, P., and Kelly, K. (1987). Discovering Causal Structure. Academic Press, San Diego, CA. Kiiveri, H. and Speed, T. (1982). Structural analysis of multivariate data: A review. Sociological Methodology, Leinhardt, S. (ed.). Jossey-Bass, San Francisco. Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems. Morgan and Kaufman, San Mateo. Pearl, J. (1995). Causal diagrams for empirical research. Biometrika, 82, pp. 669-710. Pearl, J. and Dechter, R. (1989). Learning structure from data: A survey.  Proceedings COLT ‘89, 30-244. Pearl, J., Geiger, D. and Verma, T. (1990). The logic of influence diagrams. Influence Diagrams, Belief Nets and Decision Analysis. R. Oliver and J. Smith, editors. John Wiley &amp; Sons Ltd. Pearl, J. and Verma, T. (1991). A theory of inferred causation. Principles of Knowledge Representation and Reasoning: Proceedings of the Second International Conference, Morgan Kaufmann, San Mateo, CA. Pearl, J. and Verma, T. (1990). A Formal Theory of Inductive Causation. Technical Report R-155, Cognitive Systems Labratory, Computer Science Dept. UCLA. Pearl, J. and Verma, T. (1987). The Logic of Representing Dependencies by Directed Graphs. Report CSD 870004, R-79-II, University of California at Los Angeles Cognitive Systems Laboratory. Richardson, T. (1994). Properties of Cyclic Graphical Models. MS Thesis, Carnegie Mellon  University. Richardson (1995). A Polynomial-Time Algorithm for Deciding Markov Equivalence of Directed Cyclic Graphical Models, Technical Report PHIL-63, Philosophy Department, Carnegie Mellon University. Reichenbach, H. (1956). The Direction of Time. Univ. of California Press, Berkeley, CA. Salmon, W. (1980). Probabilistic causality. Pacific Philosophical Quarterly 61, 50-74. Spirtes, P. (1994a). “Conditional Independence in Directed Cyclic Graphical Models for Feedback.” Technical Report CMU-PHIL-54, Department of Philosophy, Carnegie Mellon University, Pittsburgh, PA. Spirtes, P., Glymour, C., &amp; Scheines, R. (1993). Causation, prediction, and search. Springer-Verlag Lecture Notes in Statistics 81,. Springer-Verlag, NY. Spirtes, P., Richardson, T., Meek, C., Scheines, R., and Glymour, C. (1996). Using d-separation to calculate zero partial correlations in linear models with correlated errors.  Technical Report CMU-PHIL-72, Dept. of Philosophy, Carnegie Mellon University, Pittsburgh, PA, 15213. Suppes, P. (1970). A Probabilistic Theory of Causality. North-Holland, Amsterdam.","url":"http://localhost:4000/D-separation-d-connection/","image":"http://localhost:4000/assets/images/D-separation,d-connection/7.png","@type":"BlogPosting","headline":"D-separation，d-connection","dateModified":"2020-05-05T00:00:00+08:00","datePublished":"2020-05-05T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/D-separation-d-connection/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">D-separation，d-connection</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-05-05">05 May 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/D-separation，d-connection/7.png" alt="D-separation，d-connection">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    这篇介绍一个颇复杂的概念，<strong>d-separation</strong>，关于图和因果关系的一个小概念，逻辑有点绕。</p>
+
+<p>    关于这个概念的前因后果可以看这个链接：https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html。这里只描述概念本身。</p>
+
+<p>    d-separation和d-connection中的d是dependence的意思，指依赖性。如果两个变量或变量集X, Y可以被有向图中的一组变量Z d-separated，则X，Y在该图可以表达的所有概率分布以Z为独立条件。换句话说，就是一旦你了解了Z，那么你对X的了解就不会再给你任何多的有关Y的信息，那么X, Y则是基于Z独立的。</p>
+
+<p>    如果一条路径携带信息，或者存在依赖性，则认为这条路径是活的(active)。一个图中，变量X，Y可能经过多条路径相连，其中可能有路径是活的，也可能没有，如果有，那么X和Y则是d-connected。如果X和Y是d-separated, 那表示连接这两个变量的所有路径都不是活的。</p>
+
+<p>    怎么样的路径是活的呢？路径上的所有变量(点, 不包括首尾顶点)和路径(边)是活的。路径和路径上的变量是否是活的是基于一组变量的集合Z的。让我们先考虑Z为空的情况，两个变量A, B经过一个变量C有以下几种方式：</p>
+
+<p>1) A –&gt; C –&gt; B
+2) A &lt;– C &lt;– B
+3) A &lt;– C –&gt; B</p>
+
+<p>4) A –&gt; C &lt;– B</p>
+
+<p>    用因果逻辑来分析上面四个关系，1）A是B的间接因，2）B是A的间接因，3）C是A和B的共同因，4）C是A和B的共同果。前面三种关系都表示A，B存在关联(association)，或依赖性(dependence)，基于d-separation的理论，前面这三种有向路径都是活的。而第四种路径，A和B之间并无关联，所以第四种路径是死的(inactive)。所以当条件集Z是空时，只有能表达因果关系的路径才算活的。</p>
+
+<p>    之前说过，按d-separation理论，路径中所有的顶点和路径都是活的，该路径才是活的，上述示例中，C是A，B之间唯一的顶点，所以它在前三个路径中是活的，在第四个路径里是死的(无效的)。</p>
+
+<p>    这里引入一个新的概念，如果在图中有两个或以上的顶点是它的因，我们将一个顶点称之为碰撞体(collider)，反之则为非碰撞体(non-collider)。在上面四个示例中，前三个C都是非碰撞体，最后一个C为碰撞体。当条件集为空时，非碰撞体是活的顶点，传输信息(依赖关系)，碰撞体是死的，不传输信息(依赖关系)。</p>
+
+<p>    因此，当条件集为空，X和Y是否被条件集d-separated的可以转换成问题：X和Y之间是否存在不含碰撞体的路径。</p>
+
+<p>    现在考虑条件集不为空的情况。现在我们重新考虑上面四个路径，只是这次要解的问题是，A和B是否被C d-separated。C为条件集，我们要考虑的即，当C的值确定时，A和B之间是否会存在相关关系或者依赖关系。在头三条路径中，当条件集为空时，C是活的，那么现在C则是死的。即当C的值确定时，你再知道B的值，对解出A毫无帮助，反之亦然。Reichenbach称其为”Principle of the Common Cause”，Markov则形容它为，已知的当下分开了过去和未来，让未来不再依赖过去。</p>
+
+<p>    第四条路径中，C是碰撞体，因此在条件集为空时是无效的，现在则是有效的。我们可以这样来看这个问题，如果C的值被确定了，那么必然是A或者B或者它们两个同时造成C这样的结果，如果此时你知道A的值，发现C的结果不是A造成的，或不单单是A造成的，那么就可以推理出B多多少少造成了C现在这样的结果。所以获得A的信息的同时也获得了B的信息。这里有一个Pearl (1988)举的例子，如果一辆车无法发动，那么可能是引擎坏了或者油耗尽了，因此有下面的因果关系：</p>
+
+<p>​												dead battery –&gt; <strong>car won’t start</strong> &lt;– no gas</p>
+
+<p>    如果你获得的信息是引擎是好的，那么这个信息对于推断有没有汽油是没有价值的。但是，如果告诉你车无法发动，但是引擎是好的，那么你是否可以推断，应该是没油了，这个时候，引擎是好的对于推断有没有汽油则是有价值，有信息量的。所以当确定了果，则与这个果关联的原本独立的因也关联了起来。</p>
+
+<p>    <strong>D-connection</strong>则可定义为：如果G是一个有向图，在图中X, Y和Z是三个没有交集的顶点的集合。当且仅当存在一条无向路径U，连接了集合X和Y中的某些结点，U中所有的碰撞体或者其后代在Z中，没有非碰撞体在Z中，则可称之为X和Y在G图中被Z d-connected。X和Y在G图中被Z d-separated当且仅当X和Y在G图中没有被Z d-connected。</p>
+
+<p>    接下来，看一个示例：</p>
+
+<p><img src="../assets/images/D-separation，d-connection/1.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/D-separation，d-connection/2.png" alt="" /></p>
+
+<p>    分析：有两条路径，2-&gt;1&lt;-3&lt;-4-&gt;5，4，3为非碰撞体，4在Z中，另一条路径2-&gt;1-&gt;5，1为非碰撞体，1在Z中，因此，结论成立。</p>
+
+<p><img src="../assets/images/D-separation，d-connection/3.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/D-separation，d-connection/4.png" alt="" /></p>
+
+<p>    分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5不在Z中，而4-&gt;3-&gt;1中3是非碰撞体，3在Z中，因此结论成立。</p>
+
+<p><img src="../assets/images/D-separation，d-connection/5.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/D-separation，d-connection/6.png" alt="" /></p>
+
+<p>    分析：有两条路径，4-&gt;5&lt;-1&lt;-2，5是碰撞体，1不是碰撞体，5不在Z中，而4-&gt;3-&gt;1&lt;-2，1是碰撞体，1不在Z中，因此结论成立。</p>
+
+<p><img src="../assets/images/D-separation，d-connection/7.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/D-separation，d-connection/8.png" alt="" /></p>
+
+<p>    分析：有两条路径，4-&gt;5&lt;-1，5是碰撞体，5在Z中，因此结论成立。</p>
+
+<p>声明：所有图片均来自Jonas Peters的课件，没有原创图片。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html</p>
+
+<p><strong>以下是[2]中的references, 做个备份</strong>
+ Blalock, H. (Ed.) (1971). Causal Models in the Social Sciences. Aldine-Atherton, Chicago.</p>
+
+<p>Blalock, H. (1961). Causal Inferences in Nonexperimental Research. University of North Carolina Press, Chapel Hill, NC.</p>
+
+<p>Costner, H. (1971). Theory, deduction and rules of correspondence. Causal Models in the Social Sciences, Blalock, H. (ed.). Aldine,  Chicago.</p>
+
+<p>Geiger, D. and Pearl, J. (1989b). Axioms and Algorithms for Inferences Involving Conditional Independence. Report CSD 890031, R-119-I, Cognitive Systems Laboratory, University of California, Los Angeles.</p>
+
+<p>Geiger, D., Verma, T., and Pearl, J. (1990) Identifying independence in Bayesian Networks. Networks 20, 507-533.</p>
+
+<p>Glymour, C., Scheines, R., Spirtes, P., and Kelly, K. (1987). Discovering Causal Structure. Academic Press, San Diego, CA.</p>
+
+<p>Kiiveri, H. and Speed, T. (1982). Structural analysis of multivariate data: A review. Sociological Methodology, Leinhardt, S. (ed.). Jossey-Bass, San Francisco.</p>
+
+<p>Pearl, J. (1988). Probabilistic Reasoning in Intelligent Systems. Morgan and Kaufman, San Mateo.</p>
+
+<p>Pearl, J. (1995). Causal diagrams for empirical research. Biometrika, 82, pp. 669-710.</p>
+
+<p>Pearl, J. and Dechter, R. (1989). Learning structure from data: A survey.  Proceedings COLT ‘89, 30-244.</p>
+
+<p>Pearl, J., Geiger, D. and Verma, T. (1990). The logic of influence diagrams. Influence Diagrams, Belief Nets and Decision Analysis. R. Oliver and J. Smith, editors. John Wiley &amp; Sons Ltd.</p>
+
+<p>Pearl, J. and Verma, T. (1991). A theory of inferred causation. Principles of Knowledge Representation and Reasoning: Proceedings of the Second International Conference, Morgan Kaufmann, San Mateo, CA.</p>
+
+<p>Pearl, J. and Verma, T. (1990). A Formal Theory of Inductive Causation. Technical Report R-155, Cognitive Systems Labratory, Computer Science Dept. UCLA.</p>
+
+<p>Pearl, J. and Verma, T. (1987). The Logic of Representing Dependencies by Directed Graphs. Report CSD 870004, R-79-II, University of California at Los Angeles Cognitive Systems Laboratory.</p>
+
+<p>Richardson, T. (1994). Properties of Cyclic Graphical Models. MS Thesis,  Carnegie Mellon  University.</p>
+
+<p>Richardson (1995). A Polynomial-Time Algorithm for Deciding Markov Equivalence of Directed Cyclic Graphical Models, Technical Report PHIL-63, Philosophy Department, Carnegie Mellon University.</p>
+
+<p>Reichenbach, H. (1956). The Direction of Time. Univ. of California Press, Berkeley, CA.</p>
+
+<p>Salmon, W. (1980). Probabilistic causality. Pacific Philosophical Quarterly 61, 50-74.</p>
+
+<p>Spirtes, P. (1994a). “Conditional Independence in Directed Cyclic Graphical Models for Feedback.” Technical Report CMU-PHIL-54,  Department of Philosophy, Carnegie Mellon University, Pittsburgh, PA.</p>
+
+<p>Spirtes, P., Glymour, C., &amp; Scheines, R. (1993). Causation, prediction, and search. Springer-Verlag Lecture Notes in Statistics 81,. Springer-Verlag, NY.</p>
+
+<p>Spirtes, P., Richardson, T., Meek, C., Scheines, R., and Glymour, C. (1996). Using d-separation to calculate zero partial correlations in linear models with correlated errors.  Technical Report CMU-PHIL-72, Dept. of Philosophy, Carnegie Mellon University, Pittsburgh, PA, 15213.</p>
+
+<p>Suppes, P. (1970). A Probabilistic Theory of Causality. North-Holland, Amsterdam.</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=D-separation，d-connection&url=http://localhost:4000/D-separation-d-connection/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/D-separation-d-connection/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/D-separation-d-connection/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Causality">Causality</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）     这篇是发现因果关系的最后一篇，也是这里要提的最后一个发现因果关系的方法。     之前讲过两种归纳因果关系的方法，第一种是基于独立关系的判断方法：         MIT因果迷你课笔记 —— 发现因果关系1     第二种是基于分布方程中，噪音的独立性的方法：         MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)     今天要说的是第三种：基于不变性的因果预测（invariant causal prediction）     如上图所示，假设我们现在有一个因果系统，不知道因果关系，但在不同环境下观测到了一系列数据，左边蓝色数据是在环境1中观测到的，右边红色数据是在环境2中观测到的。环境和环境之间的区别在于做了不同的干预。     现在我们想要知道Y的因是哪些。     首先我们用线性模型拟合：     Pr(&gt;|t|)是P-value，P值估计系数不显著的可能性，有较大P值的变量是可以从模型中移除的候选变量。由上述实验可知，线性拟合后，Y和X1，X2，X3，都有很小P值，无法根据这个实验找到Y的因。     那用这篇介绍的Invariant Causal Prediction (ICP)来实验呢：     ExpInd长度和Y一致，但其中数据表示的是环境编号，1指环境1，2值环境2，即用于ICP这个方法的数据，包含了不同环境下的数据。而得到的结果表明，X3是Y的因。     接下来我们来说说ICP基于的原理：     不变性原理：     如果Y的结构方程不变，那么无论如何进行干预，只要不干预Y，P(Y|PAY)保持不变。这个很好理解，Y的值由Y的因和噪音决定，那么如果确定了因的值，Y的分布也是确定的，且与图中其他变量是无关的。     这里列一些典型的干预：      1. 使X1只受特定噪音影响     2. 改变影响X4的噪音：     3. 对多个变量作出干预，如下： &lt;div align=center&gt;&lt;/div&gt;        这些干预都不能改变P(Y|PAY)。     当我们取得了不同干预（不同环境）下的数据后，对于任意环境下的数据，都有一致的P(Y|PAY)，前提是这些环境中不包括干预了Y的环境：     以上就是不变性原理。     那么怎么根据这个原理，来找到Y的PAY呢？     这才是我们这篇的主要任务。          方式是，穷举S，然后检测这个S是否会使得P(Y|S)在不同环境下一致。如果某个S使得P(Y|S)在不同环境下一致，那么S有可能就是PAY。当出现多个集合符合要求，即满足不变性原理时，取交集：     α指显著性水平。     举个例子，列举不同的S集合及不变性验证结果如下：     打勾的是符合不变性原则的，打叉的是不符合不变性原则的，上例中，{3,5}，{1，3，6}，{3，8}都有可能是PAY，取交集后得到{3}，则{3}有很高的概率是属于PAY(S*)的。     这种因果判断的方法，和进行不同干预的数量，即我们所能拥有的环境的数量，以及干预的效果关联很大，如果想让结果尽量的准确，得到的交集不是空集，且尽可能地接近PAY，那么增加环境的数量，保证干预的有效性以及准确性会非常重要。     干预也可以被看成是一个变量，如下图所示：     将干预看成是变量E，变量E影响了X2的值。     用ICP验证，很容易得到X2和X4是Y的因：     但如果X2和Y之间的关系是非线性的，但调用解决线性关系的代码，方程或软件包，就可能无法得到正确答案：     另一种会失败的情况是，干预了Y：     这里引入一个新的概念，hidden variables，隐藏变量，如下图中的X4，他确然会影响X2和Y的值，是X2和Y的因，但我们并不知道它的存在，或者无法对它进行干预，那么就会出现下面的情况。     得到的Y的因不是X2，而是X1，即X2的因。从某种程度上来说，也算是归因成功，因为X1是X2的因，因此X1其实是Y的间接因。所以这种情况下的也能在一定程度上完成归因的任务。     接下来来看看这个方法如何用在真实案例中：     以上是一个基因实验，总共有6170个基因，有160个数据观察点，也可以理解为有160个样本，图中横坐标显示的是基因5954的活性，纵坐标显示的是基因4710的活性，第二张图中显示，如果降低一个样本（红色点表示）中的基因5954的活性，那么基因4710的活性也会降低，由此可推断，基因5954是基因4710的因。     上图中中间这幅图，表示的是在既不干预基因5954，又不干预基因4710活性的前提下，对实验环境进行不同干预后，基因5954和基因4710的活性表达。在这个实验中总共有1479个不同的基因删除动作（干预实验）。     上面三个干预实验中，头两个实验能很明显的判断出，被干预的那个基因是观察基因的因。而第三个实验中，表达的是降低基因3672的活性并不能使基因1475的活性降低，因此不能确定是1475的因。     那么不变性方法如何应用到上述实验中的因果推断中?     上述实验中总共有六千多个基因，如果两两配对，那么有6170×6169个组合，如果再算上方向问题，即A有可能是B的因，B也有可能是A的因，那么需要做6170×6169～6170×6169×2个干预实验，才能理清楚这个实验中，所有基因的因果关系。     因此，可以用不变性方法打辅助啊。     首先将干预中可以明确指出因果关系的干预排除，比如我们想找基因4710的因，那么我们先将实验中对5954的干预实验排除，通过其他的干预实验和不变性方法，看看是否能推断出5954是4710的因。在这里，不做任何干预的环境视为环境1，做了干预（Y和Y的因的干预实验）的视为环境2，应用不变性方法，找出潜在因果关系。     接下来，我们来比较一下不变性原理和其他方法在上述实验中找潜在因果关系的效能。     横坐标表示的是通过不变性原理，推理出来的可能存在因果关系的基因对的数量，比如通过不变性原理，发现了25组基因可能存在因果关系，按可能性由高到低排个序，选出最有可能的一组，去验证，发现果然是的，所以折线图第一个点的坐标落在了（1, 1），接着验证下一组，发现也是对的，则坐标继续落在了（2,2），如果接下来一组验证不对，那么坐标落在（3,2），完美的情况，当如PERFECT那条线，随机的选择验证的基因组，则结果就如灰色条所示。     由上述实验可知，不变性原理对因果推断是非常有用且有效的。大大提高了因果推断的效率。     之后会将因果归纳和机器学习相关联，感兴趣的不妨关注吧。     如果觉得有用，一定帮老夫在右下角点个“在看”哦。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Bühlmann and Nicolai Meinshausen, Causal inference using invariant prediction: identification and confidence intervals, 2015 [3] Nicolai Meinshausen, Package ‘InvariantCausalPrediction’, 2019" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）     这篇是发现因果关系的最后一篇，也是这里要提的最后一个发现因果关系的方法。     之前讲过两种归纳因果关系的方法，第一种是基于独立关系的判断方法：         MIT因果迷你课笔记 —— 发现因果关系1     第二种是基于分布方程中，噪音的独立性的方法：         MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)     今天要说的是第三种：基于不变性的因果预测（invariant causal prediction）     如上图所示，假设我们现在有一个因果系统，不知道因果关系，但在不同环境下观测到了一系列数据，左边蓝色数据是在环境1中观测到的，右边红色数据是在环境2中观测到的。环境和环境之间的区别在于做了不同的干预。     现在我们想要知道Y的因是哪些。     首先我们用线性模型拟合：     Pr(&gt;|t|)是P-value，P值估计系数不显著的可能性，有较大P值的变量是可以从模型中移除的候选变量。由上述实验可知，线性拟合后，Y和X1，X2，X3，都有很小P值，无法根据这个实验找到Y的因。     那用这篇介绍的Invariant Causal Prediction (ICP)来实验呢：     ExpInd长度和Y一致，但其中数据表示的是环境编号，1指环境1，2值环境2，即用于ICP这个方法的数据，包含了不同环境下的数据。而得到的结果表明，X3是Y的因。     接下来我们来说说ICP基于的原理：     不变性原理：     如果Y的结构方程不变，那么无论如何进行干预，只要不干预Y，P(Y|PAY)保持不变。这个很好理解，Y的值由Y的因和噪音决定，那么如果确定了因的值，Y的分布也是确定的，且与图中其他变量是无关的。     这里列一些典型的干预：      1. 使X1只受特定噪音影响     2. 改变影响X4的噪音：     3. 对多个变量作出干预，如下： &lt;div align=center&gt;&lt;/div&gt;        这些干预都不能改变P(Y|PAY)。     当我们取得了不同干预（不同环境）下的数据后，对于任意环境下的数据，都有一致的P(Y|PAY)，前提是这些环境中不包括干预了Y的环境：     以上就是不变性原理。     那么怎么根据这个原理，来找到Y的PAY呢？     这才是我们这篇的主要任务。          方式是，穷举S，然后检测这个S是否会使得P(Y|S)在不同环境下一致。如果某个S使得P(Y|S)在不同环境下一致，那么S有可能就是PAY。当出现多个集合符合要求，即满足不变性原理时，取交集：     α指显著性水平。     举个例子，列举不同的S集合及不变性验证结果如下：     打勾的是符合不变性原则的，打叉的是不符合不变性原则的，上例中，{3,5}，{1，3，6}，{3，8}都有可能是PAY，取交集后得到{3}，则{3}有很高的概率是属于PAY(S*)的。     这种因果判断的方法，和进行不同干预的数量，即我们所能拥有的环境的数量，以及干预的效果关联很大，如果想让结果尽量的准确，得到的交集不是空集，且尽可能地接近PAY，那么增加环境的数量，保证干预的有效性以及准确性会非常重要。     干预也可以被看成是一个变量，如下图所示：     将干预看成是变量E，变量E影响了X2的值。     用ICP验证，很容易得到X2和X4是Y的因：     但如果X2和Y之间的关系是非线性的，但调用解决线性关系的代码，方程或软件包，就可能无法得到正确答案：     另一种会失败的情况是，干预了Y：     这里引入一个新的概念，hidden variables，隐藏变量，如下图中的X4，他确然会影响X2和Y的值，是X2和Y的因，但我们并不知道它的存在，或者无法对它进行干预，那么就会出现下面的情况。     得到的Y的因不是X2，而是X1，即X2的因。从某种程度上来说，也算是归因成功，因为X1是X2的因，因此X1其实是Y的间接因。所以这种情况下的也能在一定程度上完成归因的任务。     接下来来看看这个方法如何用在真实案例中：     以上是一个基因实验，总共有6170个基因，有160个数据观察点，也可以理解为有160个样本，图中横坐标显示的是基因5954的活性，纵坐标显示的是基因4710的活性，第二张图中显示，如果降低一个样本（红色点表示）中的基因5954的活性，那么基因4710的活性也会降低，由此可推断，基因5954是基因4710的因。     上图中中间这幅图，表示的是在既不干预基因5954，又不干预基因4710活性的前提下，对实验环境进行不同干预后，基因5954和基因4710的活性表达。在这个实验中总共有1479个不同的基因删除动作（干预实验）。     上面三个干预实验中，头两个实验能很明显的判断出，被干预的那个基因是观察基因的因。而第三个实验中，表达的是降低基因3672的活性并不能使基因1475的活性降低，因此不能确定是1475的因。     那么不变性方法如何应用到上述实验中的因果推断中?     上述实验中总共有六千多个基因，如果两两配对，那么有6170×6169个组合，如果再算上方向问题，即A有可能是B的因，B也有可能是A的因，那么需要做6170×6169～6170×6169×2个干预实验，才能理清楚这个实验中，所有基因的因果关系。     因此，可以用不变性方法打辅助啊。     首先将干预中可以明确指出因果关系的干预排除，比如我们想找基因4710的因，那么我们先将实验中对5954的干预实验排除，通过其他的干预实验和不变性方法，看看是否能推断出5954是4710的因。在这里，不做任何干预的环境视为环境1，做了干预（Y和Y的因的干预实验）的视为环境2，应用不变性方法，找出潜在因果关系。     接下来，我们来比较一下不变性原理和其他方法在上述实验中找潜在因果关系的效能。     横坐标表示的是通过不变性原理，推理出来的可能存在因果关系的基因对的数量，比如通过不变性原理，发现了25组基因可能存在因果关系，按可能性由高到低排个序，选出最有可能的一组，去验证，发现果然是的，所以折线图第一个点的坐标落在了（1, 1），接着验证下一组，发现也是对的，则坐标继续落在了（2,2），如果接下来一组验证不对，那么坐标落在（3,2），完美的情况，当如PERFECT那条线，随机的选择验证的基因组，则结果就如灰色条所示。     由上述实验可知，不变性原理对因果推断是非常有用且有效的。大大提高了因果推断的效率。     之后会将因果归纳和机器学习相关联，感兴趣的不妨关注吧。     如果觉得有用，一定帮老夫在右下角点个“在看”哦。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Bühlmann and Nicolai Meinshausen, Causal inference using invariant prediction: identification and confidence intervals, 2015 [3] Nicolai Meinshausen, Package ‘InvariantCausalPrediction’, 2019" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B(invariant%20causal%20prediction)/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-03-14T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）     这篇是发现因果关系的最后一篇，也是这里要提的最后一个发现因果关系的方法。     之前讲过两种归纳因果关系的方法，第一种是基于独立关系的判断方法：         MIT因果迷你课笔记 —— 发现因果关系1     第二种是基于分布方程中，噪音的独立性的方法：         MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)     今天要说的是第三种：基于不变性的因果预测（invariant causal prediction）     如上图所示，假设我们现在有一个因果系统，不知道因果关系，但在不同环境下观测到了一系列数据，左边蓝色数据是在环境1中观测到的，右边红色数据是在环境2中观测到的。环境和环境之间的区别在于做了不同的干预。     现在我们想要知道Y的因是哪些。     首先我们用线性模型拟合：     Pr(&gt;|t|)是P-value，P值估计系数不显著的可能性，有较大P值的变量是可以从模型中移除的候选变量。由上述实验可知，线性拟合后，Y和X1，X2，X3，都有很小P值，无法根据这个实验找到Y的因。     那用这篇介绍的Invariant Causal Prediction (ICP)来实验呢：     ExpInd长度和Y一致，但其中数据表示的是环境编号，1指环境1，2值环境2，即用于ICP这个方法的数据，包含了不同环境下的数据。而得到的结果表明，X3是Y的因。     接下来我们来说说ICP基于的原理：     不变性原理：     如果Y的结构方程不变，那么无论如何进行干预，只要不干预Y，P(Y|PAY)保持不变。这个很好理解，Y的值由Y的因和噪音决定，那么如果确定了因的值，Y的分布也是确定的，且与图中其他变量是无关的。     这里列一些典型的干预：      1. 使X1只受特定噪音影响     2. 改变影响X4的噪音：     3. 对多个变量作出干预，如下： &lt;div align=center&gt;&lt;/div&gt;        这些干预都不能改变P(Y|PAY)。     当我们取得了不同干预（不同环境）下的数据后，对于任意环境下的数据，都有一致的P(Y|PAY)，前提是这些环境中不包括干预了Y的环境：     以上就是不变性原理。     那么怎么根据这个原理，来找到Y的PAY呢？     这才是我们这篇的主要任务。          方式是，穷举S，然后检测这个S是否会使得P(Y|S)在不同环境下一致。如果某个S使得P(Y|S)在不同环境下一致，那么S有可能就是PAY。当出现多个集合符合要求，即满足不变性原理时，取交集：     α指显著性水平。     举个例子，列举不同的S集合及不变性验证结果如下：     打勾的是符合不变性原则的，打叉的是不符合不变性原则的，上例中，{3,5}，{1，3，6}，{3，8}都有可能是PAY，取交集后得到{3}，则{3}有很高的概率是属于PAY(S*)的。     这种因果判断的方法，和进行不同干预的数量，即我们所能拥有的环境的数量，以及干预的效果关联很大，如果想让结果尽量的准确，得到的交集不是空集，且尽可能地接近PAY，那么增加环境的数量，保证干预的有效性以及准确性会非常重要。     干预也可以被看成是一个变量，如下图所示：     将干预看成是变量E，变量E影响了X2的值。     用ICP验证，很容易得到X2和X4是Y的因：     但如果X2和Y之间的关系是非线性的，但调用解决线性关系的代码，方程或软件包，就可能无法得到正确答案：     另一种会失败的情况是，干预了Y：     这里引入一个新的概念，hidden variables，隐藏变量，如下图中的X4，他确然会影响X2和Y的值，是X2和Y的因，但我们并不知道它的存在，或者无法对它进行干预，那么就会出现下面的情况。     得到的Y的因不是X2，而是X1，即X2的因。从某种程度上来说，也算是归因成功，因为X1是X2的因，因此X1其实是Y的间接因。所以这种情况下的也能在一定程度上完成归因的任务。     接下来来看看这个方法如何用在真实案例中：     以上是一个基因实验，总共有6170个基因，有160个数据观察点，也可以理解为有160个样本，图中横坐标显示的是基因5954的活性，纵坐标显示的是基因4710的活性，第二张图中显示，如果降低一个样本（红色点表示）中的基因5954的活性，那么基因4710的活性也会降低，由此可推断，基因5954是基因4710的因。     上图中中间这幅图，表示的是在既不干预基因5954，又不干预基因4710活性的前提下，对实验环境进行不同干预后，基因5954和基因4710的活性表达。在这个实验中总共有1479个不同的基因删除动作（干预实验）。     上面三个干预实验中，头两个实验能很明显的判断出，被干预的那个基因是观察基因的因。而第三个实验中，表达的是降低基因3672的活性并不能使基因1475的活性降低，因此不能确定是1475的因。     那么不变性方法如何应用到上述实验中的因果推断中?     上述实验中总共有六千多个基因，如果两两配对，那么有6170×6169个组合，如果再算上方向问题，即A有可能是B的因，B也有可能是A的因，那么需要做6170×6169～6170×6169×2个干预实验，才能理清楚这个实验中，所有基因的因果关系。     因此，可以用不变性方法打辅助啊。     首先将干预中可以明确指出因果关系的干预排除，比如我们想找基因4710的因，那么我们先将实验中对5954的干预实验排除，通过其他的干预实验和不变性方法，看看是否能推断出5954是4710的因。在这里，不做任何干预的环境视为环境1，做了干预（Y和Y的因的干预实验）的视为环境2，应用不变性方法，找出潜在因果关系。     接下来，我们来比较一下不变性原理和其他方法在上述实验中找潜在因果关系的效能。     横坐标表示的是通过不变性原理，推理出来的可能存在因果关系的基因对的数量，比如通过不变性原理，发现了25组基因可能存在因果关系，按可能性由高到低排个序，选出最有可能的一组，去验证，发现果然是的，所以折线图第一个点的坐标落在了（1, 1），接着验证下一组，发现也是对的，则坐标继续落在了（2,2），如果接下来一组验证不对，那么坐标落在（3,2），完美的情况，当如PERFECT那条线，随机的选择验证的基因组，则结果就如灰色条所示。     由上述实验可知，不变性原理对因果推断是非常有用且有效的。大大提高了因果推断的效率。     之后会将因果归纳和机器学习相关联，感兴趣的不妨关注吧。     如果觉得有用，一定帮老夫在右下角点个“在看”哦。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Bühlmann and Nicolai Meinshausen, Causal inference using invariant prediction: identification and confidence intervals, 2015 [3] Nicolai Meinshausen, Package ‘InvariantCausalPrediction’, 2019","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B(invariant%20causal%20prediction)/1.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）","dateModified":"2021-03-14T00:00:00+08:00","datePublished":"2021-03-14T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-03-14">14 Mar 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/1.png" alt="MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484228&amp;idx=1&amp;sn=ab42485fa9528d0187339a69cc6be2ad&amp;chksm=c0676186f710e8902749372ec192567a77aaab2abb48a2d26f13ffe1debca18bc803f58f94cf&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）</a></strong></p>
+
+<p>    这篇是发现因果关系的最后一篇，也是这里要提的最后一个发现因果关系的方法。</p>
+
+<p>    之前讲过两种归纳因果关系的方法，<strong>第一种是基于独立关系的判断方法</strong>：</p>
+
+<p>        <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483979&amp;idx=1&amp;sn=8f2c863833e69ec786a4720c59274d88&amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系1</a></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/1.png" style="zoom:80%;" /></p>
+
+<p>    <strong>第二种是基于分布方程中，噪音的独立性的方法：</strong></p>
+
+<p>        <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484077&amp;idx=1&amp;sn=7f7d173d64a4b582837de7e7f808913b&amp;chksm=c067606ff710e9798755848990b2a08df86b488771feee16bc8ab7ea7f78797b315ed016cd54&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</a></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/2.png" style="zoom:80%;" /></p>
+
+<p>    <strong>今天要说的是第三种：基于不变性的因果预测（invariant causal prediction）</strong></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/3.png" style="zoom: 80%;" /></p>
+
+<p>    如上图所示，假设我们现在有一个因果系统，不知道因果关系，但在不同环境下观测到了一系列数据，左边蓝色数据是在环境1中观测到的，右边红色数据是在环境2中观测到的。环境和环境之间的区别在于做了不同的干预。</p>
+
+<p>    现在我们想要知道Y的因是哪些。</p>
+
+<p>    首先我们用线性模型拟合：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/4.jpeg" style="zoom:80%;" /></p>
+
+<p>    Pr(&gt;|t|)是P-value，P值估计系数不显著的可能性，有较大P值的变量是可以从模型中移除的候选变量。由上述实验可知，线性拟合后，Y和X1，X2，X3，都有很小P值，无法根据这个实验找到Y的因。</p>
+
+<p>    那用这篇介绍的<strong>Invariant Causal Prediction (ICP)</strong>来实验呢：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/5.png" style="zoom:80%;" /></p>
+
+<p>    ExpInd长度和Y一致，但其中数据表示的是环境编号，1指环境1，2值环境2，即用于ICP这个方法的数据，包含了不同环境下的数据。而得到的结果表明，X3是Y的因。</p>
+
+<p>    接下来我们来说说ICP基于的原理：</p>
+
+<p>    <strong>不变性原理：</strong></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/6.png" style="zoom:80%;" /></p>
+
+<p>    如果Y的结构方程不变，那么无论如何进行干预，只要不干预Y，P(Y|PAY)保持不变。这个很好理解，Y的值由Y的因和噪音决定，那么如果确定了因的值，Y的分布也是确定的，且与图中其他变量是无关的。</p>
+
+<p>    这里列一些典型的干预：</p>
+
+<p>     1. 使X1只受特定噪音影响</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/7.png" style="zoom:80%;" /></p>
+
+<p>    2. 改变影响X4的噪音：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/8.png" style="zoom:80%;" /></p>
+
+<p>    3. 对多个变量作出干预，如下：</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/9.png" style="zoom:80%;" />&lt;/div&gt;   </p>
+
+<p>    这些干预都不能改变P(Y|PAY)。</p>
+
+<p>    当我们取得了不同干预（不同环境）下的数据后，对于任意环境下的数据，都有一致的P(Y|PAY)，前提是这些环境中不包括干预了Y的环境：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/10.png" style="zoom:80%;" /></p>
+
+<p>    以上就是不变性原理。</p>
+
+<p>    那么怎么根据这个原理，来找到Y的PAY呢？</p>
+
+<p>    这才是我们这篇的主要任务。</p>
+
+<p>    </p>
+
+<p>    方式是，穷举S，然后检测这个S是否会使得P(Y|S)在不同环境下一致。如果某个S使得P(Y|S)在不同环境下一致，那么S有可能就是PAY。当出现多个集合符合要求，即满足不变性原理时，取交集：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/11.png" style="zoom:80%;" /></p>
+
+<p>    α指显著性水平。</p>
+
+<p>    举个例子，列举不同的S集合及不变性验证结果如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/12.jpeg" style="zoom:80%;" /></p>
+
+<p>    打勾的是符合不变性原则的，打叉的是不符合不变性原则的，上例中，{3,5}，{1，3，6}，{3，8}都有可能是PAY，取交集后得到{3}，则{3}有很高的概率是属于PAY(S*)的。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/13.png" style="zoom:80%;" /></p>
+
+<p>    这种因果判断的方法，和进行不同干预的数量，即我们所能拥有的环境的数量，以及干预的效果关联很大，如果想让结果尽量的准确，得到的交集不是空集，且尽可能地接近PAY，那么增加环境的数量，保证干预的有效性以及准确性会非常重要。</p>
+
+<p>    干预也可以被看成是一个变量，如下图所示：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/14.png" style="zoom:80%;" /></p>
+
+<p>    将干预看成是变量E，变量E影响了X2的值。</p>
+
+<p>    用ICP验证，很容易得到X2和X4是Y的因：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/15.png" style="zoom:80%;" /></p>
+
+<p>    但如果X2和Y之间的关系是非线性的，但调用解决线性关系的代码，方程或软件包，就可能无法得到正确答案：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/16.png" style="zoom:80%;" /></p>
+
+<p>    另一种会失败的情况是，干预了Y：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/17.png" style="zoom:80%;" /></p>
+
+<p>    这里引入一个新的概念，<strong>hidden variables</strong>，<strong>隐藏变量，</strong>如下图中的X4，他确然会影响X2和Y的值，是X2和Y的因，但我们并不知道它的存在，或者无法对它进行干预，那么就会出现下面的情况。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/18.png" style="zoom:80%;" /></p>
+
+<p>    得到的Y的因不是X2，而是X1，即X2的因。从某种程度上来说，也算是归因成功，因为X1是X2的因，因此X1其实是Y的间接因。所以这种情况下的也能在一定程度上完成归因的任务。</p>
+
+<p>    接下来来看看这个方法如何用在真实案例中：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/19.png" style="zoom:80%;" /></p>
+
+<p>    以上是一个基因实验，总共有6170个基因，有160个数据观察点，也可以理解为有160个样本，图中横坐标显示的是基因5954的活性，纵坐标显示的是基因4710的活性，第二张图中显示，如果降低一个样本（红色点表示）中的基因5954的活性，那么基因4710的活性也会降低，由此可推断，基因5954是基因4710的因。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/20.png" style="zoom:80%;" /></p>
+
+<p>    上图中中间这幅图，表示的是在既不干预基因5954，又不干预基因4710活性的前提下，对实验环境进行不同干预后，基因5954和基因4710的活性表达。在这个实验中总共有1479个不同的基因删除动作（干预实验）。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/21.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/22.png" alt="" /></p>
+
+<p>    上面三个干预实验中，头两个实验能很明显的判断出，被干预的那个基因是观察基因的因。而第三个实验中，表达的是降低基因3672的活性并不能使基因1475的活性降低，因此不能确定是1475的因。</p>
+
+<p>    那么不变性方法如何应用到上述实验中的因果推断中?</p>
+
+<p>    上述实验中总共有六千多个基因，如果两两配对，那么有6170×6169个组合，如果再算上方向问题，即A有可能是B的因，B也有可能是A的因，那么需要做6170×6169～6170×6169×2个干预实验，才能理清楚这个实验中，所有基因的因果关系。</p>
+
+<p>    因此，可以用不变性方法打辅助啊。</p>
+
+<p>    首先将干预中可以明确指出因果关系的干预排除，比如我们想找基因4710的因，那么我们先将实验中对5954的干预实验排除，通过其他的干预实验和不变性方法，看看是否能推断出5954是4710的因。在这里，不做任何干预的环境视为环境1，做了干预（Y和Y的因的干预实验）的视为环境2，应用不变性方法，找出潜在因果关系。</p>
+
+<p>    接下来，我们来比较一下不变性原理和其他方法在上述实验中找潜在因果关系的效能。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/23.png" style="zoom:80%;" /></p>
+
+<p>    横坐标表示的是通过不变性原理，推理出来的可能存在因果关系的基因对的数量，比如通过不变性原理，发现了25组基因可能存在因果关系，按可能性由高到低排个序，选出最有可能的一组，去验证，发现果然是的，所以折线图第一个点的坐标落在了（1, 1），接着验证下一组，发现也是对的，则坐标继续落在了（2,2），如果接下来一组验证不对，那么坐标落在（3,2），完美的情况，当如PERFECT那条线，随机的选择验证的基因组，则结果就如灰色条所示。</p>
+
+<p>    由上述实验可知，不变性原理对因果推断是非常有用且有效的。大大提高了因果推断的效率。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）/24.png" style="zoom:80%;" /></p>
+
+<p>    之后会将因果归纳和机器学习相关联，感兴趣的不妨关注吧。</p>
+
+<p>    如果觉得有用，一定帮老夫在右下角点个“在看”哦。</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484228&amp;idx=1&amp;sn=ab42485fa9528d0187339a69cc6be2ad&amp;chksm=c0676186f710e8902749372ec192567a77aaab2abb48a2d26f13ffe1debca18bc803f58f94cf&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Jonas Peters, Peter Bühlmann and Nicolai Meinshausen, Causal inference using invariant prediction: identification and confidence intervals, 2015</p>
+
+<p>[3] Nicolai Meinshausen, Package ‘InvariantCausalPrediction’, 2019</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9F%BA%E4%BA%8E%E4%B8%8D%E5%8F%98%E6%80%A7%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%A2%84%E6%B5%8B-invariant-causal-prediction/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

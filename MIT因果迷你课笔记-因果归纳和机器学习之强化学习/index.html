@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第三部分，讲因果归纳和强化学习。     这部分有三个案例：     一：肾结石案例     这个案例之前提到过，先回顾一下：     肾结石的两个治疗方案：     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石，而B方案则主要用在了治愈率较高的小结石，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以用下图表示：     公式化上图，得：     P(r,t,s)可以按上面公式展开，其中p(r|t,s) = R = g(S,T,NR)，p(t|s) = T = f(S,NT)，现在想对治疗方式进行干预，那分布该如何变化：     也就是说，如果想干预治疗方式，那么改变的是治疗方式的分布函数，如果想干预治愈，那么改变的是治愈的分布函数。可以用这种方式去求解治疗方式的最佳选择。     二：Blackjack     这是一个扑克牌游戏，又名21点，源于法国，现已流传到世界各地。规则如下：     该游戏由 2 到 6 个人玩，使用除大小王之外的 52 张牌，游戏者的目标（Goal）是使手中的牌的点数之和不超过 21 且尽量大。     每张牌都有点数， 2 到 10 的牌的点数就是其牌面的数字；J 、 Q 、 K 的点数是 10；A 有两种算法， 1 或者 11 ，如果 A 算为 11 时总和大于 21 ，则 A 算为 1 。例如 （ A, 8 ） 是 19 点，（ A, 7, J ） 则为 18 点。     首次发牌（Dealing）每人2张牌。庄家以顺时钟方向向众玩家家派发一张暗牌（即不被揭开的牌），然后向自己派发一张暗牌，接着庄家会以顺时钟方向向众玩家派发一张明牌（即被揭开的牌），之后又向自己派发一张明牌. 　当众人手上各拥一张暗牌和一张明牌，庄家就以顺时钟方向逐位向玩家询问是否再要牌（Hit）（以明牌方式派发）。在要牌的过程中，如果玩家所有的牌加起来超过21点，玩家就输了（俗称爆煲Bust），游戏也就结束了。该玩家的注码归庄家。     如果玩家无爆煲，庄家询问完所有玩家后，就必须揭开自己手上的暗牌。若庄家总点数少于17点，就必须继续要牌；如果庄家爆煲，便向没有爆煲的玩家，赔出该玩家所投注的同等的注码。如果庄家无爆煲且大于等于17点，那么庄家与玩家比较点数决胜负，大的赢（例牌除外）。一样点数为平手，各自取回赌注。     停牌（STAND）：不再拿牌。在任何情况下，玩家可选择停止要牌。     分牌（SPLIT）：玩家再下一注与原赌注相等的赌金，并将前两张牌分为两副单独的牌。这两张牌的点数必须相同（即一对8、一对K 或一对Q，某些玩法中两张10点的牌如一张10一张Q时也可分牌）。但分牌后的黑杰克，只能作普通21点计算，其赔率只是1 赔1 。     双倍下注（DOUBLE或DOUBLE DOWN）：玩家在拿到前两张牌之后，可以再下一注与原赌注相等的赌金（如果觉得少可以加倍），然后只能再拿一张牌。如果拿到黑杰克，则不许双倍下注。（部分玩法中拿到3张或3张以上也可选择双倍下注，但同样只能再拿一张牌）     **例牌（BlackJack**）：如果玩家手中的一张暗牌和一张明牌分别是一张A牌（可作11点）和一张十点牌（K、Q、J、10），这副牌叫做二十一点，例牌（BlackJack）。该玩家可向庄家报到，庄家须向该玩家赔上1倍（有些，1.5倍）注码。 举例：     图中最左边的玩家有两手，庄家点数是17，这个玩家的两手分别是16和21，毫无疑问21这手赢了庄家，中间超过21点，爆煲，输了，(J，K)加起来20，赢了，最右边16，平了。     那么，如何取得这个游戏的最佳策略呢？     首先，采用随机策略，进行一些游戏，取得一些样本数据p = p(X，Y，Z)。X：当前的状态，比如玩家手里的牌或所有玩家手里的牌，桌面上出现过的牌，庄家总共用了几副牌等等，Y：对当前状况采取的策略。l = l（X，Y，Z）是收益方程，p策略，即知道了现在的状况后，为了争取最大收益或最小损失，选择的策略，如拿牌，停牌，分牌等，p则是用样本优化后我们求的策略。Epl表示在这种策略下的期望收益或损失。       期望收益的计算可以如下：     这里的每一步推导就不展开说了，我们想得到的是p(y|x)，已知的是p(y|x)，我们希望用p(y|x)替换p(y|x)后，Ep*l的值能变大。     训练是一个循环往复的过程，刚开始的策略是随机策略，然后进行一些游戏后，用已有的样本进行策略优化，将优化的策略替换原本的策略，再进行一些游戏，进行这些游戏的时候，一部分策略用的是之前优化后的策略，但依然会保留随机性，即有一部分决策是随机的选择。再用新得的样本优化现用的策略，将优化后的策略替换原本的策略，如此反复，直到期望收益不再会因为这个过程提高。     这个游戏的因果结构如下（简单的）：     最后的输赢取决于你的策略，桌面上的明牌和暗牌。也可以在因果图中补充一些信息，比如，就这个游戏而言，输赢和牌的花色没有关系。     下图是增强算法在优化这个游戏策略上的表现：     接下来看最后一个例子：     三：广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的事情时，经常会被推送一些广告，如下图：     可以通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作，并产生一些数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些推送又会一定程度上决定用户的行为。     user intention指用户意图，user data指和用户相关的数据，main line reserve指保留多少及什么样的空间给广告，#ads in main line推荐的广告数量，click是用户的点击。这只是一个简单的广告推荐的因果图，广告推荐的因果图可以更复杂，比如加上广告的内容，类别等等。这样的推荐系统，也可以用强化学习的方式来做，保留一点随机性，可以发现更多的可能。我们最终想要的是更多的点击，而不是把广告推送出去。     下面对广告系统做了一点简单的实验：     （0，0）位置表征的是这个广告系统的初始状态，增加或减少广告区域，可以发现，减少广告区域可以增加广告的点击量。蓝色区域表示的是区间，因测试数据并不充分，因此只能表达出调整广告区域后点击量所在的区间。     由因果图可以发现，广告区域决定了广告的数量，而广告数量才是决定点击量的直接因素。那么如果直接用广告数量来进行实验，实验结果如何：     趋势还是那个趋势，区间大大缩小了。因此，准确地使用因果关系来分析问题，效果可能会更好。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] cplwsy,  21点Blackjack玩法，百度经验，2017" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第三部分，讲因果归纳和强化学习。     这部分有三个案例：     一：肾结石案例     这个案例之前提到过，先回顾一下：     肾结石的两个治疗方案：     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石，而B方案则主要用在了治愈率较高的小结石，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以用下图表示：     公式化上图，得：     P(r,t,s)可以按上面公式展开，其中p(r|t,s) = R = g(S,T,NR)，p(t|s) = T = f(S,NT)，现在想对治疗方式进行干预，那分布该如何变化：     也就是说，如果想干预治疗方式，那么改变的是治疗方式的分布函数，如果想干预治愈，那么改变的是治愈的分布函数。可以用这种方式去求解治疗方式的最佳选择。     二：Blackjack     这是一个扑克牌游戏，又名21点，源于法国，现已流传到世界各地。规则如下：     该游戏由 2 到 6 个人玩，使用除大小王之外的 52 张牌，游戏者的目标（Goal）是使手中的牌的点数之和不超过 21 且尽量大。     每张牌都有点数， 2 到 10 的牌的点数就是其牌面的数字；J 、 Q 、 K 的点数是 10；A 有两种算法， 1 或者 11 ，如果 A 算为 11 时总和大于 21 ，则 A 算为 1 。例如 （ A, 8 ） 是 19 点，（ A, 7, J ） 则为 18 点。     首次发牌（Dealing）每人2张牌。庄家以顺时钟方向向众玩家家派发一张暗牌（即不被揭开的牌），然后向自己派发一张暗牌，接着庄家会以顺时钟方向向众玩家派发一张明牌（即被揭开的牌），之后又向自己派发一张明牌. 　当众人手上各拥一张暗牌和一张明牌，庄家就以顺时钟方向逐位向玩家询问是否再要牌（Hit）（以明牌方式派发）。在要牌的过程中，如果玩家所有的牌加起来超过21点，玩家就输了（俗称爆煲Bust），游戏也就结束了。该玩家的注码归庄家。     如果玩家无爆煲，庄家询问完所有玩家后，就必须揭开自己手上的暗牌。若庄家总点数少于17点，就必须继续要牌；如果庄家爆煲，便向没有爆煲的玩家，赔出该玩家所投注的同等的注码。如果庄家无爆煲且大于等于17点，那么庄家与玩家比较点数决胜负，大的赢（例牌除外）。一样点数为平手，各自取回赌注。     停牌（STAND）：不再拿牌。在任何情况下，玩家可选择停止要牌。     分牌（SPLIT）：玩家再下一注与原赌注相等的赌金，并将前两张牌分为两副单独的牌。这两张牌的点数必须相同（即一对8、一对K 或一对Q，某些玩法中两张10点的牌如一张10一张Q时也可分牌）。但分牌后的黑杰克，只能作普通21点计算，其赔率只是1 赔1 。     双倍下注（DOUBLE或DOUBLE DOWN）：玩家在拿到前两张牌之后，可以再下一注与原赌注相等的赌金（如果觉得少可以加倍），然后只能再拿一张牌。如果拿到黑杰克，则不许双倍下注。（部分玩法中拿到3张或3张以上也可选择双倍下注，但同样只能再拿一张牌）     **例牌（BlackJack**）：如果玩家手中的一张暗牌和一张明牌分别是一张A牌（可作11点）和一张十点牌（K、Q、J、10），这副牌叫做二十一点，例牌（BlackJack）。该玩家可向庄家报到，庄家须向该玩家赔上1倍（有些，1.5倍）注码。 举例：     图中最左边的玩家有两手，庄家点数是17，这个玩家的两手分别是16和21，毫无疑问21这手赢了庄家，中间超过21点，爆煲，输了，(J，K)加起来20，赢了，最右边16，平了。     那么，如何取得这个游戏的最佳策略呢？     首先，采用随机策略，进行一些游戏，取得一些样本数据p = p(X，Y，Z)。X：当前的状态，比如玩家手里的牌或所有玩家手里的牌，桌面上出现过的牌，庄家总共用了几副牌等等，Y：对当前状况采取的策略。l = l（X，Y，Z）是收益方程，p策略，即知道了现在的状况后，为了争取最大收益或最小损失，选择的策略，如拿牌，停牌，分牌等，p则是用样本优化后我们求的策略。Epl表示在这种策略下的期望收益或损失。       期望收益的计算可以如下：     这里的每一步推导就不展开说了，我们想得到的是p(y|x)，已知的是p(y|x)，我们希望用p(y|x)替换p(y|x)后，Ep*l的值能变大。     训练是一个循环往复的过程，刚开始的策略是随机策略，然后进行一些游戏后，用已有的样本进行策略优化，将优化的策略替换原本的策略，再进行一些游戏，进行这些游戏的时候，一部分策略用的是之前优化后的策略，但依然会保留随机性，即有一部分决策是随机的选择。再用新得的样本优化现用的策略，将优化后的策略替换原本的策略，如此反复，直到期望收益不再会因为这个过程提高。     这个游戏的因果结构如下（简单的）：     最后的输赢取决于你的策略，桌面上的明牌和暗牌。也可以在因果图中补充一些信息，比如，就这个游戏而言，输赢和牌的花色没有关系。     下图是增强算法在优化这个游戏策略上的表现：     接下来看最后一个例子：     三：广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的事情时，经常会被推送一些广告，如下图：     可以通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作，并产生一些数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些推送又会一定程度上决定用户的行为。     user intention指用户意图，user data指和用户相关的数据，main line reserve指保留多少及什么样的空间给广告，#ads in main line推荐的广告数量，click是用户的点击。这只是一个简单的广告推荐的因果图，广告推荐的因果图可以更复杂，比如加上广告的内容，类别等等。这样的推荐系统，也可以用强化学习的方式来做，保留一点随机性，可以发现更多的可能。我们最终想要的是更多的点击，而不是把广告推送出去。     下面对广告系统做了一点简单的实验：     （0，0）位置表征的是这个广告系统的初始状态，增加或减少广告区域，可以发现，减少广告区域可以增加广告的点击量。蓝色区域表示的是区间，因测试数据并不充分，因此只能表达出调整广告区域后点击量所在的区间。     由因果图可以发现，广告区域决定了广告的数量，而广告数量才是决定点击量的直接因素。那么如果直接用广告数量来进行实验，实验结果如何：     趋势还是那个趋势，区间大大缩小了。因此，准确地使用因果关系来分析问题，效果可能会更好。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] cplwsy,  21点Blackjack玩法，百度经验，2017" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-03-19T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第三部分，讲因果归纳和强化学习。     这部分有三个案例：     一：肾结石案例     这个案例之前提到过，先回顾一下：     肾结石的两个治疗方案：     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石，而B方案则主要用在了治愈率较高的小结石，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以用下图表示：     公式化上图，得：     P(r,t,s)可以按上面公式展开，其中p(r|t,s) = R = g(S,T,NR)，p(t|s) = T = f(S,NT)，现在想对治疗方式进行干预，那分布该如何变化：     也就是说，如果想干预治疗方式，那么改变的是治疗方式的分布函数，如果想干预治愈，那么改变的是治愈的分布函数。可以用这种方式去求解治疗方式的最佳选择。     二：Blackjack     这是一个扑克牌游戏，又名21点，源于法国，现已流传到世界各地。规则如下：     该游戏由 2 到 6 个人玩，使用除大小王之外的 52 张牌，游戏者的目标（Goal）是使手中的牌的点数之和不超过 21 且尽量大。     每张牌都有点数， 2 到 10 的牌的点数就是其牌面的数字；J 、 Q 、 K 的点数是 10；A 有两种算法， 1 或者 11 ，如果 A 算为 11 时总和大于 21 ，则 A 算为 1 。例如 （ A, 8 ） 是 19 点，（ A, 7, J ） 则为 18 点。     首次发牌（Dealing）每人2张牌。庄家以顺时钟方向向众玩家家派发一张暗牌（即不被揭开的牌），然后向自己派发一张暗牌，接着庄家会以顺时钟方向向众玩家派发一张明牌（即被揭开的牌），之后又向自己派发一张明牌. 　当众人手上各拥一张暗牌和一张明牌，庄家就以顺时钟方向逐位向玩家询问是否再要牌（Hit）（以明牌方式派发）。在要牌的过程中，如果玩家所有的牌加起来超过21点，玩家就输了（俗称爆煲Bust），游戏也就结束了。该玩家的注码归庄家。     如果玩家无爆煲，庄家询问完所有玩家后，就必须揭开自己手上的暗牌。若庄家总点数少于17点，就必须继续要牌；如果庄家爆煲，便向没有爆煲的玩家，赔出该玩家所投注的同等的注码。如果庄家无爆煲且大于等于17点，那么庄家与玩家比较点数决胜负，大的赢（例牌除外）。一样点数为平手，各自取回赌注。     停牌（STAND）：不再拿牌。在任何情况下，玩家可选择停止要牌。     分牌（SPLIT）：玩家再下一注与原赌注相等的赌金，并将前两张牌分为两副单独的牌。这两张牌的点数必须相同（即一对8、一对K 或一对Q，某些玩法中两张10点的牌如一张10一张Q时也可分牌）。但分牌后的黑杰克，只能作普通21点计算，其赔率只是1 赔1 。     双倍下注（DOUBLE或DOUBLE DOWN）：玩家在拿到前两张牌之后，可以再下一注与原赌注相等的赌金（如果觉得少可以加倍），然后只能再拿一张牌。如果拿到黑杰克，则不许双倍下注。（部分玩法中拿到3张或3张以上也可选择双倍下注，但同样只能再拿一张牌）     **例牌（BlackJack**）：如果玩家手中的一张暗牌和一张明牌分别是一张A牌（可作11点）和一张十点牌（K、Q、J、10），这副牌叫做二十一点，例牌（BlackJack）。该玩家可向庄家报到，庄家须向该玩家赔上1倍（有些，1.5倍）注码。 举例：     图中最左边的玩家有两手，庄家点数是17，这个玩家的两手分别是16和21，毫无疑问21这手赢了庄家，中间超过21点，爆煲，输了，(J，K)加起来20，赢了，最右边16，平了。     那么，如何取得这个游戏的最佳策略呢？     首先，采用随机策略，进行一些游戏，取得一些样本数据p = p(X，Y，Z)。X：当前的状态，比如玩家手里的牌或所有玩家手里的牌，桌面上出现过的牌，庄家总共用了几副牌等等，Y：对当前状况采取的策略。l = l（X，Y，Z）是收益方程，p策略，即知道了现在的状况后，为了争取最大收益或最小损失，选择的策略，如拿牌，停牌，分牌等，p则是用样本优化后我们求的策略。Epl表示在这种策略下的期望收益或损失。       期望收益的计算可以如下：     这里的每一步推导就不展开说了，我们想得到的是p(y|x)，已知的是p(y|x)，我们希望用p(y|x)替换p(y|x)后，Ep*l的值能变大。     训练是一个循环往复的过程，刚开始的策略是随机策略，然后进行一些游戏后，用已有的样本进行策略优化，将优化的策略替换原本的策略，再进行一些游戏，进行这些游戏的时候，一部分策略用的是之前优化后的策略，但依然会保留随机性，即有一部分决策是随机的选择。再用新得的样本优化现用的策略，将优化后的策略替换原本的策略，如此反复，直到期望收益不再会因为这个过程提高。     这个游戏的因果结构如下（简单的）：     最后的输赢取决于你的策略，桌面上的明牌和暗牌。也可以在因果图中补充一些信息，比如，就这个游戏而言，输赢和牌的花色没有关系。     下图是增强算法在优化这个游戏策略上的表现：     接下来看最后一个例子：     三：广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的事情时，经常会被推送一些广告，如下图：     可以通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作，并产生一些数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些推送又会一定程度上决定用户的行为。     user intention指用户意图，user data指和用户相关的数据，main line reserve指保留多少及什么样的空间给广告，#ads in main line推荐的广告数量，click是用户的点击。这只是一个简单的广告推荐的因果图，广告推荐的因果图可以更复杂，比如加上广告的内容，类别等等。这样的推荐系统，也可以用强化学习的方式来做，保留一点随机性，可以发现更多的可能。我们最终想要的是更多的点击，而不是把广告推送出去。     下面对广告系统做了一点简单的实验：     （0，0）位置表征的是这个广告系统的初始状态，增加或减少广告区域，可以发现，减少广告区域可以增加广告的点击量。蓝色区域表示的是区间，因测试数据并不充分，因此只能表达出调整广告区域后点击量所在的区间。     由因果图可以发现，广告区域决定了广告的数量，而广告数量才是决定点击量的直接因素。那么如果直接用广告数量来进行实验，实验结果如何：     趋势还是那个趋势，区间大大缩小了。因此，准确地使用因果关系来分析问题，效果可能会更好。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] cplwsy,  21点Blackjack玩法，百度经验，2017","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/1.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习","dateModified":"2021-03-19T00:00:00+08:00","datePublished":"2021-03-19T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-03-19">19 Mar 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484352&amp;idx=1&amp;sn=8fe2788dceccc3b9d98560f7157de134&amp;chksm=c0676102f710e8148f6b4ec1f6f999872a2fbb819a939bda64f046531582158b5fe95c8846f7&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a></strong></p>
+
+<p>    这是这门课最后一部分的内容，因果归纳和机器学习。</p>
+
+<p>    总共分四个部分，这是第三部分，讲因果归纳和强化学习。</p>
+
+<p>    这部分有三个案例：</p>
+
+<p>    <strong>一：肾结石案例</strong></p>
+
+<p>    这个案例之前提到过，先回顾一下：</p>
+
+<p>    肾结石的两个治疗方案：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" style="zoom: 67%;" /></p>
+
+<p>    肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石，而B方案则主要用在了治愈率较高的小结石，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以用下图表示：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/2.png" style="zoom:67%;" /></p>
+
+<p>    公式化上图，得：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/3.png" style="zoom: 50%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/4.png" style="zoom:50%;" /></p>
+
+<p>    P(r,t,s)可以按上面公式展开，其中p(r|t,s) = R = g(S,T,NR)，p(t|s) = T = f(S,NT)，现在想对治疗方式进行干预，那分布该如何变化：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/5.png" style="zoom: 67%;" /></p>
+
+<p>    也就是说，如果想干预治疗方式，那么改变的是治疗方式的分布函数，如果想干预治愈，那么改变的是治愈的分布函数。可以用这种方式去求解治疗方式的最佳选择。</p>
+
+<p>    <strong>二：Blackjack</strong></p>
+
+<p>    这是一个扑克牌游戏，又名21点，源于法国，现已流传到世界各地。规则如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/6.png" style="zoom: 67%;" /></p>
+
+<p>    该游戏由 2 到 6 个人玩，使用除大小王之外的 52 张牌，游戏者的<strong>目标（Goal）</strong>是使手中的牌的点数之和不超过 21 且尽量大。</p>
+
+<p>    每张牌都有点数， 2 到 10 的牌的点数就是其牌面的数字；J 、 Q 、 K 的点数是 10；A 有两种算法， 1 或者 11 ，如果 A 算为 11 时总和大于 21 ，则 A 算为 1 。例如 （ A, 8 ） 是 19 点，（ A, 7, J ） 则为 18 点。</p>
+
+<p>    首次<strong>发牌（Dealing）</strong>每人2张牌。庄家以顺时钟方向向众玩家家派发一张暗牌（即不被揭开的牌），然后向自己派发一张暗牌，接着庄家会以顺时钟方向向众玩家派发一张明牌（即被揭开的牌），之后又向自己派发一张明牌. 　当众人手上各拥一张暗牌和一张明牌，庄家就以顺时钟方向逐位向玩家询问是否再<strong>要牌（Hit）</strong>（以明牌方式派发）。在要牌的过程中，如果玩家所有的牌加起来超过21点，玩家就输了（俗称<strong>爆煲Bust</strong>），游戏也就结束了。该玩家的注码归庄家。</p>
+
+<p>    如果玩家无爆煲，庄家询问完所有玩家后，就必须揭开自己手上的暗牌。若庄家总点数少于17点，就必须继续要牌；如果庄家爆煲，便向没有爆煲的玩家，赔出该玩家所投注的同等的注码。如果庄家无爆煲且大于等于17点，那么庄家与玩家比较点数决胜负，大的赢（例牌除外）。一样点数为平手，各自取回赌注。</p>
+
+<p>    <strong>停牌（STAND）</strong>：不再拿牌。在任何情况下，玩家可选择停止要牌。</p>
+
+<p>    <strong>分牌（SPLIT）</strong>：玩家再下一注与原赌注相等的赌金，并将前两张牌分为两副单独的牌。这两张牌的点数必须相同（即一对8、一对K 或一对Q，某些玩法中两张10点的牌如一张10一张Q时也可分牌）。但分牌后的黑杰克，只能作普通21点计算，其赔率只是1 赔1 。</p>
+
+<p>    <strong>双倍下注（DOUBLE或DOUBLE DOWN）</strong>：玩家在拿到前两张牌之后，可以再下一注与原赌注相等的赌金（如果觉得少可以加倍），然后只能再拿一张牌。如果拿到黑杰克，则不许双倍下注。（部分玩法中拿到3张或3张以上也可选择双倍下注，但同样只能再拿一张牌）</p>
+
+<p>    **例牌（<strong style="font-family: &quot;Microsoft Yahei&quot;, 微软雅黑, arial, 宋体, sans-serif;font-size: 16px;white-space: normal;">BlackJack**）</strong>：如果玩家手中的一张暗牌和一张明牌分别是一张A牌（可作11点）和一张十点牌（K、Q、J、10），这副牌叫做二十一点，例牌（BlackJack）。该玩家可向庄家报到，庄家须向该玩家赔上1倍（有些，1.5倍）注码。</p>
+
+<p>举例：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/7.png" style="zoom:80%;" /></p>
+
+<p>    图中最左边的玩家有两手，庄家点数是17，这个玩家的两手分别是16和21，毫无疑问21这手赢了庄家，中间超过21点，爆煲，输了，(J，K)加起来20，赢了，最右边16，平了。</p>
+
+<p>    那么，如何取得这个游戏的最佳策略呢？</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/8.png" style="zoom: 80%;" /></p>
+
+<p>    首先，采用随机策略，进行一些游戏，取得一些样本数据p = p(X，Y，Z)。X：当前的状态，比如玩家手里的牌或所有玩家手里的牌，桌面上出现过的牌，庄家总共用了几副牌等等，Y：对当前状况采取的策略。l = l（X，Y，Z）是收益方程，p策略，即知道了现在的状况后，为了争取最大收益或最小损失，选择的策略，如拿牌，停牌，分牌等，p<em>则是用样本优化后我们求的策略。Ep</em>l表示在这种策略下的期望收益或损失。  </p>
+
+<p>    期望收益的计算可以如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/9.png" style="zoom: 67%;" /></p>
+
+<p>    这里的每一步推导就不展开说了，我们想得到的是p<em>(y|x)，已知的是p(y|x)，我们希望用p</em>(y|x)替换p(y|x)后，Ep*l的值能变大。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/10.png" style="zoom:67%;" /></p>
+
+<p>    训练是一个循环往复的过程，刚开始的策略是随机策略，然后进行一些游戏后，用已有的样本进行策略优化，将优化的策略替换原本的策略，再进行一些游戏，进行这些游戏的时候，一部分策略用的是之前优化后的策略，但依然会保留随机性，即有一部分决策是随机的选择。再用新得的样本优化现用的策略，将优化后的策略替换原本的策略，如此反复，直到期望收益不再会因为这个过程提高。</p>
+
+<p>    这个游戏的因果结构如下（简单的）：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/11.png" style="zoom: 67%;" /></p>
+
+<p>    最后的输赢取决于你的策略，桌面上的明牌和暗牌。也可以在因果图中补充一些信息，比如，就这个游戏而言，输赢和牌的花色没有关系。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/12.png" style="zoom:67%;" /></p>
+
+<p>    下图是增强算法在优化这个游戏策略上的表现：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/13.png" style="zoom:67%;" /></p>
+
+<p>    接下来看最后一个例子：</p>
+
+<p>    <strong>三：广告推荐</strong></p>
+
+<p>    当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的事情时，经常会被推送一些广告，如下图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/14.png" /></p>
+
+<p>    可以通过研究推送广告过程中的因果关系来优化模型：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/15.png" style="zoom:80%;" /></p>
+
+<p>用户的意图会决定用户的操作，并产生一些数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些推送又会一定程度上决定用户的行为。</p>
+
+<p>    user intention指用户意图，user data指和用户相关的数据，main line reserve指保留多少及什么样的空间给广告，#ads in main line推荐的广告数量，click是用户的点击。这只是一个简单的广告推荐的因果图，广告推荐的因果图可以更复杂，比如加上广告的内容，类别等等。这样的推荐系统，也可以用强化学习的方式来做，保留一点随机性，可以发现更多的可能。我们最终想要的是更多的点击，而不是把广告推送出去。</p>
+
+<p>    下面对广告系统做了一点简单的实验：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/16.png" style="zoom:67%;" /></p>
+
+<p>    （0，0）位置表征的是这个广告系统的初始状态，增加或减少广告区域，可以发现，减少广告区域可以增加广告的点击量。蓝色区域表示的是区间，因测试数据并不充分，因此只能表达出调整广告区域后点击量所在的区间。</p>
+
+<p>    由因果图可以发现，广告区域决定了广告的数量，而广告数量才是决定点击量的直接因素。那么如果直接用广告数量来进行实验，实验结果如何：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/17.png" style="zoom:67%;" /></p>
+
+<p>    趋势还是那个趋势，区间大大缩小了。因此，准确地使用因果关系来分析问题，效果可能会更好。</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484352&amp;idx=1&amp;sn=8fe2788dceccc3b9d98560f7157de134&amp;chksm=c0676102f710e8148f6b4ec1f6f999872a2fbb819a939bda64f046531582158b5fe95c8846f7&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] cplwsy,  21点Blackjack玩法，百度经验，2017</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/4.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）
+
+    这是这门课最后一部分的内</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">17 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

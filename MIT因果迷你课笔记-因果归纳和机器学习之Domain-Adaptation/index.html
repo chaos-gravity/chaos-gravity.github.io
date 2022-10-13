@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第四部分，讲因果归纳和Domain Adaptation。     先理解 Multi-task Learning （MTL）和 Transfer Learning 的概念。     （引用自参考[2]） Multi-task Learning （MTL），只专注于单个模型可能会忽略一些相关任务中可能提升目标任务的潜在信息，通过进行一定程度的共享不同任务之间的参数，可能会使原任务泛化更好。广义的讲，只要loss有多个就算MTL。     （引用自参考[3]）Transfer Learning的初衷是节省人工标注样本的时间，让模型可以通过已有的标记数据（source domain data）向未标注数据（target domain data）迁移。从而训练出适用于target domain的模型。举个例： 上图是某行人检测任务数据集当中的4张图片，假设前两张正对着摄像机的行人作为训练集，后两张背对着的行人图片作为测试集，结果该模型的测试评分会很差，因为训练时没有考虑到摄像机观察角度引起的问题，类似的在图像识别领域有很多因素会降低识别率（例如光照，背景等）。那能否用一些未标记的图片（类似图3，4这样的图），增强我们的行人检测模型，让它不仅可以识别正对着的行人，还可以识别背对着的行人？这就是迁移学习要干的事。     由上面的概念可知，MTL的训练数据来自不同的域（domain），而应用的场景可能只是训练数据中的其中一个域。TL的训练数据来自不同的域，而应用的场景是训练数据中没有的域。     现在有一个假设：     这个假设叫做Coverage Shift Assumption（注：因为视频和课件中均没有出现文字版的名字，不知道这三个单词我打对了没）。这个假设是说对于所有域，以X为条件的Y的分布是一致的，如上式所示。      首先说明，这只是一个假设，不是完美的。另外，从因果的角度来检讨，也有些不那么自然的地方。因为会影响Y的是Y的因，而显然X中不是所有特征都是Y的因。     那如何根据上面的假设传递知识：     上面公式中1,2,3,4,5这些可以看成是不同domain的编号，也就是说有些域和Y之间的关系是已知的（比如有打过标签的训练数据，训练过），但有些域和Y之间的关系是不知道的（比如有些域的数据没有打过标签，没有参与训练模型），那如何从已知的Y和一些域的关系去推导Y和另外一些域的关系？       上图是授课老师展示的一个方案，这里就不细说了，因为他没细说，我也没明白。     另外一个原因是Domain Adaptation还在概念的阶段，不是一个成熟的课题，所以这里的主要任务是抛出问题，引发思考，感兴趣的可以深入了解一下。     到这里，这门因果课就结束啦，下面是授课老师推荐的一些相关的书，可供参考：     最后再回头说一说进入这个领域的初衷（改自课程老师在该课程最后十分钟说的一段话），我想对这个领域感兴趣的大多数人，都是人工智能领域的学者，现在深度学习大热，所有问题都开始用端到端的方式解决了，也取得了很好的效果。但是我们仔细想一下，知道这其中是有问题的，问题在于真正的智能，比如我们人类，解决问题不都是端到端的，人类擅长总结，概括，类比，推理，归纳因果，甚至进行想象，反事实等，我们下围棋不一定能赢过机器人，但我们下围棋的策略，是根据游戏规则，自身经验，推理而来的，再比如人类归纳因果也不总是对的，但我们的行为背后总有动机在支撑。这是现在的人工智能无法做到的。虽然目前因果归纳并没有在人工智能领域取得什么好的成果，但仍有很多学者和科学家坚信，在人工智能领域加上因果归纳，也许会让我们更接近强人工智能。     完结，撒花，希望所有的时间都没有白费，期待下一段旅程，觉得有用的话，右下角帮忙点个‘在看’哦！恭喜发财，感激不尽。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Anticoder,  Multi-task Learning(Review)多任务学习概述，2019 [3] Xf Mao，什么是迁移学习 (Transfer Learning)？这个领域历史发展前景如何？，2017" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第四部分，讲因果归纳和Domain Adaptation。     先理解 Multi-task Learning （MTL）和 Transfer Learning 的概念。     （引用自参考[2]） Multi-task Learning （MTL），只专注于单个模型可能会忽略一些相关任务中可能提升目标任务的潜在信息，通过进行一定程度的共享不同任务之间的参数，可能会使原任务泛化更好。广义的讲，只要loss有多个就算MTL。     （引用自参考[3]）Transfer Learning的初衷是节省人工标注样本的时间，让模型可以通过已有的标记数据（source domain data）向未标注数据（target domain data）迁移。从而训练出适用于target domain的模型。举个例： 上图是某行人检测任务数据集当中的4张图片，假设前两张正对着摄像机的行人作为训练集，后两张背对着的行人图片作为测试集，结果该模型的测试评分会很差，因为训练时没有考虑到摄像机观察角度引起的问题，类似的在图像识别领域有很多因素会降低识别率（例如光照，背景等）。那能否用一些未标记的图片（类似图3，4这样的图），增强我们的行人检测模型，让它不仅可以识别正对着的行人，还可以识别背对着的行人？这就是迁移学习要干的事。     由上面的概念可知，MTL的训练数据来自不同的域（domain），而应用的场景可能只是训练数据中的其中一个域。TL的训练数据来自不同的域，而应用的场景是训练数据中没有的域。     现在有一个假设：     这个假设叫做Coverage Shift Assumption（注：因为视频和课件中均没有出现文字版的名字，不知道这三个单词我打对了没）。这个假设是说对于所有域，以X为条件的Y的分布是一致的，如上式所示。      首先说明，这只是一个假设，不是完美的。另外，从因果的角度来检讨，也有些不那么自然的地方。因为会影响Y的是Y的因，而显然X中不是所有特征都是Y的因。     那如何根据上面的假设传递知识：     上面公式中1,2,3,4,5这些可以看成是不同domain的编号，也就是说有些域和Y之间的关系是已知的（比如有打过标签的训练数据，训练过），但有些域和Y之间的关系是不知道的（比如有些域的数据没有打过标签，没有参与训练模型），那如何从已知的Y和一些域的关系去推导Y和另外一些域的关系？       上图是授课老师展示的一个方案，这里就不细说了，因为他没细说，我也没明白。     另外一个原因是Domain Adaptation还在概念的阶段，不是一个成熟的课题，所以这里的主要任务是抛出问题，引发思考，感兴趣的可以深入了解一下。     到这里，这门因果课就结束啦，下面是授课老师推荐的一些相关的书，可供参考：     最后再回头说一说进入这个领域的初衷（改自课程老师在该课程最后十分钟说的一段话），我想对这个领域感兴趣的大多数人，都是人工智能领域的学者，现在深度学习大热，所有问题都开始用端到端的方式解决了，也取得了很好的效果。但是我们仔细想一下，知道这其中是有问题的，问题在于真正的智能，比如我们人类，解决问题不都是端到端的，人类擅长总结，概括，类比，推理，归纳因果，甚至进行想象，反事实等，我们下围棋不一定能赢过机器人，但我们下围棋的策略，是根据游戏规则，自身经验，推理而来的，再比如人类归纳因果也不总是对的，但我们的行为背后总有动机在支撑。这是现在的人工智能无法做到的。虽然目前因果归纳并没有在人工智能领域取得什么好的成果，但仍有很多学者和科学家坚信，在人工智能领域加上因果归纳，也许会让我们更接近强人工智能。     完结，撒花，希望所有的时间都没有白费，期待下一段旅程，觉得有用的话，右下角帮忙点个‘在看’哦！恭喜发财，感激不尽。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Anticoder,  Multi-task Learning(Review)多任务学习概述，2019 [3] Xf Mao，什么是迁移学习 (Transfer Learning)？这个领域历史发展前景如何？，2017" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain%20Adaptation/6.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-03-20T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第四部分，讲因果归纳和Domain Adaptation。     先理解 Multi-task Learning （MTL）和 Transfer Learning 的概念。     （引用自参考[2]） Multi-task Learning （MTL），只专注于单个模型可能会忽略一些相关任务中可能提升目标任务的潜在信息，通过进行一定程度的共享不同任务之间的参数，可能会使原任务泛化更好。广义的讲，只要loss有多个就算MTL。     （引用自参考[3]）Transfer Learning的初衷是节省人工标注样本的时间，让模型可以通过已有的标记数据（source domain data）向未标注数据（target domain data）迁移。从而训练出适用于target domain的模型。举个例： 上图是某行人检测任务数据集当中的4张图片，假设前两张正对着摄像机的行人作为训练集，后两张背对着的行人图片作为测试集，结果该模型的测试评分会很差，因为训练时没有考虑到摄像机观察角度引起的问题，类似的在图像识别领域有很多因素会降低识别率（例如光照，背景等）。那能否用一些未标记的图片（类似图3，4这样的图），增强我们的行人检测模型，让它不仅可以识别正对着的行人，还可以识别背对着的行人？这就是迁移学习要干的事。     由上面的概念可知，MTL的训练数据来自不同的域（domain），而应用的场景可能只是训练数据中的其中一个域。TL的训练数据来自不同的域，而应用的场景是训练数据中没有的域。     现在有一个假设：     这个假设叫做Coverage Shift Assumption（注：因为视频和课件中均没有出现文字版的名字，不知道这三个单词我打对了没）。这个假设是说对于所有域，以X为条件的Y的分布是一致的，如上式所示。      首先说明，这只是一个假设，不是完美的。另外，从因果的角度来检讨，也有些不那么自然的地方。因为会影响Y的是Y的因，而显然X中不是所有特征都是Y的因。     那如何根据上面的假设传递知识：     上面公式中1,2,3,4,5这些可以看成是不同domain的编号，也就是说有些域和Y之间的关系是已知的（比如有打过标签的训练数据，训练过），但有些域和Y之间的关系是不知道的（比如有些域的数据没有打过标签，没有参与训练模型），那如何从已知的Y和一些域的关系去推导Y和另外一些域的关系？       上图是授课老师展示的一个方案，这里就不细说了，因为他没细说，我也没明白。     另外一个原因是Domain Adaptation还在概念的阶段，不是一个成熟的课题，所以这里的主要任务是抛出问题，引发思考，感兴趣的可以深入了解一下。     到这里，这门因果课就结束啦，下面是授课老师推荐的一些相关的书，可供参考：     最后再回头说一说进入这个领域的初衷（改自课程老师在该课程最后十分钟说的一段话），我想对这个领域感兴趣的大多数人，都是人工智能领域的学者，现在深度学习大热，所有问题都开始用端到端的方式解决了，也取得了很好的效果。但是我们仔细想一下，知道这其中是有问题的，问题在于真正的智能，比如我们人类，解决问题不都是端到端的，人类擅长总结，概括，类比，推理，归纳因果，甚至进行想象，反事实等，我们下围棋不一定能赢过机器人，但我们下围棋的策略，是根据游戏规则，自身经验，推理而来的，再比如人类归纳因果也不总是对的，但我们的行为背后总有动机在支撑。这是现在的人工智能无法做到的。虽然目前因果归纳并没有在人工智能领域取得什么好的成果，但仍有很多学者和科学家坚信，在人工智能领域加上因果归纳，也许会让我们更接近强人工智能。     完结，撒花，希望所有的时间都没有白费，期待下一段旅程，觉得有用的话，右下角帮忙点个‘在看’哦！恭喜发财，感激不尽。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Anticoder,  Multi-task Learning(Review)多任务学习概述，2019 [3] Xf Mao，什么是迁移学习 (Transfer Learning)？这个领域历史发展前景如何？，2017","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain%20Adaptation/6.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation","dateModified":"2021-03-20T00:00:00+08:00","datePublished":"2021-03-20T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-03-20">20 Mar 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484405&amp;idx=1&amp;sn=56e27ea10c70068b867b6ca2cf8cfa51&amp;chksm=c0676137f710e8217e0ec1aa8bc4bf4655cd9aa68c527dfb42dd9b096f4689bc8c9a8d2c1500&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a></strong></p>
+
+<p>    这是这门课最后一部分的内容，因果归纳和机器学习。</p>
+
+<p>    总共分四个部分，这是第四部分，讲因果归纳和Domain Adaptation。</p>
+
+<p>    先理解 Multi-task Learning （MTL）和 Transfer Learning 的概念。</p>
+
+<p>    （<strong>引用自参考[2]</strong>） Multi-task Learning （MTL），只专注于单个模型可能会忽略一些相关任务中可能提升目标任务的潜在信息，通过进行一定程度的共享不同任务之间的参数，可能会使原任务泛化更好。广义的讲，只要loss有多个就算MTL。</p>
+
+<p>    （<strong>引用自参考[3]</strong>）Transfer Learning的初衷是节省人工标注样本的时间，让模型可以通过已有的标记数据（source domain data）向未标注数据（target domain data）迁移。从而训练出适用于target domain的模型。举个例：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/1.jpeg" alt="" /></p>
+
+<p>上图是某行人检测任务数据集当中的4张图片，假设前两张正对着摄像机的行人作为训练集，后两张背对着的行人图片作为测试集，结果该模型的测试评分会很差，因为训练时没有考虑到摄像机观察角度引起的问题，类似的在图像识别领域有很多因素会降低识别率（例如光照，背景等）。那能否用一些未标记的图片（类似图3，4这样的图），增强我们的行人检测模型，让它不仅可以识别正对着的行人，还可以识别背对着的行人？这就是迁移学习要干的事。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/2.png" style="zoom:67%;" /></p>
+
+<p>    由上面的概念可知，MTL的训练数据来自不同的域（domain），而应用的场景可能只是训练数据中的其中一个域。TL的训练数据来自不同的域，而应用的场景是训练数据中没有的域。</p>
+
+<p>    现在有一个假设：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/3.png" style="zoom: 50%;" /></p>
+
+<p>    这个假设叫做Coverage Shift Assumption（注：因为视频和课件中均没有出现文字版的名字，不知道这三个单词我打对了没）。这个假设是说对于所有域，以X为条件的Y的分布是一致的，如上式所示。 </p>
+
+<p>    首先说明，这只是一个假设，不是完美的。另外，从因果的角度来检讨，也有些不那么自然的地方。因为会影响Y的是Y的因，而显然X中不是所有特征都是Y的因。</p>
+
+<p>    那如何根据上面的假设传递知识：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/4.png" style="zoom: 67%;" /></p>
+
+<p>    上面公式中1,2,3,4,5这些可以看成是不同domain的编号，也就是说有些域和Y之间的关系是已知的（比如有打过标签的训练数据，训练过），但有些域和Y之间的关系是不知道的（比如有些域的数据没有打过标签，没有参与训练模型），那如何从已知的Y和一些域的关系去推导Y和另外一些域的关系？  </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/5.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" style="zoom:67%;" /></p>
+
+<p>    上图是授课老师展示的一个方案，这里就不细说了，因为他没细说，我也没明白。</p>
+
+<p>    另外一个原因是Domain Adaptation还在概念的阶段，不是一个成熟的课题，所以这里的主要任务是抛出问题，引发思考，感兴趣的可以深入了解一下。</p>
+
+<p>    到这里，这门因果课就结束啦，下面是授课老师推荐的一些相关的书，可供参考：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/7.png" style="zoom:67%;" /></p>
+
+<p>    最后再回头说一说进入这个领域的初衷（改自课程老师在该课程最后十分钟说的一段话），我想对这个领域感兴趣的大多数人，都是人工智能领域的学者，现在深度学习大热，所有问题都开始用端到端的方式解决了，也取得了很好的效果。但是我们仔细想一下，知道这其中是有问题的，问题在于真正的智能，比如我们人类，解决问题不都是端到端的，人类擅长总结，概括，类比，推理，归纳因果，甚至进行想象，反事实等，我们下围棋不一定能赢过机器人，但我们下围棋的策略，是根据游戏规则，自身经验，推理而来的，再比如人类归纳因果也不总是对的，但我们的行为背后总有动机在支撑。这是现在的人工智能无法做到的。虽然目前因果归纳并没有在人工智能领域取得什么好的成果，但仍有很多学者和科学家坚信，在人工智能领域加上因果归纳，也许会让我们更接近强人工智能。</p>
+
+<p>    完结，撒花，希望所有的时间都没有白费，期待下一段旅程，觉得有用的话，右下角帮忙点个‘在看’哦！恭喜发财，感激不尽。</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484405&amp;idx=1&amp;sn=56e27ea10c70068b867b6ca2cf8cfa51&amp;chksm=c0676137f710e8217e0ec1aa8bc4bf4655cd9aa68c527dfb42dd9b096f4689bc8c9a8d2c1500&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Anticoder,  Multi-task Learning(Review)多任务学习概述，2019</p>
+
+<p>[3] Xf Mao，什么是迁移学习 (Transfer Learning)？这个领域历史发展前景如何？，2017</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/4.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）
+
+    这是这门课最后一部分的内</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">17 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

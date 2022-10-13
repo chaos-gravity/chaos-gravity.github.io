@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    机器学习或深度学习的研究常常会用到一些公开数据集，这里呢，为大家介绍一个公开的古典钢琴乐的MIDI数据集。     这是字节跳动（ByteDance）的项目，项目地址： https://github.com/bytedance/GiantMIDI-Piano     首先说一下MIDI是什么，可以简单理解为数字乐谱。     进行步骤： 从IMSLP（International Music Score Library Project）抓取作曲家的名字和他的曲目名（最终获得18067个作曲家的名字和143701个曲子名称，并记录每个作曲家的名字，曲子，出生日期，死亡日期，国籍。有些作曲家国籍，出生死亡日期是缺失的 在Youtube上根据作曲家的名字和曲名爬曲子，下载Youtube返回的第一顺位的曲子。这里需要注意的是返回的结果里的字和我们搜索的关键字或者关键字集合未必完全匹配，但仍有可能是正确的结果，搜索结果匹配度计算方式如下（Jaccard Similarity，X是搜索关键字的集合，Y是搜索结果的关键字的集合，J表示相似度，越大越好，这个任务里阈值是0.6）： 最后找到了9709个作曲家的60724个曲子。 这样下载的曲子，有些是单纯的钢琴曲，但有些不是，怎么从里面择出钢琴曲呢？他们训练了一个CNN网络，把曲子切成一秒一秒的片段，分别转换成梅尔频谱（Log Mel Spectrograms）输入，输出是是钢琴曲的概率，再取平均值，最后的结果如果大于0.5，则判断该曲子为钢琴曲。最后得到2786个作曲家的10854个钢琴曲。 通过他们之前设计的一个系统high-resolution piano transcription system（https://github.com/bytedance/piano_transcription），将收集的钢琴曲都转换成琴谱，转谱内容包括音高（pitch），琴键的触发（onset）、抬起（offset）、和力度（velocity），以及踏板的触发（onset）和抬起（offset）。     接下来看一些统计数据：     按国家统计了数据集中作曲家的数量。     数据集中88个琴键被使用的情况。     数据集中作曲数量Top 100的作曲家最常使用的琴键。     这里展示了来自三个不同地方的作曲家的琴键的使用情况。     六个作曲家使用不同调的频率的统计。     音差分布的统计，音差即后一个音调减去前一个音调的数值。     不同三和弦的使用频次。     不同四和弦的使用频次。     最后看一下，如何评估这个转谱系统的，他们手工标注了数据集中100个钢琴曲，发现其中有89个确实是钢琴曲，也就是说分辨一个曲子是不是钢琴曲的系统的精度是89%。     再用HMM（Hidden Markov Model）这样一个对齐工具来对齐由系统生成的MIDI和手工生成的MIDI内容。那么转谱错误率计算公式如下：      S（substitution）指替代错误，I（insertion）指插入错误，D（Deletion）指删除错误的数量。N为音符总数。     对于MAESTRO这个数据集，错误的来源分两种，一种是performance error（钢琴家演奏的时候弹错了）和system error（对齐系统的错）：    而GiantMIDI还有一个transcription error（翻译错误）： Relative error的计算方式如下： Relative error会近似于transcription error。因为由系统和演奏造成的错误值大概率是相近的。 文章中评估了52首同时出现在这两个数据集中的曲子。得到的结果如下: Relative difference越小，说明曲转谱系统越好。     这篇就到这里了，简单介绍了一下数据集的产生，如果大家对转谱系统感兴趣，可以去看他们团队的另外一篇文章：  &lt;div align=center&gt;&lt;/div&gt; 他们公开的数据集包括搜集到的钢琴曲mp3，转谱的结果，以及相关的代码和模型。对古典音乐感兴趣的小伙伴可以下载听听。 ​ 最后还是那句话，觉得有用就关注我吧。右下角点个“在看”再走哇。 参考： [1] 机器之心，万余首钢琴作品、一千多个小时，字节跳动发布全球最大钢琴MIDI数据集，2020" />
+<meta property="og:description" content="    机器学习或深度学习的研究常常会用到一些公开数据集，这里呢，为大家介绍一个公开的古典钢琴乐的MIDI数据集。     这是字节跳动（ByteDance）的项目，项目地址： https://github.com/bytedance/GiantMIDI-Piano     首先说一下MIDI是什么，可以简单理解为数字乐谱。     进行步骤： 从IMSLP（International Music Score Library Project）抓取作曲家的名字和他的曲目名（最终获得18067个作曲家的名字和143701个曲子名称，并记录每个作曲家的名字，曲子，出生日期，死亡日期，国籍。有些作曲家国籍，出生死亡日期是缺失的 在Youtube上根据作曲家的名字和曲名爬曲子，下载Youtube返回的第一顺位的曲子。这里需要注意的是返回的结果里的字和我们搜索的关键字或者关键字集合未必完全匹配，但仍有可能是正确的结果，搜索结果匹配度计算方式如下（Jaccard Similarity，X是搜索关键字的集合，Y是搜索结果的关键字的集合，J表示相似度，越大越好，这个任务里阈值是0.6）： 最后找到了9709个作曲家的60724个曲子。 这样下载的曲子，有些是单纯的钢琴曲，但有些不是，怎么从里面择出钢琴曲呢？他们训练了一个CNN网络，把曲子切成一秒一秒的片段，分别转换成梅尔频谱（Log Mel Spectrograms）输入，输出是是钢琴曲的概率，再取平均值，最后的结果如果大于0.5，则判断该曲子为钢琴曲。最后得到2786个作曲家的10854个钢琴曲。 通过他们之前设计的一个系统high-resolution piano transcription system（https://github.com/bytedance/piano_transcription），将收集的钢琴曲都转换成琴谱，转谱内容包括音高（pitch），琴键的触发（onset）、抬起（offset）、和力度（velocity），以及踏板的触发（onset）和抬起（offset）。     接下来看一些统计数据：     按国家统计了数据集中作曲家的数量。     数据集中88个琴键被使用的情况。     数据集中作曲数量Top 100的作曲家最常使用的琴键。     这里展示了来自三个不同地方的作曲家的琴键的使用情况。     六个作曲家使用不同调的频率的统计。     音差分布的统计，音差即后一个音调减去前一个音调的数值。     不同三和弦的使用频次。     不同四和弦的使用频次。     最后看一下，如何评估这个转谱系统的，他们手工标注了数据集中100个钢琴曲，发现其中有89个确实是钢琴曲，也就是说分辨一个曲子是不是钢琴曲的系统的精度是89%。     再用HMM（Hidden Markov Model）这样一个对齐工具来对齐由系统生成的MIDI和手工生成的MIDI内容。那么转谱错误率计算公式如下：      S（substitution）指替代错误，I（insertion）指插入错误，D（Deletion）指删除错误的数量。N为音符总数。     对于MAESTRO这个数据集，错误的来源分两种，一种是performance error（钢琴家演奏的时候弹错了）和system error（对齐系统的错）：    而GiantMIDI还有一个transcription error（翻译错误）： Relative error的计算方式如下： Relative error会近似于transcription error。因为由系统和演奏造成的错误值大概率是相近的。 文章中评估了52首同时出现在这两个数据集中的曲子。得到的结果如下: Relative difference越小，说明曲转谱系统越好。     这篇就到这里了，简单介绍了一下数据集的产生，如果大家对转谱系统感兴趣，可以去看他们团队的另外一篇文章：  &lt;div align=center&gt;&lt;/div&gt; 他们公开的数据集包括搜集到的钢琴曲mp3，转谱的结果，以及相关的代码和模型。对古典音乐感兴趣的小伙伴可以下载听听。 ​ 最后还是那句话，觉得有用就关注我吧。右下角点个“在看”再走哇。 参考： [1] 机器之心，万余首钢琴作品、一千多个小时，字节跳动发布全球最大钢琴MIDI数据集，2020" />
+<link rel="canonical" href="http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/" />
+<meta property="og:url" content="http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/GiantMIDI-Piano:%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/11.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-10-11T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    机器学习或深度学习的研究常常会用到一些公开数据集，这里呢，为大家介绍一个公开的古典钢琴乐的MIDI数据集。     这是字节跳动（ByteDance）的项目，项目地址： https://github.com/bytedance/GiantMIDI-Piano     首先说一下MIDI是什么，可以简单理解为数字乐谱。     进行步骤： 从IMSLP（International Music Score Library Project）抓取作曲家的名字和他的曲目名（最终获得18067个作曲家的名字和143701个曲子名称，并记录每个作曲家的名字，曲子，出生日期，死亡日期，国籍。有些作曲家国籍，出生死亡日期是缺失的 在Youtube上根据作曲家的名字和曲名爬曲子，下载Youtube返回的第一顺位的曲子。这里需要注意的是返回的结果里的字和我们搜索的关键字或者关键字集合未必完全匹配，但仍有可能是正确的结果，搜索结果匹配度计算方式如下（Jaccard Similarity，X是搜索关键字的集合，Y是搜索结果的关键字的集合，J表示相似度，越大越好，这个任务里阈值是0.6）： 最后找到了9709个作曲家的60724个曲子。 这样下载的曲子，有些是单纯的钢琴曲，但有些不是，怎么从里面择出钢琴曲呢？他们训练了一个CNN网络，把曲子切成一秒一秒的片段，分别转换成梅尔频谱（Log Mel Spectrograms）输入，输出是是钢琴曲的概率，再取平均值，最后的结果如果大于0.5，则判断该曲子为钢琴曲。最后得到2786个作曲家的10854个钢琴曲。 通过他们之前设计的一个系统high-resolution piano transcription system（https://github.com/bytedance/piano_transcription），将收集的钢琴曲都转换成琴谱，转谱内容包括音高（pitch），琴键的触发（onset）、抬起（offset）、和力度（velocity），以及踏板的触发（onset）和抬起（offset）。     接下来看一些统计数据：     按国家统计了数据集中作曲家的数量。     数据集中88个琴键被使用的情况。     数据集中作曲数量Top 100的作曲家最常使用的琴键。     这里展示了来自三个不同地方的作曲家的琴键的使用情况。     六个作曲家使用不同调的频率的统计。     音差分布的统计，音差即后一个音调减去前一个音调的数值。     不同三和弦的使用频次。     不同四和弦的使用频次。     最后看一下，如何评估这个转谱系统的，他们手工标注了数据集中100个钢琴曲，发现其中有89个确实是钢琴曲，也就是说分辨一个曲子是不是钢琴曲的系统的精度是89%。     再用HMM（Hidden Markov Model）这样一个对齐工具来对齐由系统生成的MIDI和手工生成的MIDI内容。那么转谱错误率计算公式如下：      S（substitution）指替代错误，I（insertion）指插入错误，D（Deletion）指删除错误的数量。N为音符总数。     对于MAESTRO这个数据集，错误的来源分两种，一种是performance error（钢琴家演奏的时候弹错了）和system error（对齐系统的错）：    而GiantMIDI还有一个transcription error（翻译错误）： Relative error的计算方式如下： Relative error会近似于transcription error。因为由系统和演奏造成的错误值大概率是相近的。 文章中评估了52首同时出现在这两个数据集中的曲子。得到的结果如下: Relative difference越小，说明曲转谱系统越好。     这篇就到这里了，简单介绍了一下数据集的产生，如果大家对转谱系统感兴趣，可以去看他们团队的另外一篇文章：  &lt;div align=center&gt;&lt;/div&gt; 他们公开的数据集包括搜集到的钢琴曲mp3，转谱的结果，以及相关的代码和模型。对古典音乐感兴趣的小伙伴可以下载听听。 ​ 最后还是那句话，觉得有用就关注我吧。右下角点个“在看”再走哇。 参考： [1] 机器之心，万余首钢琴作品、一千多个小时，字节跳动发布全球最大钢琴MIDI数据集，2020","url":"http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/","image":"http://localhost:4000/assets/images/GiantMIDI-Piano:%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/11.png","@type":"BlogPosting","headline":"GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集","dateModified":"2021-10-11T00:00:00+08:00","datePublished":"2021-10-11T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-10-11">11 Oct 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/11.png" alt="GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    机器学习或深度学习的研究常常会用到一些公开数据集，这里呢，为大家介绍一个公开的古典钢琴乐的MIDI数据集。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/1.png" style="zoom:67%;" /></p>
+
+<p>    这是字节跳动（ByteDance）的项目，项目地址：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/bytedance/GiantMIDI-Piano
+</code></pre></div></div>
+
+<p>    首先说一下MIDI是什么，可以简单理解为数字乐谱。</p>
+
+<p>    进行步骤：</p>
+<ul>
+  <li>
+    <p>从IMSLP（International Music Score Library Project）抓取作曲家的名字和他的曲目名（最终获得18067个作曲家的名字和143701个曲子名称，并记录每个作曲家的名字，曲子，出生日期，死亡日期，国籍。有些作曲家国籍，出生死亡日期是缺失的</p>
+  </li>
+  <li>
+    <p>在Youtube上根据作曲家的名字和曲名爬曲子，下载Youtube返回的第一顺位的曲子。这里需要注意的是返回的结果里的字和我们搜索的关键字或者关键字集合未必完全匹配，但仍有可能是正确的结果，搜索结果匹配度计算方式如下（Jaccard Similarity，X是搜索关键字的集合，Y是搜索结果的关键字的集合，J表示相似度，越大越好，这个任务里阈值是0.6）：</p>
+  </li>
+</ul>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/2.png" style="zoom: 50%;" /></p>
+
+<p>最后找到了9709个作曲家的60724个曲子。</p>
+
+<ul>
+  <li>这样下载的曲子，有些是单纯的钢琴曲，但有些不是，怎么从里面择出钢琴曲呢？他们训练了一个CNN网络，把曲子切成一秒一秒的片段，分别转换成梅尔频谱（Log Mel Spectrograms）输入，输出是是钢琴曲的概率，再取平均值，最后的结果如果大于0.5，则判断该曲子为钢琴曲。最后得到2786个作曲家的10854个钢琴曲。</li>
+  <li>通过他们之前设计的一个系统high-resolution piano transcription system（https://github.com/bytedance/piano_transcription），将收集的钢琴曲都转换成琴谱，转谱内容包括音高（pitch），琴键的触发（onset）、抬起（offset）、和力度（velocity），以及踏板的触发（onset）和抬起（offset）。</li>
+</ul>
+
+<p>    接下来看一些统计数据：</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/3.jpeg" alt="" /></p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/4.png" alt="" /></p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/5.png" style="zoom:80%;" /></p>
+
+<p>    按国家统计了数据集中作曲家的数量。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/6.png" alt="" /></p>
+
+<p>    数据集中88个琴键被使用的情况。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/7.png" alt="" /></p>
+
+<p>    数据集中作曲数量Top 100的作曲家最常使用的琴键。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/8.png" alt="" /></p>
+
+<p>    这里展示了来自三个不同地方的作曲家的琴键的使用情况。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/9.png" style="zoom:80%;" /></p>
+
+<p>    六个作曲家使用不同调的频率的统计。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/10.png" style="zoom:80%;" /></p>
+
+<p>    音差分布的统计，音差即后一个音调减去前一个音调的数值。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/11.png" style="zoom:80%;" /></p>
+
+<p>    不同三和弦的使用频次。</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/12.png" style="zoom:80%;" /></p>
+
+<p>    不同四和弦的使用频次。</p>
+
+<p>    最后看一下，如何评估这个转谱系统的，他们手工标注了数据集中100个钢琴曲，发现其中有89个确实是钢琴曲，也就是说分辨一个曲子是不是钢琴曲的系统的精度是89%。</p>
+
+<p>    再用HMM（Hidden Markov Model）这样一个对齐工具来对齐由系统生成的MIDI和手工生成的MIDI内容。那么转谱错误率计算公式如下：</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/13.png" style="zoom:50%;" /></p>
+
+<p>     S（substitution）指替代错误，I（insertion）指插入错误，D（Deletion）指删除错误的数量。N为音符总数。</p>
+
+<p>    对于MAESTRO这个数据集，错误的来源分两种，一种是performance error（钢琴家演奏的时候弹错了）和system error（对齐系统的错）：   </p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/14.png" style="zoom:67%;" /></p>
+
+<p>而GiantMIDI还有一个transcription error（翻译错误）：</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/15.png" style="zoom:67%;" /></p>
+
+<p>Relative error的计算方式如下：</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/16.png" style="zoom: 67%;" /></p>
+
+<p>Relative error会近似于transcription error。因为由系统和演奏造成的错误值大概率是相近的。</p>
+
+<p>文章中评估了52首同时出现在这两个数据集中的曲子。得到的结果如下:</p>
+
+<p><img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/17.png" style="zoom: 50%;" /></p>
+
+<p>Relative difference越小，说明曲转谱系统越好。</p>
+
+<p>    这篇就到这里了，简单介绍了一下数据集的产生，如果大家对转谱系统感兴趣，可以去看他们团队的另外一篇文章：</p>
+
+<p> &lt;div align=center&gt;<img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/18.png" style="zoom:67%;" />&lt;/div&gt;</p>
+
+<p>他们公开的数据集包括搜集到的钢琴曲mp3，转谱的结果，以及相关的代码和模型。对古典音乐感兴趣的小伙伴可以下载听听。</p>
+
+<p>​    最后还是那句话，觉得有用就关注我吧。右下角点个“在看”再走哇。<img src="../assets/images/GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集/19.png" style="zoom:50%;" /></p>
+
+<p>参考：</p>
+
+<p>[1] 机器之心，万余首钢琴作品、一千多个小时，字节跳动发布全球最大钢琴MIDI数据集，2020</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集&url=http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/GiantMIDI-Piano-%E5%AD%97%E8%8A%82%E8%B7%B3%E5%8A%A8%E5%8F%91%E5%B8%83%E7%9A%84%E5%A4%A7%E5%9E%8B%E5%8F%A4%E5%85%B8%E9%92%A2%E7%90%B4%E4%B9%90MIDI%E6%95%B0%E6%8D%AE%E9%9B%86/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Audio">Audio</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Representation-Learning">Representation Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#GiantMIDI-Piano">GiantMIDI-Piano</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/piano_trans_paper_2020/0.png" alt="钢琴曲转谱（Solo Piano Transcription）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">钢琴曲转谱（Solo Piano Transcription）</a>
+                
+            </h2>
+            <h4 class="card-text">​    今天来看一篇钢琴琴谱翻译的文章，出自ByteDance字节跳动，Giant-Piano（GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集）采用的转谱模型就是这个：
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jun 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/2.png" alt="Facebook DeiT(Data-efficient Image Transformers) 解析"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/">Facebook DeiT(Data-efficient Image Transformers) 解析</a>
+                
+            </h2>
+            <h4 class="card-text">    今天看Facebook AI的DeiT。比起Moco v3训练出来的模型，DeiT胜在模型小，训练和推理都更加迅速。且精准度还有了很大提高。
+
+
+
+    迅速到什么程度呢？用一个8-GPU服</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">23 Nov 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT/1.png" alt="Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/">Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT</a>
+                
+            </h2>
+            <h4 class="card-text">    系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析
+
+    系列上篇：Facebook自监督学习Visual Transforme</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">07 Nov 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

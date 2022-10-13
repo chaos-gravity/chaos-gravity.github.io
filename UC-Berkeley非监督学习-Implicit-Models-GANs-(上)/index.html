@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>UC Berkeley非监督学习--Implicit Models -- GANs (上) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>UC Berkeley非监督学习–Implicit Models – GANs (上) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="UC Berkeley非监督学习–Implicit Models – GANs (上)" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 4：UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）         Lecture 7：自监督学习（Self Supervised Learning）     这篇讲Implicit Models，很多是GANs，内容有点丰富，占了两个Lectures，因此这次会分上中下三篇。整理完这两个，剩下的8，9，10，11，12接下来可能不会整理，也可能会慢慢整理。 这是发明GAN的人。这样看效果图，GAN确实很强啊。大家可以在B站或者油管搜BigGAN的视频，看看变换潜变量可以达到的不同效果。 2018年，一个人从github上下载了些代码，用GAN训练了模型并生成了上面这幅图，卖了$432500，，所以，看完这篇吧，让我们离财富自由更近一点。 图像生成的目标： 可以理解图片中的内容 可以完成从一幅图到另外一幅图的丝滑转换。 可以生成和样本相似却又不同的图。 可以通过调整潜变量生成有不同特征的图（样本图中没有的特征）。      Implicit Models要做的也是，先生成一个潜变量z，再通过模型把潜变量转换成图片。但他训练模型的方式和VAE以及Flow Models是不一样的，它通过评估生成的图片的品质来优化模型。 Implicit Models的基本逻辑： 翻译一下是： 需要样本图片pdata 需要可以生成图片的q，然后生成一堆图片pmodel 需要一个可以比较pmodel和pdata的差异的模型D 获得更好的Φ的方式是努力去缩小pmodel和pdata的差异 GAN的第一篇文章发表于2014年： 来看损失函数： G是生成器（z-&gt;x），D是分辨器（分辨输入是G生成的，还是训练样本中的）。D越是确信输入是训练集中的样本，则输出的值越大。D和G存在一个博弈关系，G的目标就是尽量让D(G(z))的输出趋近于1，而D的目标是尽量让D(x)的输出趋近于1，D(G(z))的输出趋于0。 大家可以去下面的网址去观察一下gan训练的可视化效果，还挺有意思的： https://poloclub.github.io/ganlab/     上面这张图是2014年GAN可以做到的效果，右边黄框里的是样本图片，其他是生成的图片，可以发现，当时GAN就可以很好的生成和样本图片近似的图片，但是还不完美，还有很多似是而非的图片产生。     接下来看如何评估GANs模型，到现在生成模型的评估依然是一个问题，而GANs不像之前的生成模型，我们可以用极大似然值来评估，另外，生成图片的优劣其实是一种主观判断。     评估GANs模型： 1.  Parzen-Window density estimator / Kernel Density Estimator (KDE) 这是2006年被提出来的一个概念，网上解释很多，这里就不细说了，详细可以看参考[1]。上面公式中K是窗函数，判断x和xi的距离是不是在一定区间内，K也可以是高斯函数等。KDE要输出密度值，越多样本在x周边，给出的密度值越大。 当h设置不同的值时，出来的效果也很不同，用这个方法得选一下窗口值的大小。 2014年的GAN有用这个方法来评估模型，但事实上这个评估方式更适合低维度的数据，不太适合高维度的数据。 上图实验数据，用于6*6，36维的数据评估，可以发现这个评估方法的效果不是很好，而且和k-means这些方法的比较，也可以发现，也许这个方法只能很好的评估聚类效果，而不是生成效果。 2.  Inception Score 看一下Inception Score的基本想法和方法：  绕过高维密度估计 一个好的生成网络可以生成多种多样不同语义图片 给定生成图片，图片中的事物可以被明确地分辨出来，p(y|x)应该是低熵的 通过调整潜变量，可以生成含有不同事物的图片，p(y)应该是高熵的。 基于以上考虑，Inception Score公式如下： 值越高越好。 由上面的实验结果可以发现，Inception Score确实可以很好的区分真实图片和生成图片，评估生成图片的质量。但这个方法也有缺点，比如说，背景信息，边边角角的生成质量被忽略了，另外就是如果在生成数据的时候，针对Inception Model可以识别的类，一个类生成一个，那么最后就可以获得很好的Inception Score。 3.  Fréchet Inception Distance Fréchet Inception Distance （FID）的基本想法和方法：  Inception Score不够优秀，包括无法评估生成图片的细节优劣，另外如果你生成有方，模型可识别的类型每样生成一个，只要生成的质量不是太差，都能获得很高的Inception Score FID可以更多的分辨细节上的优劣。 实现方法就是把生成的图片转换成特征向量，feature embedding，即不是用判断物种类别的结果，而是用判断类别前生成的特征向量来判断生成样本的好坏。同样是用生成样本和训练样本去做比较，比较特征向量的均值和协方差。 值越低越好 IND是越低越好，FID是越高越好，通过上面几幅图比较，明显FID更优秀。 现在我们来总结一下GAN的基本特征：  可以快速生成，随机生成一个潜变量，然后通过训练好的生成网络，即可产生图片 没有推理网络，只有一个生成网络，和一个判断图片是不是生成的网络，不需要像VAE一样再有一个把图片转换成潜变量的网络（GAN变种可以有） 目标函数直接明了。 一些原理：     接下来看一些GAN背后的原理。 1.  Bayes-Optimal Discriminator     如果已知训练数据的样本分布和生成数据的样本分布，最佳分辨器是什么？     由此可知，当训练样本分布和生成样本分布都已知的情况下，最佳分辨器是可以直接求出来的。 如果用最佳分辨器来训练生成网络呢？ 由于分辨器已经用了最佳，V肯定是越小越好，按上面的公式，V可以分解为一个常量项和两个KL项，两个KL项大于等于0，则V可能的最小值就是-log(4)，而优化生成模型的时候，其实我们只需要优化两个KL项，即JSD，使其最小化即可。 2.  Jensen-Shannon Divergence （JSD）     我们来看一下JSD和其他方法的比较，如上图所示，原始数据的分布如左边第一幅图，我们现在要用一个高斯函数来拟合这个分布，KLD，MMD，JSD的拟合结果分别用圆线展示出来了，会发现，KLD想尽量囊括所有数据的特征，MMD会倾向于最强的分布，但是又会被小的分布影响到。而JSD则是比MMD更倾向于最强分布，忽略了小的分布。     上图展示了分别用Maximum likelihood和Reverse KL拟合的结果，可以发现前者为折中拟合，后者是二选一拟合。而JSD其实介于这两个方法之间，但是更接近Reverse KL。 左边是Maximum likelihood，中间是Reverse KL，右边是JSD，可以发现，JSD其实是介于前两者之间的一个方法。 那么究竟哪种拟合效果更好，更值得追求呢？目前来看，如果是想保留更多的信息，比如压缩图片，那么第一种可能更好，如果是图像生成，需要尽可能清晰地获取特征，那么可能Reverse KL，JSD会更好。更好的方法当然是尽可能避免用一个高斯函数去拟合复杂的数据分布。但是高纬度的数据复杂度是极高的，我们不太可能用我们的肉眼，包括一些数据分析工具来知道，我们应该用什么样复杂度的模型去拟合，因此，在选择优化模型的方法时，还是得多注意一点，尽量避免Mode collapse，或者效能上的损失。 3.  Mode Collapse 比如上图这种情况，数据分布如最右边的小图所示，仍然是用高斯分布去拟合，会发现，得到的结果会随着训练进程一直在变。 3.  Avoiding Saturation  来看，可不可以先训练D呢？以及，如果我们一开始只优化D，会出现什么问题。     答案是可以先训练D，而且可以训练出来不错的D。但是如果把D先优化好，再来优化G，G会没办法优化。 当D可以很好地识别训练图和生成图后，D是一个很好的二分类分类器，假设D那个时候是一个sigmoid函数。那么它求导以后如右下角所示，当x是假图的时候梯度趋近0。因此G不会被优化。 但这个问题有办法可以解决： 优化G的时候加个负号，最小化变最大化。 D优化后，当输入x是生成图时，梯度趋近于-1。问题解决。 [1] kiyoxi，Parzen window 密度估计——一种非参数概率密度函数估计方法，知乎，2022" />
+<meta property="og:description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 4：UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）         Lecture 7：自监督学习（Self Supervised Learning）     这篇讲Implicit Models，很多是GANs，内容有点丰富，占了两个Lectures，因此这次会分上中下三篇。整理完这两个，剩下的8，9，10，11，12接下来可能不会整理，也可能会慢慢整理。 这是发明GAN的人。这样看效果图，GAN确实很强啊。大家可以在B站或者油管搜BigGAN的视频，看看变换潜变量可以达到的不同效果。 2018年，一个人从github上下载了些代码，用GAN训练了模型并生成了上面这幅图，卖了$432500，，所以，看完这篇吧，让我们离财富自由更近一点。 图像生成的目标： 可以理解图片中的内容 可以完成从一幅图到另外一幅图的丝滑转换。 可以生成和样本相似却又不同的图。 可以通过调整潜变量生成有不同特征的图（样本图中没有的特征）。      Implicit Models要做的也是，先生成一个潜变量z，再通过模型把潜变量转换成图片。但他训练模型的方式和VAE以及Flow Models是不一样的，它通过评估生成的图片的品质来优化模型。 Implicit Models的基本逻辑： 翻译一下是： 需要样本图片pdata 需要可以生成图片的q，然后生成一堆图片pmodel 需要一个可以比较pmodel和pdata的差异的模型D 获得更好的Φ的方式是努力去缩小pmodel和pdata的差异 GAN的第一篇文章发表于2014年： 来看损失函数： G是生成器（z-&gt;x），D是分辨器（分辨输入是G生成的，还是训练样本中的）。D越是确信输入是训练集中的样本，则输出的值越大。D和G存在一个博弈关系，G的目标就是尽量让D(G(z))的输出趋近于1，而D的目标是尽量让D(x)的输出趋近于1，D(G(z))的输出趋于0。 大家可以去下面的网址去观察一下gan训练的可视化效果，还挺有意思的： https://poloclub.github.io/ganlab/     上面这张图是2014年GAN可以做到的效果，右边黄框里的是样本图片，其他是生成的图片，可以发现，当时GAN就可以很好的生成和样本图片近似的图片，但是还不完美，还有很多似是而非的图片产生。     接下来看如何评估GANs模型，到现在生成模型的评估依然是一个问题，而GANs不像之前的生成模型，我们可以用极大似然值来评估，另外，生成图片的优劣其实是一种主观判断。     评估GANs模型： 1.  Parzen-Window density estimator / Kernel Density Estimator (KDE) 这是2006年被提出来的一个概念，网上解释很多，这里就不细说了，详细可以看参考[1]。上面公式中K是窗函数，判断x和xi的距离是不是在一定区间内，K也可以是高斯函数等。KDE要输出密度值，越多样本在x周边，给出的密度值越大。 当h设置不同的值时，出来的效果也很不同，用这个方法得选一下窗口值的大小。 2014年的GAN有用这个方法来评估模型，但事实上这个评估方式更适合低维度的数据，不太适合高维度的数据。 上图实验数据，用于6*6，36维的数据评估，可以发现这个评估方法的效果不是很好，而且和k-means这些方法的比较，也可以发现，也许这个方法只能很好的评估聚类效果，而不是生成效果。 2.  Inception Score 看一下Inception Score的基本想法和方法：  绕过高维密度估计 一个好的生成网络可以生成多种多样不同语义图片 给定生成图片，图片中的事物可以被明确地分辨出来，p(y|x)应该是低熵的 通过调整潜变量，可以生成含有不同事物的图片，p(y)应该是高熵的。 基于以上考虑，Inception Score公式如下： 值越高越好。 由上面的实验结果可以发现，Inception Score确实可以很好的区分真实图片和生成图片，评估生成图片的质量。但这个方法也有缺点，比如说，背景信息，边边角角的生成质量被忽略了，另外就是如果在生成数据的时候，针对Inception Model可以识别的类，一个类生成一个，那么最后就可以获得很好的Inception Score。 3.  Fréchet Inception Distance Fréchet Inception Distance （FID）的基本想法和方法：  Inception Score不够优秀，包括无法评估生成图片的细节优劣，另外如果你生成有方，模型可识别的类型每样生成一个，只要生成的质量不是太差，都能获得很高的Inception Score FID可以更多的分辨细节上的优劣。 实现方法就是把生成的图片转换成特征向量，feature embedding，即不是用判断物种类别的结果，而是用判断类别前生成的特征向量来判断生成样本的好坏。同样是用生成样本和训练样本去做比较，比较特征向量的均值和协方差。 值越低越好 IND是越低越好，FID是越高越好，通过上面几幅图比较，明显FID更优秀。 现在我们来总结一下GAN的基本特征：  可以快速生成，随机生成一个潜变量，然后通过训练好的生成网络，即可产生图片 没有推理网络，只有一个生成网络，和一个判断图片是不是生成的网络，不需要像VAE一样再有一个把图片转换成潜变量的网络（GAN变种可以有） 目标函数直接明了。 一些原理：     接下来看一些GAN背后的原理。 1.  Bayes-Optimal Discriminator     如果已知训练数据的样本分布和生成数据的样本分布，最佳分辨器是什么？     由此可知，当训练样本分布和生成样本分布都已知的情况下，最佳分辨器是可以直接求出来的。 如果用最佳分辨器来训练生成网络呢？ 由于分辨器已经用了最佳，V肯定是越小越好，按上面的公式，V可以分解为一个常量项和两个KL项，两个KL项大于等于0，则V可能的最小值就是-log(4)，而优化生成模型的时候，其实我们只需要优化两个KL项，即JSD，使其最小化即可。 2.  Jensen-Shannon Divergence （JSD）     我们来看一下JSD和其他方法的比较，如上图所示，原始数据的分布如左边第一幅图，我们现在要用一个高斯函数来拟合这个分布，KLD，MMD，JSD的拟合结果分别用圆线展示出来了，会发现，KLD想尽量囊括所有数据的特征，MMD会倾向于最强的分布，但是又会被小的分布影响到。而JSD则是比MMD更倾向于最强分布，忽略了小的分布。     上图展示了分别用Maximum likelihood和Reverse KL拟合的结果，可以发现前者为折中拟合，后者是二选一拟合。而JSD其实介于这两个方法之间，但是更接近Reverse KL。 左边是Maximum likelihood，中间是Reverse KL，右边是JSD，可以发现，JSD其实是介于前两者之间的一个方法。 那么究竟哪种拟合效果更好，更值得追求呢？目前来看，如果是想保留更多的信息，比如压缩图片，那么第一种可能更好，如果是图像生成，需要尽可能清晰地获取特征，那么可能Reverse KL，JSD会更好。更好的方法当然是尽可能避免用一个高斯函数去拟合复杂的数据分布。但是高纬度的数据复杂度是极高的，我们不太可能用我们的肉眼，包括一些数据分析工具来知道，我们应该用什么样复杂度的模型去拟合，因此，在选择优化模型的方法时，还是得多注意一点，尽量避免Mode collapse，或者效能上的损失。 3.  Mode Collapse 比如上图这种情况，数据分布如最右边的小图所示，仍然是用高斯分布去拟合，会发现，得到的结果会随着训练进程一直在变。 3.  Avoiding Saturation  来看，可不可以先训练D呢？以及，如果我们一开始只优化D，会出现什么问题。     答案是可以先训练D，而且可以训练出来不错的D。但是如果把D先优化好，再来优化G，G会没办法优化。 当D可以很好地识别训练图和生成图后，D是一个很好的二分类分类器，假设D那个时候是一个sigmoid函数。那么它求导以后如右下角所示，当x是假图的时候梯度趋近0。因此G不会被优化。 但这个问题有办法可以解决： 优化G的时候加个负号，最小化变最大化。 D优化后，当输入x是生成图时，梯度趋近于-1。问题解决。 [1] kiyoxi，Parzen window 密度估计——一种非参数概率密度函数估计方法，知乎，2022" />
+<link rel="canonical" href="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/" />
+<meta property="og:url" content="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--Implicit%20Models%20--%20GANs%20(%E4%B8%8A)/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-05-10T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 4：UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）         Lecture 7：自监督学习（Self Supervised Learning）     这篇讲Implicit Models，很多是GANs，内容有点丰富，占了两个Lectures，因此这次会分上中下三篇。整理完这两个，剩下的8，9，10，11，12接下来可能不会整理，也可能会慢慢整理。 这是发明GAN的人。这样看效果图，GAN确实很强啊。大家可以在B站或者油管搜BigGAN的视频，看看变换潜变量可以达到的不同效果。 2018年，一个人从github上下载了些代码，用GAN训练了模型并生成了上面这幅图，卖了$432500，，所以，看完这篇吧，让我们离财富自由更近一点。 图像生成的目标： 可以理解图片中的内容 可以完成从一幅图到另外一幅图的丝滑转换。 可以生成和样本相似却又不同的图。 可以通过调整潜变量生成有不同特征的图（样本图中没有的特征）。      Implicit Models要做的也是，先生成一个潜变量z，再通过模型把潜变量转换成图片。但他训练模型的方式和VAE以及Flow Models是不一样的，它通过评估生成的图片的品质来优化模型。 Implicit Models的基本逻辑： 翻译一下是： 需要样本图片pdata 需要可以生成图片的q，然后生成一堆图片pmodel 需要一个可以比较pmodel和pdata的差异的模型D 获得更好的Φ的方式是努力去缩小pmodel和pdata的差异 GAN的第一篇文章发表于2014年： 来看损失函数： G是生成器（z-&gt;x），D是分辨器（分辨输入是G生成的，还是训练样本中的）。D越是确信输入是训练集中的样本，则输出的值越大。D和G存在一个博弈关系，G的目标就是尽量让D(G(z))的输出趋近于1，而D的目标是尽量让D(x)的输出趋近于1，D(G(z))的输出趋于0。 大家可以去下面的网址去观察一下gan训练的可视化效果，还挺有意思的： https://poloclub.github.io/ganlab/     上面这张图是2014年GAN可以做到的效果，右边黄框里的是样本图片，其他是生成的图片，可以发现，当时GAN就可以很好的生成和样本图片近似的图片，但是还不完美，还有很多似是而非的图片产生。     接下来看如何评估GANs模型，到现在生成模型的评估依然是一个问题，而GANs不像之前的生成模型，我们可以用极大似然值来评估，另外，生成图片的优劣其实是一种主观判断。     评估GANs模型： 1.  Parzen-Window density estimator / Kernel Density Estimator (KDE) 这是2006年被提出来的一个概念，网上解释很多，这里就不细说了，详细可以看参考[1]。上面公式中K是窗函数，判断x和xi的距离是不是在一定区间内，K也可以是高斯函数等。KDE要输出密度值，越多样本在x周边，给出的密度值越大。 当h设置不同的值时，出来的效果也很不同，用这个方法得选一下窗口值的大小。 2014年的GAN有用这个方法来评估模型，但事实上这个评估方式更适合低维度的数据，不太适合高维度的数据。 上图实验数据，用于6*6，36维的数据评估，可以发现这个评估方法的效果不是很好，而且和k-means这些方法的比较，也可以发现，也许这个方法只能很好的评估聚类效果，而不是生成效果。 2.  Inception Score 看一下Inception Score的基本想法和方法：  绕过高维密度估计 一个好的生成网络可以生成多种多样不同语义图片 给定生成图片，图片中的事物可以被明确地分辨出来，p(y|x)应该是低熵的 通过调整潜变量，可以生成含有不同事物的图片，p(y)应该是高熵的。 基于以上考虑，Inception Score公式如下： 值越高越好。 由上面的实验结果可以发现，Inception Score确实可以很好的区分真实图片和生成图片，评估生成图片的质量。但这个方法也有缺点，比如说，背景信息，边边角角的生成质量被忽略了，另外就是如果在生成数据的时候，针对Inception Model可以识别的类，一个类生成一个，那么最后就可以获得很好的Inception Score。 3.  Fréchet Inception Distance Fréchet Inception Distance （FID）的基本想法和方法：  Inception Score不够优秀，包括无法评估生成图片的细节优劣，另外如果你生成有方，模型可识别的类型每样生成一个，只要生成的质量不是太差，都能获得很高的Inception Score FID可以更多的分辨细节上的优劣。 实现方法就是把生成的图片转换成特征向量，feature embedding，即不是用判断物种类别的结果，而是用判断类别前生成的特征向量来判断生成样本的好坏。同样是用生成样本和训练样本去做比较，比较特征向量的均值和协方差。 值越低越好 IND是越低越好，FID是越高越好，通过上面几幅图比较，明显FID更优秀。 现在我们来总结一下GAN的基本特征：  可以快速生成，随机生成一个潜变量，然后通过训练好的生成网络，即可产生图片 没有推理网络，只有一个生成网络，和一个判断图片是不是生成的网络，不需要像VAE一样再有一个把图片转换成潜变量的网络（GAN变种可以有） 目标函数直接明了。 一些原理：     接下来看一些GAN背后的原理。 1.  Bayes-Optimal Discriminator     如果已知训练数据的样本分布和生成数据的样本分布，最佳分辨器是什么？     由此可知，当训练样本分布和生成样本分布都已知的情况下，最佳分辨器是可以直接求出来的。 如果用最佳分辨器来训练生成网络呢？ 由于分辨器已经用了最佳，V肯定是越小越好，按上面的公式，V可以分解为一个常量项和两个KL项，两个KL项大于等于0，则V可能的最小值就是-log(4)，而优化生成模型的时候，其实我们只需要优化两个KL项，即JSD，使其最小化即可。 2.  Jensen-Shannon Divergence （JSD）     我们来看一下JSD和其他方法的比较，如上图所示，原始数据的分布如左边第一幅图，我们现在要用一个高斯函数来拟合这个分布，KLD，MMD，JSD的拟合结果分别用圆线展示出来了，会发现，KLD想尽量囊括所有数据的特征，MMD会倾向于最强的分布，但是又会被小的分布影响到。而JSD则是比MMD更倾向于最强分布，忽略了小的分布。     上图展示了分别用Maximum likelihood和Reverse KL拟合的结果，可以发现前者为折中拟合，后者是二选一拟合。而JSD其实介于这两个方法之间，但是更接近Reverse KL。 左边是Maximum likelihood，中间是Reverse KL，右边是JSD，可以发现，JSD其实是介于前两者之间的一个方法。 那么究竟哪种拟合效果更好，更值得追求呢？目前来看，如果是想保留更多的信息，比如压缩图片，那么第一种可能更好，如果是图像生成，需要尽可能清晰地获取特征，那么可能Reverse KL，JSD会更好。更好的方法当然是尽可能避免用一个高斯函数去拟合复杂的数据分布。但是高纬度的数据复杂度是极高的，我们不太可能用我们的肉眼，包括一些数据分析工具来知道，我们应该用什么样复杂度的模型去拟合，因此，在选择优化模型的方法时，还是得多注意一点，尽量避免Mode collapse，或者效能上的损失。 3.  Mode Collapse 比如上图这种情况，数据分布如最右边的小图所示，仍然是用高斯分布去拟合，会发现，得到的结果会随着训练进程一直在变。 3.  Avoiding Saturation  来看，可不可以先训练D呢？以及，如果我们一开始只优化D，会出现什么问题。     答案是可以先训练D，而且可以训练出来不错的D。但是如果把D先优化好，再来优化G，G会没办法优化。 当D可以很好地识别训练图和生成图后，D是一个很好的二分类分类器，假设D那个时候是一个sigmoid函数。那么它求导以后如右下角所示，当x是假图的时候梯度趋近0。因此G不会被优化。 但这个问题有办法可以解决： 优化G的时候加个负号，最小化变最大化。 D优化后，当输入x是生成图时，梯度趋近于-1。问题解决。 [1] kiyoxi，Parzen window 密度估计——一种非参数概率密度函数估计方法，知乎，2022","url":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/","image":"http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--Implicit%20Models%20--%20GANs%20(%E4%B8%8A)/1.png","@type":"BlogPosting","headline":"UC Berkeley非监督学习–Implicit Models – GANs (上)","dateModified":"2022-05-10T00:00:00+08:00","datePublished":"2022-05-10T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">UC Berkeley非监督学习--Implicit Models -- GANs (上)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-05-10">10 May 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="" /></p>
+
+<p>    这个课程总共十二讲，官方链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://sites.google.com/view/berkeley-cs294-158-sp20/home
+</code></pre></div></div>
+
+<p>    目前已整理过：</p>
+
+<p>        Lecture 1：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484985&amp;idx=1&amp;sn=87564039ce87c9618bbd7fd68cb83339&amp;chksm=c06764fbf710eded7815eeeec344ab1b1807534664d18973ca9a3d566d8b7f1d37d62e2f2e8c&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–介绍</a></p>
+
+<p>        Lecture 2：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247485197&amp;idx=1&amp;sn=7c51b8ec0198f627d562fbf0dc0ddb1c&amp;chksm=c06765cff710ecd97a813a6550272be127ac5ea844764a08b2d33646c84e539fc45f212dfe0a&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–自回归模型</a></p>
+
+<p>        Lecture 3：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247485497&amp;idx=1&amp;sn=2e073fa7a62a656f0a145ad5380a8fe8&amp;chksm=c0676afbf710e3ed62622aee58404b13fd1175145afb21112efd6732f88003413b3127b1d031&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–流模型（Flow Models）</a></p>
+
+<p>        Lecture 4：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247486320&amp;idx=1&amp;sn=12deb99b51522dcad015e53bd6e92716&amp;chksm=c06769b2f710e0a4a71fb778ab7fc6314cf9de907670456e7a148e956156bce3424694a1bb6b&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）</a></p>
+
+<p>        Lecture 7：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a></p>
+
+<p>    这篇讲Implicit Models，很多是GANs，内容有点丰富，占了两个Lectures，因此这次会分上中下三篇。整理完这两个，剩下的8，9，10，11，12接下来可能不会整理，也可能会慢慢整理。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/2.png" alt="" /></p>
+
+<p>这是发明GAN的人。这样看效果图，GAN确实很强啊。大家可以在B站或者油管搜BigGAN的视频，看看变换潜变量可以达到的不同效果。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/3.png" style="zoom:67%;" /></p>
+
+<p>2018年，一个人从github上下载了些代码，用GAN训练了模型并生成了上面这幅图，卖了$432500，<img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/4.png" style="zoom:50%;" />，所以，看完这篇吧，让我们离财富自由更近一点。</p>
+
+<p><strong>图像生成的目标：</strong></p>
+<ol>
+  <li>
+    <p>可以理解图片中的内容</p>
+  </li>
+  <li>可以完成从一幅图到另外一幅图的丝滑转换。</li>
+  <li>可以生成和样本相似却又不同的图。</li>
+  <li>可以通过调整潜变量生成有不同特征的图（样本图中没有的特征）。 </li>
+</ol>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/5.png" style="zoom:10%;" /></p>
+
+<p>    Implicit Models要做的也是，先生成一个潜变量z，再通过模型把潜变量转换成图片。但他训练模型的方式和VAE以及Flow Models是不一样的，它通过评估生成的图片的品质来优化模型。</p>
+
+<p>Implicit Models的基本逻辑：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/6.png" style="zoom: 80%;" /></p>
+
+<p>翻译一下是：</p>
+
+<ol>
+  <li>需要样本图片pdata</li>
+  <li>需要可以生成图片的q，然后生成一堆图片pmodel</li>
+  <li>需要一个可以比较pmodel和pdata的差异的模型D</li>
+  <li>获得更好的Φ的方式是努力去缩小pmodel和pdata的差异</li>
+</ol>
+
+<p><strong>GAN的第一篇文章发表于2014年</strong>：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/7.png" style="zoom:67%;" /></p>
+
+<p>来看损失函数：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/8.png" style="zoom:67%;" /></p>
+
+<p>G是生成器（z-&gt;x），D是分辨器（分辨输入是G生成的，还是训练样本中的）。D越是确信输入是训练集中的样本，则输出的值越大。D和G存在一个博弈关系，G的目标就是尽量让D(G(z))的输出趋近于1，而D的目标是尽量让D(x)的输出趋近于1，D(G(z))的输出趋于0。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/9.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/10.png" style="zoom:80%;" /></p>
+
+<p>大家可以去下面的网址去观察一下gan训练的可视化效果，还挺有意思的：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://poloclub.github.io/ganlab/
+</code></pre></div></div>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/11.png" style="zoom:67%;" /></p>
+
+<p>    上面这张图是2014年GAN可以做到的效果，右边黄框里的是样本图片，其他是生成的图片，可以发现，当时GAN就可以很好的生成和样本图片近似的图片，但是还不完美，还有很多似是而非的图片产生。</p>
+
+<p>    接下来看如何评估GANs模型，到现在生成模型的评估依然是一个问题，而GANs不像之前的生成模型，我们可以用极大似然值来评估，另外，生成图片的优劣其实是一种主观判断。</p>
+
+<p>   </p>
+
+<p><strong>评估GANs模型：</strong>
+<strong>1.  Parzen-Window density estimator / Kernel Density Estimator (KDE)</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/12.png" style="zoom: 33%;" /></p>
+
+<p>这是2006年被提出来的一个概念，网上解释很多，这里就不细说了，详细可以看参考[1]。上面公式中K是窗函数，判断x和xi的距离是不是在一定区间内，K也可以是高斯函数等。KDE要输出密度值，越多样本在x周边，给出的密度值越大。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/13.png" style="zoom: 67%;" /></p>
+
+<p>当h设置不同的值时，出来的效果也很不同，用这个方法得选一下窗口值的大小。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/14.png" style="zoom: 50%;" /></p>
+
+<p>2014年的GAN有用这个方法来评估模型，但事实上这个评估方式更适合低维度的数据，不太适合高维度的数据。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/15.png" style="zoom:67%;" /></p>
+
+<p>上图实验数据，用于6*6，36维的数据评估，可以发现这个评估方法的效果不是很好，而且和k-means这些方法的比较，也可以发现，也许这个方法只能很好的评估聚类效果，而不是生成效果。</p>
+
+<p><strong>2.  Inception Score</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/16.png" style="zoom: 67%;" /></p>
+
+<p>看一下Inception Score的基本想法和方法：</p>
+
+<ol>
+  <li>
+    <p> 绕过高维密度估计</p>
+  </li>
+  <li>一个好的生成网络可以生成多种多样不同语义图片</li>
+  <li>给定生成图片，图片中的事物可以被明确地分辨出来，p(y|x)应该是低熵的</li>
+  <li>通过调整潜变量，可以生成含有不同事物的图片，p(y)应该是高熵的。</li>
+</ol>
+
+<p>基于以上考虑，Inception Score公式如下：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/17.png" style="zoom: 67%;" /></p>
+
+<p>值越高越好。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/18.png" style="zoom:80%;" /></p>
+
+<p>由上面的实验结果可以发现，Inception Score确实可以很好的区分真实图片和生成图片，评估生成图片的质量。但这个方法也有缺点，比如说，背景信息，边边角角的生成质量被忽略了，另外就是如果在生成数据的时候，针对Inception Model可以识别的类，一个类生成一个，那么最后就可以获得很好的Inception Score。</p>
+
+<p><strong>3.  Fréchet Inception Distance</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/19.png" style="zoom:80%;" /></p>
+
+<p>Fréchet Inception Distance （FID）的基本想法和方法：</p>
+<ol>
+  <li>
+    <p> Inception Score不够优秀，包括无法评估生成图片的细节优劣，另外如果你生成有方，模型可识别的类型每样生成一个，只要生成的质量不是太差，都能获得很高的Inception Score</p>
+  </li>
+  <li>FID可以更多的分辨细节上的优劣。</li>
+  <li>实现方法就是把生成的图片转换成特征向量，feature embedding，即不是用判断物种类别的结果，而是用判断类别前生成的特征向量来判断生成样本的好坏。同样是用生成样本和训练样本去做比较，比较特征向量的均值和协方差。</li>
+  <li>值越低越好</li>
+</ol>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/20.png" alt="" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/21.png" alt="" /></p>
+
+<p>IND是越低越好，FID是越高越好，通过上面几幅图比较，明显FID更优秀。</p>
+
+<p>现在我们来总结一下GAN的基本特征：</p>
+
+<ol>
+  <li>
+    <p> 可以快速生成，随机生成一个潜变量，然后通过训练好的生成网络，即可产生图片</p>
+  </li>
+  <li>没有推理网络，只有一个生成网络，和一个判断图片是不是生成的网络，不需要像VAE一样再有一个把图片转换成潜变量的网络（GAN变种可以有）</li>
+  <li>目标函数直接明了。</li>
+</ol>
+
+<p><strong>一些原理：</strong></p>
+
+<p>    接下来看一些GAN背后的原理。</p>
+
+<p><strong>1.  Bayes-Optimal Discriminator</strong></p>
+
+<p>    如果已知训练数据的样本分布和生成数据的样本分布，最佳分辨器是什么？</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/22.png" style="zoom:67%;" /></p>
+
+<p>    由此可知，当训练样本分布和生成样本分布都已知的情况下，最佳分辨器是可以直接求出来的。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/23.png" style="zoom:67%;" /></p>
+
+<p>如果用最佳分辨器来训练生成网络呢？</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/24.png" style="zoom: 80%;" /></p>
+
+<p>由于分辨器已经用了最佳，V肯定是越小越好，按上面的公式，V可以分解为一个常量项和两个KL项，两个KL项大于等于0，则V可能的最小值就是-log(4)，而优化生成模型的时候，其实我们只需要优化两个KL项，即JSD，使其最小化即可。</p>
+
+<p><strong>2.  Jensen-Shannon Divergence （JSD）</strong></p>
+
+<p><strong>
+</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/25.png" alt="" /></p>
+
+<p>    我们来看一下JSD和其他方法的比较，如上图所示，原始数据的分布如左边第一幅图，我们现在要用一个高斯函数来拟合这个分布，KLD，MMD，JSD的拟合结果分别用圆线展示出来了，会发现，KLD想尽量囊括所有数据的特征，MMD会倾向于最强的分布，但是又会被小的分布影响到。而JSD则是比MMD更倾向于最强分布，忽略了小的分布。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/26.png" style="zoom:67%;" /></p>
+
+<p>    上图展示了分别用Maximum likelihood和Reverse KL拟合的结果，可以发现前者为折中拟合，后者是二选一拟合。而JSD其实介于这两个方法之间，但是更接近Reverse KL。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/27.png" alt="" /></p>
+
+<p>左边是Maximum likelihood，中间是Reverse KL，右边是JSD，可以发现，JSD其实是介于前两者之间的一个方法。</p>
+
+<p>那么究竟哪种拟合效果更好，更值得追求呢？目前来看，如果是想保留更多的信息，比如压缩图片，那么第一种可能更好，如果是图像生成，需要尽可能清晰地获取特征，那么可能Reverse KL，JSD会更好。更好的方法当然是尽可能避免用一个高斯函数去拟合复杂的数据分布。但是高纬度的数据复杂度是极高的，我们不太可能用我们的肉眼，包括一些数据分析工具来知道，我们应该用什么样复杂度的模型去拟合，因此，在选择优化模型的方法时，还是得多注意一点，尽量避免Mode collapse，或者效能上的损失。</p>
+
+<p><strong>3.  Mode Collapse</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/28.png" style="zoom:90%;" /></p>
+
+<p>比如上图这种情况，数据分布如最右边的小图所示，仍然是用高斯分布去拟合，会发现，得到的结果会随着训练进程一直在变。</p>
+
+<p><strong>3.  Avoiding Saturation</strong> </p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/29.png" style="zoom:67%;" /></p>
+
+<p>来看，可不可以先训练D呢？以及，如果我们一开始只优化D，会出现什么问题。</p>
+
+<p>    答案是可以先训练D，而且可以训练出来不错的D。但是如果把D先优化好，再来优化G，G会没办法优化。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/30.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/31.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/32.png" style="zoom:67%;" /></p>
+
+<p>当D可以很好地识别训练图和生成图后，D是一个很好的二分类分类器，假设D那个时候是一个sigmoid函数。那么它求导以后如右下角所示，当x是假图的时候梯度趋近0。因此G不会被优化。</p>
+
+<p>但这个问题有办法可以解决：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/33.png" style="zoom: 67%;" /></p>
+
+<p>优化G的时候加个负号，最小化变最大化。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/34.png" style="zoom: 50%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/35.png" style="zoom: 80%;" /></p>
+
+<p>D优化后，当输入x是生成图时，梯度趋近于-1。问题解决。</p>
+
+<p>[1] kiyoxi，Parzen window 密度估计——一种非参数概率密度函数估计方法，知乎，2022</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=UC Berkeley非监督学习--Implicit Models -- GANs (上)&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Generative-Model">Generative Model</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Unsupervised-Learning">Unsupervised Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#UC-Berkeley-CS294-158">UC Berkeley CS294-158</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--自回归模型/1.png" alt="UC Berkeley非监督学习--自回归模型"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">UC Berkeley非监督学习--自回归模型</a>
+                
+            </h2>
+            <h4 class="card-text">    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第二讲Autoregressive Models，自回归模型。
+
+
+
+    这个课程总共十二讲，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">09 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

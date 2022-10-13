@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>以图片为目标的视觉强化学习 – 代码解析上篇(rlkit安装及部分代码及函数的解析和使用) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="以图片为目标的视觉强化学习 – 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    之前有讲过一篇论文，今天来讲讲它的代码： 论文解析的链接是：以图片为目标的视觉强化学习     这篇研究以及这篇研究的后续研究，源代码都有公开，我们的目标是把这个库都解析一遍，感兴趣的话，关注吧。下面是相关源代码的链接： https://github.com/rail-berkeley/rlkit 现在要说的这个工作我们称呼它RIG，RIG适用的rlkit版本和最新的两个工作适用的rlkit版本不一样，我们先看RIG适用的rlkit。     论文开发者直接开发了一个工具，里面有众多强化学习的算法，方便做相关研究的渣渣们，比如我，直接拿来用，但前提你得看得懂。那么看懂就交给我了。     我们先来安装和解析一下这个工具，首先看安装指引： cp rlkit/launchers/config_template.py rlkit/launchers/config.py     然后我们看看config.py里面都做了些什么： import os from os.path import join import rlkit # 设定项目目录 rlkit_project_dir = join(os.path.dirname(rlkit.__file__), os.pardir) LOCAL_LOG_DIR = join(rlkit_project_dir, &#39;data&#39;) # 接下来设定大部分与远程服务器相关 # 代码目录，可能不止一个，不止一个就添加在后面 CODE_DIRS_TO_MOUNT = [ rlkit_project_dir, # &#39;/home/user/python/module/one&#39;, Add more paths as needed ] # 工作需要用到mujoco模拟器，如果你mujoco安装的位置特殊，这里可能要改 DIR_AND_MOUNT_POINT_MAPPINGS = [ dict( local_dir=join(os.getenv(&#39;HOME&#39;), &#39;.mujoco/&#39;), mount_point=&#39;/root/.mujoco&#39;, ), ] # 跑程序的代码地址 RUN_DOODAD_EXPERIMENT_SCRIPT_PATH = ( join(rlkit_project_dir, &#39;scripts&#39;, &#39;run_experiment_from_doodad.py&#39;) # &#39;/home/user/path/to/rlkit/scripts/run_experiment_from_doodad.py&#39; ) # 接下来是AWS，SLURM，和GCP的一些设定， # 我目前都没用到，暂时不提，用到的小伙伴可以看一下 关于config.py文件，不用doodad的话，要把下面两行改一下，不然之后跑程序会报错： # If not set, default will be chosen by doodad #AWS_S3_PATH = &#39;s3://bucket/directory 改为（其实就是把注释去掉，再补个冒号），我的环境里它不会被用到，只是调试起来方便一些： # If not set, default will be chosen by doodad AWS_S3_PATH = &#39;s3://bucket/directory&#39; 接下来创建一个虚拟代码环境，他提供了三个虚拟环境配置文件：linux-cpu-env.yml，linux-gpu-env.yml，mac-env.yml。一般是linux-gpu： conda env create -f environment/linux-gpu-env.yml 在跑之前我们看里面写了点啥，name是虚拟环境的名称，channels是虚拟环境安装软件的源，下面的dependencies是虚拟环境依赖的软件，这里就不列全了：    name: rlkit channels: - kne # for pybox2d - pytorch - anaconda # for mkl dependencies: - cython - ipython  # technically unnecessary 我自己不习惯用别人写好的脚本建立环境，喜欢一边看代码一边解决依赖问题。 首先我们要解决最重要的一个依赖，MuJoCo，强化学习的环境模拟常用的软件，以前是个付费软件，现在免费了，可能是有大佬买了，现在似乎属于DeepMind，DeepMind属于Google： https://mujoco.org/ 代码里用的MuJoCo版本是1.5，我喜欢用最新的，我们试试2.1，不行再回来换1.5，MuJoCo安装起来还是挺费劲的，遇到问题耐心些，多搜一搜： mkdir -p ~/.mujoco cd ~/.mujoco # 到mujoco官网-&gt;download页面-&gt;选2.1.0版本-&gt;下载linux版 wget https://github.com/deepmind/mujoco/releases/download/2.1.0/mujoco210-linux-x86_64.tar.gz tar -xvf mujoco210-linux-x86_64.tar.gz echo &#39;export LD_LIBRARY_PATH=$HOME/.mujoco/mujoco210/bin:$LD_LIBRARY_PATH&#39; &gt;&gt; ~/.bashrc source ~/.bashrc # 以上mujoco就下载安置好了 # 接下来安装mujoco-py git clone https://github.com/openai/mujoco-py.git cd mujoco-py pip3 install -r requirements.txt pip3 install -r requirements.dev.txt python3 setup.py install #---------------------------------------- # 接下来是一些你可能import mujoco_py失败，甚至上面就没装成功，而需要进行的步骤 # 按错误提示选择性执行 sudo apt-get install gcc sudo apt install libosmesa6-dev sudo apt-get install python3-devel sudo apt-get update -y sudo apt-get install -y patchelf sudo apt-get install libglew-dev echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/bin&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so&#39; &gt;&gt; ~/.bashrc source ~/.bashrc 如果可以import mujoco_py执行成功，且可以跑一些示例代码，就表示安装成功了。     再回过头看rlkit，他除了提供虚拟环境的方案，还提供了Docker文件，Docker我不喜欢用，当然，主要是因为没下功夫，用不好，所以只能不喜欢，对这些比较擅长的可以试着用Docker。     rlkit调用GPU的方式： import rlkit.torch.pytorch_util as ptu ptu.set_gpu_mode(True)      如果用doodad来执行方法，则直接用下面的方式调用gpu，然而我测试发现，不用doodad，下面这种方式也可以成功调用gpu： run_experiment(..., use_gpu=True)     他们会建议用doodad来执行python程序，这里我们更想偏向于原理性代码的讨论，doodad部分的代码就不涉及了。     接下来我们看RIG的代码，在examples/rig/目录下，有两个目录，四个文件，我们一个一个开始，首先看examples/rig/pointmass/rig.py： from multiworld.envs.pygame.point2d import Point2DWallEnv from rlkit.launchers.launcher_util import run_experiment from rlkit.launchers.rig_experiments import grill_her_td3_full_experiment 要安装一下multiworld，这个工具也是该团队开发的： git clone https://github.com/vitchyr/multiworld.git cd multiworld python setup.py install pip install gym pip install pygame pip install boto3 pip install gtimer pip install sk-video pip install gitpython 关于安装rlkit，rlkit依赖版本较低的python和tensorflow，再加上跑不同程序要用到的rlkit版本还不太一样，我们反正要解析源代码，这里就不安装rlkit了，直接把rlkit的源码包放在主程序的目录下。如果想安装rlkit，可以按照他们给的方法操作，之后直接pip install rlkit就行。亲测不安装是可以的。     接着看main函数，先定义了一个字典，里面都是参数，字典里还嵌套字典，层层叠叠，难怪AI工程师会被调侃调参大师，这里暂时不一一看，之后用到了会提： variant = dict(         imsize=84,         .......         algorithm=&#39;RIG&#39;,     )     配置完参数之后，就是跑训练代码了： run_experiment(         grill_her_td3_full_experiment, #rig算法实验的函数，以variant为参数         exp_prefix=&#39;rlkit-pointmass-rig-example&#39;, #实验名称         # 实验方式：默认是local，我们这里没装doodad。         # 单机用here_no_doodad可以跑，也可以调用GPU         # 其他方式暂时不研究了，有兴趣的可以研究         # “local”，         # “docker_local”，         # “ec2”，         # &#39;here_no_doodad&#39;， mode=&#39;here_no_doodad&#39;,         variant=variant, # 参数         use_gpu=True,  # 要用GPU跑就打开 )     在这样的配置下，我们看代码是怎么跑的（会略过不太重要的代码），下面是run_experiment里比较重要的代码： run_experiment_kwargs = dict(         # 实验名称，默认会带上时间 exp_prefix=exp_prefix, # 参数 variant=variant, # 实验ID exp_id=exp_id,         # 随机种子，不设定就随机产生 seed=seed, use_gpu=use_gpu,         # 默认是‘last’,作用之后说 snapshot_mode=snapshot_mode,         # 默认是1，作用之后说 snapshot_gap=snapshot_gap,         # 没装git就是None,暂时就None吧 git_infos=git_infos,         #这里应该是rig.py  script_name=main.__file__, ) if mode == &#39;here_no_doodad&#39;: run_experiment_kwargs[&#39;base_log_dir&#39;] = base_log_dir return run_experiment_here( method_call, **run_experiment_kwargs         ) 接下来是run_experiment_here函数，依然是只看重要一点的代码： # 这个函数里只有一行代码： # logger.reset() # logger也是他们自己开发的，reset就是回归初始状态 reset_execution_environment()     # 这里做的事情包括：创建log目录，将variant参数记录下来，     # 以及添加各式各样的路径和参数 actual_log_dir = setup_logger( exp_prefix=exp_prefix, variant=variant, exp_id=exp_id, seed=seed, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, base_log_dir=base_log_dir, log_dir=log_dir, git_infos=git_infos, script_name=script_name, **setup_logger_kwargs )     # 启用seed set_seed(seed)     # 启用GPU，默认用id为0的GPU     # 如果想选择用其他gpu，可以set_gpu_mode(use_gpu,gpu_id)     set_gpu_mode(use_gpu)      run_experiment_here_kwargs = dict( variant=variant, exp_id=exp_id, seed=seed, use_gpu=use_gpu, exp_prefix=exp_prefix, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, git_infos=git_infos, script_name=script_name, base_log_dir=base_log_dir, **setup_logger_kwargs )     # 把参数信息存成actual_log_dir下面的experiment.pkl文件 save_experiment_data( dict( run_experiment_here_kwargs=run_experiment_here_kwargs ), actual_log_dir )     # 好了，终于到我们的算法函数了。     # 其实是这样的 grill_her_td3_full_experiment(variant)     return experiment_function(variant) 接下来到这里：‍ def grill_her_td3_full_experiment(variant):     # 看名字就知道功能了，预处理 full_experiment_variant_preprocess(variant)     # 训练vae，一边训练还会一边自己调参哦 train_vae_and_update_variant(variant) # 这个看了再说。     grill_her_td3_experiment(variant[&#39;grill_variant&#39;]) 这篇先到这里吧，我累了。下篇会讲具体模型算法还有训练测试代码，希望一个下篇就解决，不需要再分个中下。 感兴趣的小伙伴们就关注吧。觉得有用右下角帮忙点个赞哦。" />
+<meta property="og:description" content="    之前有讲过一篇论文，今天来讲讲它的代码： 论文解析的链接是：以图片为目标的视觉强化学习     这篇研究以及这篇研究的后续研究，源代码都有公开，我们的目标是把这个库都解析一遍，感兴趣的话，关注吧。下面是相关源代码的链接： https://github.com/rail-berkeley/rlkit 现在要说的这个工作我们称呼它RIG，RIG适用的rlkit版本和最新的两个工作适用的rlkit版本不一样，我们先看RIG适用的rlkit。     论文开发者直接开发了一个工具，里面有众多强化学习的算法，方便做相关研究的渣渣们，比如我，直接拿来用，但前提你得看得懂。那么看懂就交给我了。     我们先来安装和解析一下这个工具，首先看安装指引： cp rlkit/launchers/config_template.py rlkit/launchers/config.py     然后我们看看config.py里面都做了些什么： import os from os.path import join import rlkit # 设定项目目录 rlkit_project_dir = join(os.path.dirname(rlkit.__file__), os.pardir) LOCAL_LOG_DIR = join(rlkit_project_dir, &#39;data&#39;) # 接下来设定大部分与远程服务器相关 # 代码目录，可能不止一个，不止一个就添加在后面 CODE_DIRS_TO_MOUNT = [ rlkit_project_dir, # &#39;/home/user/python/module/one&#39;, Add more paths as needed ] # 工作需要用到mujoco模拟器，如果你mujoco安装的位置特殊，这里可能要改 DIR_AND_MOUNT_POINT_MAPPINGS = [ dict( local_dir=join(os.getenv(&#39;HOME&#39;), &#39;.mujoco/&#39;), mount_point=&#39;/root/.mujoco&#39;, ), ] # 跑程序的代码地址 RUN_DOODAD_EXPERIMENT_SCRIPT_PATH = ( join(rlkit_project_dir, &#39;scripts&#39;, &#39;run_experiment_from_doodad.py&#39;) # &#39;/home/user/path/to/rlkit/scripts/run_experiment_from_doodad.py&#39; ) # 接下来是AWS，SLURM，和GCP的一些设定， # 我目前都没用到，暂时不提，用到的小伙伴可以看一下 关于config.py文件，不用doodad的话，要把下面两行改一下，不然之后跑程序会报错： # If not set, default will be chosen by doodad #AWS_S3_PATH = &#39;s3://bucket/directory 改为（其实就是把注释去掉，再补个冒号），我的环境里它不会被用到，只是调试起来方便一些： # If not set, default will be chosen by doodad AWS_S3_PATH = &#39;s3://bucket/directory&#39; 接下来创建一个虚拟代码环境，他提供了三个虚拟环境配置文件：linux-cpu-env.yml，linux-gpu-env.yml，mac-env.yml。一般是linux-gpu： conda env create -f environment/linux-gpu-env.yml 在跑之前我们看里面写了点啥，name是虚拟环境的名称，channels是虚拟环境安装软件的源，下面的dependencies是虚拟环境依赖的软件，这里就不列全了：    name: rlkit channels: - kne # for pybox2d - pytorch - anaconda # for mkl dependencies: - cython - ipython  # technically unnecessary 我自己不习惯用别人写好的脚本建立环境，喜欢一边看代码一边解决依赖问题。 首先我们要解决最重要的一个依赖，MuJoCo，强化学习的环境模拟常用的软件，以前是个付费软件，现在免费了，可能是有大佬买了，现在似乎属于DeepMind，DeepMind属于Google： https://mujoco.org/ 代码里用的MuJoCo版本是1.5，我喜欢用最新的，我们试试2.1，不行再回来换1.5，MuJoCo安装起来还是挺费劲的，遇到问题耐心些，多搜一搜： mkdir -p ~/.mujoco cd ~/.mujoco # 到mujoco官网-&gt;download页面-&gt;选2.1.0版本-&gt;下载linux版 wget https://github.com/deepmind/mujoco/releases/download/2.1.0/mujoco210-linux-x86_64.tar.gz tar -xvf mujoco210-linux-x86_64.tar.gz echo &#39;export LD_LIBRARY_PATH=$HOME/.mujoco/mujoco210/bin:$LD_LIBRARY_PATH&#39; &gt;&gt; ~/.bashrc source ~/.bashrc # 以上mujoco就下载安置好了 # 接下来安装mujoco-py git clone https://github.com/openai/mujoco-py.git cd mujoco-py pip3 install -r requirements.txt pip3 install -r requirements.dev.txt python3 setup.py install #---------------------------------------- # 接下来是一些你可能import mujoco_py失败，甚至上面就没装成功，而需要进行的步骤 # 按错误提示选择性执行 sudo apt-get install gcc sudo apt install libosmesa6-dev sudo apt-get install python3-devel sudo apt-get update -y sudo apt-get install -y patchelf sudo apt-get install libglew-dev echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/bin&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so&#39; &gt;&gt; ~/.bashrc source ~/.bashrc 如果可以import mujoco_py执行成功，且可以跑一些示例代码，就表示安装成功了。     再回过头看rlkit，他除了提供虚拟环境的方案，还提供了Docker文件，Docker我不喜欢用，当然，主要是因为没下功夫，用不好，所以只能不喜欢，对这些比较擅长的可以试着用Docker。     rlkit调用GPU的方式： import rlkit.torch.pytorch_util as ptu ptu.set_gpu_mode(True)      如果用doodad来执行方法，则直接用下面的方式调用gpu，然而我测试发现，不用doodad，下面这种方式也可以成功调用gpu： run_experiment(..., use_gpu=True)     他们会建议用doodad来执行python程序，这里我们更想偏向于原理性代码的讨论，doodad部分的代码就不涉及了。     接下来我们看RIG的代码，在examples/rig/目录下，有两个目录，四个文件，我们一个一个开始，首先看examples/rig/pointmass/rig.py： from multiworld.envs.pygame.point2d import Point2DWallEnv from rlkit.launchers.launcher_util import run_experiment from rlkit.launchers.rig_experiments import grill_her_td3_full_experiment 要安装一下multiworld，这个工具也是该团队开发的： git clone https://github.com/vitchyr/multiworld.git cd multiworld python setup.py install pip install gym pip install pygame pip install boto3 pip install gtimer pip install sk-video pip install gitpython 关于安装rlkit，rlkit依赖版本较低的python和tensorflow，再加上跑不同程序要用到的rlkit版本还不太一样，我们反正要解析源代码，这里就不安装rlkit了，直接把rlkit的源码包放在主程序的目录下。如果想安装rlkit，可以按照他们给的方法操作，之后直接pip install rlkit就行。亲测不安装是可以的。     接着看main函数，先定义了一个字典，里面都是参数，字典里还嵌套字典，层层叠叠，难怪AI工程师会被调侃调参大师，这里暂时不一一看，之后用到了会提： variant = dict(         imsize=84,         .......         algorithm=&#39;RIG&#39;,     )     配置完参数之后，就是跑训练代码了： run_experiment(         grill_her_td3_full_experiment, #rig算法实验的函数，以variant为参数         exp_prefix=&#39;rlkit-pointmass-rig-example&#39;, #实验名称         # 实验方式：默认是local，我们这里没装doodad。         # 单机用here_no_doodad可以跑，也可以调用GPU         # 其他方式暂时不研究了，有兴趣的可以研究         # “local”，         # “docker_local”，         # “ec2”，         # &#39;here_no_doodad&#39;， mode=&#39;here_no_doodad&#39;,         variant=variant, # 参数         use_gpu=True,  # 要用GPU跑就打开 )     在这样的配置下，我们看代码是怎么跑的（会略过不太重要的代码），下面是run_experiment里比较重要的代码： run_experiment_kwargs = dict(         # 实验名称，默认会带上时间 exp_prefix=exp_prefix, # 参数 variant=variant, # 实验ID exp_id=exp_id,         # 随机种子，不设定就随机产生 seed=seed, use_gpu=use_gpu,         # 默认是‘last’,作用之后说 snapshot_mode=snapshot_mode,         # 默认是1，作用之后说 snapshot_gap=snapshot_gap,         # 没装git就是None,暂时就None吧 git_infos=git_infos,         #这里应该是rig.py  script_name=main.__file__, ) if mode == &#39;here_no_doodad&#39;: run_experiment_kwargs[&#39;base_log_dir&#39;] = base_log_dir return run_experiment_here( method_call, **run_experiment_kwargs         ) 接下来是run_experiment_here函数，依然是只看重要一点的代码： # 这个函数里只有一行代码： # logger.reset() # logger也是他们自己开发的，reset就是回归初始状态 reset_execution_environment()     # 这里做的事情包括：创建log目录，将variant参数记录下来，     # 以及添加各式各样的路径和参数 actual_log_dir = setup_logger( exp_prefix=exp_prefix, variant=variant, exp_id=exp_id, seed=seed, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, base_log_dir=base_log_dir, log_dir=log_dir, git_infos=git_infos, script_name=script_name, **setup_logger_kwargs )     # 启用seed set_seed(seed)     # 启用GPU，默认用id为0的GPU     # 如果想选择用其他gpu，可以set_gpu_mode(use_gpu,gpu_id)     set_gpu_mode(use_gpu)      run_experiment_here_kwargs = dict( variant=variant, exp_id=exp_id, seed=seed, use_gpu=use_gpu, exp_prefix=exp_prefix, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, git_infos=git_infos, script_name=script_name, base_log_dir=base_log_dir, **setup_logger_kwargs )     # 把参数信息存成actual_log_dir下面的experiment.pkl文件 save_experiment_data( dict( run_experiment_here_kwargs=run_experiment_here_kwargs ), actual_log_dir )     # 好了，终于到我们的算法函数了。     # 其实是这样的 grill_her_td3_full_experiment(variant)     return experiment_function(variant) 接下来到这里：‍ def grill_her_td3_full_experiment(variant):     # 看名字就知道功能了，预处理 full_experiment_variant_preprocess(variant)     # 训练vae，一边训练还会一边自己调参哦 train_vae_and_update_variant(variant) # 这个看了再说。     grill_her_td3_experiment(variant[&#39;grill_variant&#39;]) 这篇先到这里吧，我累了。下篇会讲具体模型算法还有训练测试代码，希望一个下篇就解决，不需要再分个中下。 感兴趣的小伙伴们就关注吧。觉得有用右下角帮忙点个赞哦。" />
+<link rel="canonical" href="http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/" />
+<meta property="og:url" content="http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%20--%20%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-02-08T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    之前有讲过一篇论文，今天来讲讲它的代码： 论文解析的链接是：以图片为目标的视觉强化学习     这篇研究以及这篇研究的后续研究，源代码都有公开，我们的目标是把这个库都解析一遍，感兴趣的话，关注吧。下面是相关源代码的链接： https://github.com/rail-berkeley/rlkit 现在要说的这个工作我们称呼它RIG，RIG适用的rlkit版本和最新的两个工作适用的rlkit版本不一样，我们先看RIG适用的rlkit。     论文开发者直接开发了一个工具，里面有众多强化学习的算法，方便做相关研究的渣渣们，比如我，直接拿来用，但前提你得看得懂。那么看懂就交给我了。     我们先来安装和解析一下这个工具，首先看安装指引： cp rlkit/launchers/config_template.py rlkit/launchers/config.py     然后我们看看config.py里面都做了些什么： import os from os.path import join import rlkit # 设定项目目录 rlkit_project_dir = join(os.path.dirname(rlkit.__file__), os.pardir) LOCAL_LOG_DIR = join(rlkit_project_dir, &#39;data&#39;) # 接下来设定大部分与远程服务器相关 # 代码目录，可能不止一个，不止一个就添加在后面 CODE_DIRS_TO_MOUNT = [ rlkit_project_dir, # &#39;/home/user/python/module/one&#39;, Add more paths as needed ] # 工作需要用到mujoco模拟器，如果你mujoco安装的位置特殊，这里可能要改 DIR_AND_MOUNT_POINT_MAPPINGS = [ dict( local_dir=join(os.getenv(&#39;HOME&#39;), &#39;.mujoco/&#39;), mount_point=&#39;/root/.mujoco&#39;, ), ] # 跑程序的代码地址 RUN_DOODAD_EXPERIMENT_SCRIPT_PATH = ( join(rlkit_project_dir, &#39;scripts&#39;, &#39;run_experiment_from_doodad.py&#39;) # &#39;/home/user/path/to/rlkit/scripts/run_experiment_from_doodad.py&#39; ) # 接下来是AWS，SLURM，和GCP的一些设定， # 我目前都没用到，暂时不提，用到的小伙伴可以看一下 关于config.py文件，不用doodad的话，要把下面两行改一下，不然之后跑程序会报错： # If not set, default will be chosen by doodad #AWS_S3_PATH = &#39;s3://bucket/directory 改为（其实就是把注释去掉，再补个冒号），我的环境里它不会被用到，只是调试起来方便一些： # If not set, default will be chosen by doodad AWS_S3_PATH = &#39;s3://bucket/directory&#39; 接下来创建一个虚拟代码环境，他提供了三个虚拟环境配置文件：linux-cpu-env.yml，linux-gpu-env.yml，mac-env.yml。一般是linux-gpu： conda env create -f environment/linux-gpu-env.yml 在跑之前我们看里面写了点啥，name是虚拟环境的名称，channels是虚拟环境安装软件的源，下面的dependencies是虚拟环境依赖的软件，这里就不列全了：    name: rlkit channels: - kne # for pybox2d - pytorch - anaconda # for mkl dependencies: - cython - ipython  # technically unnecessary 我自己不习惯用别人写好的脚本建立环境，喜欢一边看代码一边解决依赖问题。 首先我们要解决最重要的一个依赖，MuJoCo，强化学习的环境模拟常用的软件，以前是个付费软件，现在免费了，可能是有大佬买了，现在似乎属于DeepMind，DeepMind属于Google： https://mujoco.org/ 代码里用的MuJoCo版本是1.5，我喜欢用最新的，我们试试2.1，不行再回来换1.5，MuJoCo安装起来还是挺费劲的，遇到问题耐心些，多搜一搜： mkdir -p ~/.mujoco cd ~/.mujoco # 到mujoco官网-&gt;download页面-&gt;选2.1.0版本-&gt;下载linux版 wget https://github.com/deepmind/mujoco/releases/download/2.1.0/mujoco210-linux-x86_64.tar.gz tar -xvf mujoco210-linux-x86_64.tar.gz echo &#39;export LD_LIBRARY_PATH=$HOME/.mujoco/mujoco210/bin:$LD_LIBRARY_PATH&#39; &gt;&gt; ~/.bashrc source ~/.bashrc # 以上mujoco就下载安置好了 # 接下来安装mujoco-py git clone https://github.com/openai/mujoco-py.git cd mujoco-py pip3 install -r requirements.txt pip3 install -r requirements.dev.txt python3 setup.py install #---------------------------------------- # 接下来是一些你可能import mujoco_py失败，甚至上面就没装成功，而需要进行的步骤 # 按错误提示选择性执行 sudo apt-get install gcc sudo apt install libosmesa6-dev sudo apt-get install python3-devel sudo apt-get update -y sudo apt-get install -y patchelf sudo apt-get install libglew-dev echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/bin&#39; &gt;&gt; ~/.bashrc echo &#39;export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so&#39; &gt;&gt; ~/.bashrc source ~/.bashrc 如果可以import mujoco_py执行成功，且可以跑一些示例代码，就表示安装成功了。     再回过头看rlkit，他除了提供虚拟环境的方案，还提供了Docker文件，Docker我不喜欢用，当然，主要是因为没下功夫，用不好，所以只能不喜欢，对这些比较擅长的可以试着用Docker。     rlkit调用GPU的方式： import rlkit.torch.pytorch_util as ptu ptu.set_gpu_mode(True)      如果用doodad来执行方法，则直接用下面的方式调用gpu，然而我测试发现，不用doodad，下面这种方式也可以成功调用gpu： run_experiment(..., use_gpu=True)     他们会建议用doodad来执行python程序，这里我们更想偏向于原理性代码的讨论，doodad部分的代码就不涉及了。     接下来我们看RIG的代码，在examples/rig/目录下，有两个目录，四个文件，我们一个一个开始，首先看examples/rig/pointmass/rig.py： from multiworld.envs.pygame.point2d import Point2DWallEnv from rlkit.launchers.launcher_util import run_experiment from rlkit.launchers.rig_experiments import grill_her_td3_full_experiment 要安装一下multiworld，这个工具也是该团队开发的： git clone https://github.com/vitchyr/multiworld.git cd multiworld python setup.py install pip install gym pip install pygame pip install boto3 pip install gtimer pip install sk-video pip install gitpython 关于安装rlkit，rlkit依赖版本较低的python和tensorflow，再加上跑不同程序要用到的rlkit版本还不太一样，我们反正要解析源代码，这里就不安装rlkit了，直接把rlkit的源码包放在主程序的目录下。如果想安装rlkit，可以按照他们给的方法操作，之后直接pip install rlkit就行。亲测不安装是可以的。     接着看main函数，先定义了一个字典，里面都是参数，字典里还嵌套字典，层层叠叠，难怪AI工程师会被调侃调参大师，这里暂时不一一看，之后用到了会提： variant = dict(         imsize=84,         .......         algorithm=&#39;RIG&#39;,     )     配置完参数之后，就是跑训练代码了： run_experiment(         grill_her_td3_full_experiment, #rig算法实验的函数，以variant为参数         exp_prefix=&#39;rlkit-pointmass-rig-example&#39;, #实验名称         # 实验方式：默认是local，我们这里没装doodad。         # 单机用here_no_doodad可以跑，也可以调用GPU         # 其他方式暂时不研究了，有兴趣的可以研究         # “local”，         # “docker_local”，         # “ec2”，         # &#39;here_no_doodad&#39;， mode=&#39;here_no_doodad&#39;,         variant=variant, # 参数         use_gpu=True,  # 要用GPU跑就打开 )     在这样的配置下，我们看代码是怎么跑的（会略过不太重要的代码），下面是run_experiment里比较重要的代码： run_experiment_kwargs = dict(         # 实验名称，默认会带上时间 exp_prefix=exp_prefix, # 参数 variant=variant, # 实验ID exp_id=exp_id,         # 随机种子，不设定就随机产生 seed=seed, use_gpu=use_gpu,         # 默认是‘last’,作用之后说 snapshot_mode=snapshot_mode,         # 默认是1，作用之后说 snapshot_gap=snapshot_gap,         # 没装git就是None,暂时就None吧 git_infos=git_infos,         #这里应该是rig.py  script_name=main.__file__, ) if mode == &#39;here_no_doodad&#39;: run_experiment_kwargs[&#39;base_log_dir&#39;] = base_log_dir return run_experiment_here( method_call, **run_experiment_kwargs         ) 接下来是run_experiment_here函数，依然是只看重要一点的代码： # 这个函数里只有一行代码： # logger.reset() # logger也是他们自己开发的，reset就是回归初始状态 reset_execution_environment()     # 这里做的事情包括：创建log目录，将variant参数记录下来，     # 以及添加各式各样的路径和参数 actual_log_dir = setup_logger( exp_prefix=exp_prefix, variant=variant, exp_id=exp_id, seed=seed, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, base_log_dir=base_log_dir, log_dir=log_dir, git_infos=git_infos, script_name=script_name, **setup_logger_kwargs )     # 启用seed set_seed(seed)     # 启用GPU，默认用id为0的GPU     # 如果想选择用其他gpu，可以set_gpu_mode(use_gpu,gpu_id)     set_gpu_mode(use_gpu)      run_experiment_here_kwargs = dict( variant=variant, exp_id=exp_id, seed=seed, use_gpu=use_gpu, exp_prefix=exp_prefix, snapshot_mode=snapshot_mode, snapshot_gap=snapshot_gap, git_infos=git_infos, script_name=script_name, base_log_dir=base_log_dir, **setup_logger_kwargs )     # 把参数信息存成actual_log_dir下面的experiment.pkl文件 save_experiment_data( dict( run_experiment_here_kwargs=run_experiment_here_kwargs ), actual_log_dir )     # 好了，终于到我们的算法函数了。     # 其实是这样的 grill_her_td3_full_experiment(variant)     return experiment_function(variant) 接下来到这里：‍ def grill_her_td3_full_experiment(variant):     # 看名字就知道功能了，预处理 full_experiment_variant_preprocess(variant)     # 训练vae，一边训练还会一边自己调参哦 train_vae_and_update_variant(variant) # 这个看了再说。     grill_her_td3_experiment(variant[&#39;grill_variant&#39;]) 这篇先到这里吧，我累了。下篇会讲具体模型算法还有训练测试代码，希望一个下篇就解决，不需要再分个中下。 感兴趣的小伙伴们就关注吧。觉得有用右下角帮忙点个赞哦。","url":"http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/","image":"http://localhost:4000/assets/images/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%20--%20%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/2.png","@type":"BlogPosting","headline":"以图片为目标的视觉强化学习 – 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)","dateModified":"2022-02-08T00:00:00+08:00","datePublished":"2022-02-08T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-02-08">08 Feb 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/2.png" alt="以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    之前有讲过一篇论文，今天来讲讲它的代码：</p>
+
+<p><img src="../assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/1.png" alt="" /></p>
+
+<p>论文解析的链接是：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484273&amp;idx=1&amp;sn=8bd92202039862f48875a58bdaee4999&amp;chksm=c06761b3f710e8a53bb9cf7b8fa580fe250de2ddab6ca5db042206fb0241a8b2a954c4e3e862&amp;scene=21#wechat_redirect">以图片为目标的视觉强化学习</a></p>
+
+<p><img src="../assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/2.png" alt="" /></p>
+
+<p>    这篇研究以及这篇研究的后续研究，源代码都有公开，我们的目标是把这个库都解析一遍，感兴趣的话，关注吧。下面是相关源代码的链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/rail-berkeley/rlkit
+</code></pre></div></div>
+
+<p>现在要说的这个工作我们称呼它RIG，RIG适用的rlkit版本和最新的两个工作适用的rlkit版本不一样，我们先看RIG适用的rlkit。</p>
+
+<p>    论文开发者直接开发了一个工具，里面有众多强化学习的算法，方便做相关研究的渣渣们，比如我，直接拿来用，但前提你得看得懂<img src="../assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/3.png" style="zoom:50%;" />。那么看懂就交给我了。</p>
+
+<p>    我们先来安装和解析一下这个工具，首先看安装指引：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cp rlkit/launchers/config_template.py rlkit/launchers/config.py
+</code></pre></div></div>
+
+<p>    然后我们看看config.py里面都做了些什么：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">from</span> <span class="nn">os.path</span> <span class="kn">import</span> <span class="n">join</span>
+<span class="kn">import</span> <span class="nn">rlkit</span>
+<span class="c1"># 设定项目目录
+</span>
+<span class="n">rlkit_project_dir</span> <span class="o">=</span> <span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">dirname</span><span class="p">(</span><span class="n">rlkit</span><span class="p">.</span><span class="n">__file__</span><span class="p">),</span> <span class="n">os</span><span class="p">.</span><span class="n">pardir</span><span class="p">)</span>
+<span class="n">LOCAL_LOG_DIR</span> <span class="o">=</span> <span class="n">join</span><span class="p">(</span><span class="n">rlkit_project_dir</span><span class="p">,</span> <span class="s">'data'</span><span class="p">)</span>
+
+
+<span class="c1"># 接下来设定大部分与远程服务器相关
+</span>
+
+<span class="c1"># 代码目录，可能不止一个，不止一个就添加在后面
+</span><span class="n">CODE_DIRS_TO_MOUNT</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">rlkit_project_dir</span><span class="p">,</span>
+    <span class="c1"># '/home/user/python/module/one', Add more paths as needed
+</span><span class="p">]</span>
+<span class="c1"># 工作需要用到mujoco模拟器，如果你mujoco安装的位置特殊，这里可能要改
+</span><span class="n">DIR_AND_MOUNT_POINT_MAPPINGS</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">local_dir</span><span class="o">=</span><span class="n">join</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">getenv</span><span class="p">(</span><span class="s">'HOME'</span><span class="p">),</span> <span class="s">'.mujoco/'</span><span class="p">),</span>
+        <span class="n">mount_point</span><span class="o">=</span><span class="s">'/root/.mujoco'</span><span class="p">,</span>
+    <span class="p">),</span>
+<span class="p">]</span>
+<span class="c1"># 跑程序的代码地址
+</span><span class="n">RUN_DOODAD_EXPERIMENT_SCRIPT_PATH</span> <span class="o">=</span> <span class="p">(</span>
+    <span class="n">join</span><span class="p">(</span><span class="n">rlkit_project_dir</span><span class="p">,</span> <span class="s">'scripts'</span><span class="p">,</span> <span class="s">'run_experiment_from_doodad.py'</span><span class="p">)</span>
+    <span class="c1"># '/home/user/path/to/rlkit/scripts/run_experiment_from_doodad.py'
+</span><span class="p">)</span>
+
+
+<span class="c1"># 接下来是AWS，SLURM，和GCP的一些设定，
+# 我目前都没用到，暂时不提，用到的小伙伴可以看一下
+</span></code></pre></div></div>
+
+<p>关于config.py文件，不用doodad的话，要把下面两行改一下，不然之后跑程序会报错：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># If not set, default will be chosen by doodad
+#AWS_S3_PATH = 's3://bucket/directory
+</span></code></pre></div></div>
+
+<p>改为（其实就是把注释去掉，再补个冒号），我的环境里它不会被用到，只是调试起来方便一些：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># If not set, default will be chosen by doodad
+</span><span class="n">AWS_S3_PATH</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'s3://bucket/directory'</span>
+</code></pre></div></div>
+
+<p>接下来创建一个虚拟代码环境，他提供了三个虚拟环境配置文件：linux-cpu-env.yml，linux-gpu-env.yml，mac-env.yml。一般是linux-gpu：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">conda</span><span class="err"> </span><span class="n">env</span><span class="err"> </span><span class="n">create</span><span class="err"> </span><span class="o">-</span><span class="n">f</span><span class="err"> </span><span class="n">environment</span><span class="o">/</span><span class="n">linux</span><span class="o">-</span><span class="n">gpu</span><span class="o">-</span><span class="n">env</span><span class="p">.</span><span class="n">yml</span>
+</code></pre></div></div>
+
+<p>在跑之前我们看里面写了点啥，name是虚拟环境的名称，channels是虚拟环境安装软件的源，下面的dependencies是虚拟环境依赖的软件，这里就不列全了：   </p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">name</span><span class="p">:</span> <span class="n">rlkit</span>
+<span class="n">channels</span><span class="p">:</span>
+<span class="o">-</span> <span class="n">kne</span>  <span class="c1"># for pybox2d
+</span><span class="o">-</span> <span class="n">pytorch</span>
+<span class="o">-</span> <span class="n">anaconda</span>  <span class="c1"># for mkl
+</span><span class="n">dependencies</span><span class="p">:</span>
+<span class="o">-</span> <span class="n">cython</span>
+<span class="o">-</span><span class="err"> </span><span class="n">ipython</span><span class="err">  </span><span class="c1"># technically unnecessary
+</span></code></pre></div></div>
+
+<p>我自己不习惯用别人写好的脚本建立环境，喜欢一边看代码一边解决依赖问题。</p>
+
+<p>首先我们要解决最重要的一个依赖，MuJoCo，强化学习的环境模拟常用的软件，以前是个付费软件，现在免费了，可能是有大佬买了，现在似乎属于DeepMind，DeepMind属于Google：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://mujoco.org/
+</code></pre></div></div>
+
+<p>代码里用的MuJoCo版本是1.5，我喜欢用最新的，我们试试2.1，不行再回来换1.5，MuJoCo安装起来还是挺费劲的，遇到问题耐心些，多搜一搜：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">mkdir</span> <span class="o">-</span><span class="n">p</span> <span class="o">~/</span><span class="p">.</span><span class="n">mujoco</span>
+<span class="n">cd</span> <span class="o">~/</span><span class="p">.</span><span class="n">mujoco</span>
+<span class="c1"># 到mujoco官网-&gt;download页面-&gt;选2.1.0版本-&gt;下载linux版
+</span><span class="n">wget</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">deepmind</span><span class="o">/</span><span class="n">mujoco</span><span class="o">/</span><span class="n">releases</span><span class="o">/</span><span class="n">download</span><span class="o">/</span><span class="mf">2.1</span><span class="p">.</span><span class="mi">0</span><span class="o">/</span><span class="n">mujoco210</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">x86_64</span><span class="p">.</span><span class="n">tar</span><span class="p">.</span><span class="n">gz</span>
+<span class="n">tar</span> <span class="o">-</span><span class="n">xvf</span> <span class="n">mujoco210</span><span class="o">-</span><span class="n">linux</span><span class="o">-</span><span class="n">x86_64</span><span class="p">.</span><span class="n">tar</span><span class="p">.</span><span class="n">gz</span>
+<span class="n">echo</span> <span class="s">'export LD_LIBRARY_PATH=$HOME/.mujoco/mujoco210/bin:$LD_LIBRARY_PATH'</span> <span class="o">&gt;&gt;</span> <span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+<span class="n">source</span> <span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+<span class="c1"># 以上mujoco就下载安置好了
+# 接下来安装mujoco-py
+</span><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">openai</span><span class="o">/</span><span class="n">mujoco</span><span class="o">-</span><span class="n">py</span><span class="p">.</span><span class="n">git</span>
+<span class="n">cd</span> <span class="n">mujoco</span><span class="o">-</span><span class="n">py</span>
+<span class="n">pip3</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="o">-</span><span class="n">r</span><span class="err"> </span><span class="n">requirements</span><span class="p">.</span><span class="n">txt</span>
+<span class="n">pip3</span> <span class="n">install</span> <span class="o">-</span><span class="n">r</span> <span class="n">requirements</span><span class="p">.</span><span class="n">dev</span><span class="p">.</span><span class="n">txt</span>
+<span class="n">python3</span> <span class="n">setup</span><span class="p">.</span><span class="n">py</span> <span class="n">install</span>
+<span class="c1">#----------------------------------------
+# 接下来是一些你可能import mujoco_py失败，甚至上面就没装成功，而需要进行的步骤
+# 按错误提示选择性执行
+</span><span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">gcc</span>
+<span class="n">sudo</span><span class="err"> </span><span class="n">apt</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="n">libosmesa6</span><span class="o">-</span><span class="n">dev</span>
+<span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="n">python3</span><span class="o">-</span><span class="n">devel</span>
+<span class="n">sudo</span><span class="err"> </span><span class="n">apt</span><span class="o">-</span><span class="n">get</span><span class="err"> </span><span class="n">update</span><span class="err"> </span><span class="o">-</span><span class="n">y</span>
+<span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">get</span> <span class="n">install</span> <span class="o">-</span><span class="n">y</span> <span class="n">patchelf</span>
+<span class="n">sudo</span><span class="err"> </span><span class="n">apt</span><span class="o">-</span><span class="n">get</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="n">libglew</span><span class="o">-</span><span class="n">dev</span>
+<span class="n">echo</span> <span class="s">'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia'</span> <span class="o">&gt;&gt;</span> <span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+<span class="n">echo</span><span class="err"> </span><span class="s">'export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/bin'</span><span class="err"> </span><span class="o">&gt;&gt;</span><span class="err"> </span><span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+<span class="n">echo</span> <span class="s">'export LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libGLEW.so'</span> <span class="o">&gt;&gt;</span> <span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+<span class="n">source</span> <span class="o">~/</span><span class="p">.</span><span class="n">bashrc</span>
+</code></pre></div></div>
+
+<p>如果可以import mujoco_py执行成功，且可以跑一些示例代码，就表示安装成功了。</p>
+
+<p>    再回过头看rlkit，他除了提供虚拟环境的方案，还提供了Docker文件，Docker我不喜欢用，当然，主要是因为没下功夫，用不好，所以只能不喜欢，对这些比较擅长的可以试着用Docker。</p>
+
+<p>    rlkit调用GPU的方式：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">rlkit.torch.pytorch_util</span> <span class="k">as</span> <span class="n">ptu</span>
+<span class="n">ptu</span><span class="p">.</span><span class="n">set_gpu_mode</span><span class="p">(</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>     如果用doodad来执行方法，则直接用下面的方式调用gpu，然而我测试发现，不用doodad，下面这种方式也可以成功调用gpu：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">run_experiment</span><span class="p">(...,</span> <span class="n">use_gpu</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    他们会建议用doodad来执行python程序，这里我们更想偏向于原理性代码的讨论，doodad部分的代码就不涉及了。</p>
+
+<p>    接下来我们看RIG的代码，在examples/rig/目录下，有两个目录，四个文件，我们一个一个开始，首先看examples/rig/pointmass/rig.py：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">multiworld.envs.pygame.point2d</span> <span class="kn">import</span> <span class="n">Point2DWallEnv</span>
+<span class="kn">from</span> <span class="nn">rlkit.launchers.launcher_util</span> <span class="kn">import</span> <span class="n">run_experiment</span>
+<span class="kn">from</span> <span class="nn">rlkit.launchers.rig_experiments</span> <span class="kn">import</span> <span class="n">grill_her_td3_full_experiment</span>
+</code></pre></div></div>
+
+<p>要安装一下multiworld，这个工具也是该团队开发的：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="p">.</span><span class="n">com</span><span class="o">/</span><span class="n">vitchyr</span><span class="o">/</span><span class="n">multiworld</span><span class="p">.</span><span class="n">git</span>
+<span class="n">cd</span> <span class="n">multiworld</span>
+<span class="n">python</span><span class="err"> </span><span class="n">setup</span><span class="p">.</span><span class="n">py</span> <span class="n">install</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">gym</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">pygame</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">boto3</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">gtimer</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">sk</span><span class="o">-</span><span class="n">video</span>
+<span class="n">pip</span> <span class="n">install</span> <span class="n">gitpython</span>
+</code></pre></div></div>
+
+<p>关于安装rlkit，rlkit依赖版本较低的python和tensorflow，再加上跑不同程序要用到的rlkit版本还不太一样，我们反正要解析源代码，这里就不安装rlkit了，直接把rlkit的源码包放在主程序的目录下。如果想安装rlkit，可以按照他们给的方法操作，之后直接pip install rlkit就行。亲测不安装是可以的。</p>
+
+<p>    接着看main函数，先定义了一个字典，里面都是参数，字典里还嵌套字典，层层叠叠，难怪AI工程师会被调侃调参大师，这里暂时不一一看，之后用到了会提：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="n">variant</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<span class="err">        </span><span class="n">imsize</span><span class="o">=</span><span class="mi">84</span><span class="p">,</span>
+<span class="err">        </span><span class="p">.......</span>
+<span class="err">        </span><span class="n">algorithm</span><span class="o">=</span><span class="s">'RIG'</span><span class="p">,</span>
+<span class="err">    </span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    配置完参数之后，就是跑训练代码了：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="n">run_experiment</span><span class="p">(</span>
+<span class="err">        </span><span class="n">grill_her_td3_full_experiment</span><span class="p">,</span><span class="err"> </span><span class="c1">#rig算法实验的函数，以variant为参数
+</span><span class="err">        </span><span class="n">exp_prefix</span><span class="o">=</span><span class="s">'rlkit-pointmass-rig-example'</span><span class="p">,</span><span class="err"> </span><span class="c1">#实验名称
+</span><span class="err">        </span><span class="c1"># 实验方式：默认是local，我们这里没装doodad。
+</span><span class="err">        </span><span class="c1"># 单机用here_no_doodad可以跑，也可以调用GPU
+</span><span class="err">        </span><span class="c1"># 其他方式暂时不研究了，有兴趣的可以研究
+</span><span class="err">        </span><span class="c1"># “local”，
+</span><span class="err">        </span><span class="c1"># “docker_local”，
+</span><span class="err">        </span><span class="c1"># “ec2”，
+</span><span class="err">        </span><span class="c1"># 'here_no_doodad'， 
+</span>        <span class="n">mode</span><span class="o">=</span><span class="s">'here_no_doodad'</span><span class="p">,</span> 
+<span class="err">        </span><span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span><span class="err"> </span><span class="c1"># 参数
+</span><span class="err">        </span><span class="n">use_gpu</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span><span class="err">  </span><span class="c1"># 要用GPU跑就打开
+</span>    <span class="p">)</span>
+</code></pre></div></div>
+
+<p>    在这样的配置下，我们看代码是怎么跑的（会略过不太重要的代码），下面是run_experiment里比较重要的代码：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="n">run_experiment_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+<span class="err">        </span><span class="c1"># 实验名称，默认会带上时间
+</span>        <span class="n">exp_prefix</span><span class="o">=</span><span class="n">exp_prefix</span><span class="p">,</span>
+        <span class="c1"># 参数
+</span>        <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span>
+        <span class="c1"># 实验ID
+</span>        <span class="n">exp_id</span><span class="o">=</span><span class="n">exp_id</span><span class="p">,</span>
+<span class="err">        </span><span class="c1"># 随机种子，不设定就随机产生
+</span>        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">use_gpu</span><span class="o">=</span><span class="n">use_gpu</span><span class="p">,</span>
+<span class="err">        </span><span class="c1"># 默认是‘last’,作用之后说
+</span>        <span class="n">snapshot_mode</span><span class="o">=</span><span class="n">snapshot_mode</span><span class="p">,</span>
+<span class="err">        </span><span class="c1"># 默认是1，作用之后说
+</span>        <span class="n">snapshot_gap</span><span class="o">=</span><span class="n">snapshot_gap</span><span class="p">,</span>
+<span class="err">        </span><span class="c1"># 没装git就是None,暂时就None吧
+</span>        <span class="n">git_infos</span><span class="o">=</span><span class="n">git_infos</span><span class="p">,</span>
+<span class="err">        </span><span class="c1">#这里应该是rig.py 
+</span>        <span class="n">script_name</span><span class="o">=</span><span class="n">main</span><span class="p">.</span><span class="n">__file__</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">mode</span> <span class="o">==</span> <span class="s">'here_no_doodad'</span><span class="p">:</span>
+        <span class="n">run_experiment_kwargs</span><span class="p">[</span><span class="s">'base_log_dir'</span><span class="p">]</span> <span class="o">=</span> <span class="n">base_log_dir</span>
+        <span class="k">return</span> <span class="n">run_experiment_here</span><span class="p">(</span>
+            <span class="n">method_call</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">run_experiment_kwargs</span>
+<span class="err">        </span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>接下来是run_experiment_here函数，依然是只看重要一点的代码：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="c1"># 这个函数里只有一行代码：
+</span>    <span class="c1"># logger.reset()
+</span>    <span class="c1"># logger也是他们自己开发的，reset就是回归初始状态
+</span>    <span class="n">reset_execution_environment</span><span class="p">()</span>
+<span class="err">    </span><span class="c1"># 这里做的事情包括：创建log目录，将variant参数记录下来，
+</span><span class="err">    </span><span class="c1"># 以及添加各式各样的路径和参数
+</span>    <span class="n">actual_log_dir</span> <span class="o">=</span> <span class="n">setup_logger</span><span class="p">(</span>
+        <span class="n">exp_prefix</span><span class="o">=</span><span class="n">exp_prefix</span><span class="p">,</span>
+        <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span>
+        <span class="n">exp_id</span><span class="o">=</span><span class="n">exp_id</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">snapshot_mode</span><span class="o">=</span><span class="n">snapshot_mode</span><span class="p">,</span>
+        <span class="n">snapshot_gap</span><span class="o">=</span><span class="n">snapshot_gap</span><span class="p">,</span>
+        <span class="n">base_log_dir</span><span class="o">=</span><span class="n">base_log_dir</span><span class="p">,</span>
+        <span class="n">log_dir</span><span class="o">=</span><span class="n">log_dir</span><span class="p">,</span>
+        <span class="n">git_infos</span><span class="o">=</span><span class="n">git_infos</span><span class="p">,</span>
+        <span class="n">script_name</span><span class="o">=</span><span class="n">script_name</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">setup_logger_kwargs</span>
+    <span class="p">)</span>
+<span class="err">    </span><span class="c1"># 启用seed
+</span>    <span class="n">set_seed</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># 启用GPU，默认用id为0的GPU
+</span><span class="err">    </span><span class="c1"># 如果想选择用其他gpu，可以set_gpu_mode(use_gpu,gpu_id)
+</span><span class="err">    </span><span class="n">set_gpu_mode</span><span class="p">(</span><span class="n">use_gpu</span><span class="p">)</span>
+<span class="err">    </span>
+    <span class="n">run_experiment_here_kwargs</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+        <span class="n">variant</span><span class="o">=</span><span class="n">variant</span><span class="p">,</span>
+        <span class="n">exp_id</span><span class="o">=</span><span class="n">exp_id</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">seed</span><span class="p">,</span>
+        <span class="n">use_gpu</span><span class="o">=</span><span class="n">use_gpu</span><span class="p">,</span>
+        <span class="n">exp_prefix</span><span class="o">=</span><span class="n">exp_prefix</span><span class="p">,</span>
+        <span class="n">snapshot_mode</span><span class="o">=</span><span class="n">snapshot_mode</span><span class="p">,</span>
+        <span class="n">snapshot_gap</span><span class="o">=</span><span class="n">snapshot_gap</span><span class="p">,</span>
+        <span class="n">git_infos</span><span class="o">=</span><span class="n">git_infos</span><span class="p">,</span>
+        <span class="n">script_name</span><span class="o">=</span><span class="n">script_name</span><span class="p">,</span>
+        <span class="n">base_log_dir</span><span class="o">=</span><span class="n">base_log_dir</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">setup_logger_kwargs</span>
+    <span class="p">)</span>
+<span class="err">    </span><span class="c1"># 把参数信息存成actual_log_dir下面的experiment.pkl文件
+</span>    <span class="n">save_experiment_data</span><span class="p">(</span>
+        <span class="nb">dict</span><span class="p">(</span>
+            <span class="n">run_experiment_here_kwargs</span><span class="o">=</span><span class="n">run_experiment_here_kwargs</span>
+        <span class="p">),</span>
+        <span class="n">actual_log_dir</span>
+    <span class="p">)</span>
+<span class="err">    </span><span class="c1"># 好了，终于到我们的算法函数了。
+</span><span class="err">    </span><span class="c1"># 其实是这样的 grill_her_td3_full_experiment(variant)
+</span><span class="err">    </span><span class="k">return</span><span class="err"> </span><span class="n">experiment_function</span><span class="p">(</span><span class="n">variant</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>接下来到这里：‍</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">grill_her_td3_full_experiment</span><span class="p">(</span><span class="n">variant</span><span class="p">):</span>
+<span class="err">    </span><span class="c1"># 看名字就知道功能了，预处理
+</span>    <span class="n">full_experiment_variant_preprocess</span><span class="p">(</span><span class="n">variant</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># 训练vae，一边训练还会一边自己调参哦
+</span>    <span class="n">train_vae_and_update_variant</span><span class="p">(</span><span class="n">variant</span><span class="p">)</span>
+    <span class="c1"># 这个看了再说。
+</span><span class="err">    </span><span class="n">grill_her_td3_experiment</span><span class="p">(</span><span class="n">variant</span><span class="p">[</span><span class="s">'grill_variant'</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>这篇先到这里吧，我累了<img src="../assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/4.png" style="zoom: 50%;" />。下篇会讲具体模型算法还有训练测试代码，希望一个下篇就解决，不需要再分个中下<img src="../assets/images/以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)/5.png" style="zoom: 50%;" />。</p>
+
+<p>感兴趣的小伙伴们就关注吧。觉得有用右下角帮忙点个赞哦。</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=以图片为目标的视觉强化学习 -- 代码解析上篇(rlkit安装及部分代码及函数的解析和使用)&url=http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90%E4%B8%8A%E7%AF%87(rlkit%E5%AE%89%E8%A3%85%E5%8F%8A%E9%83%A8%E5%88%86%E4%BB%A3%E7%A0%81%E5%8F%8A%E5%87%BD%E6%95%B0%E7%9A%84%E8%A7%A3%E6%9E%90%E5%92%8C%E4%BD%BF%E7%94%A8)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Reinforcement-Learning">Reinforcement Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Goal-Directed-Task">Goal Directed Task</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/以图片为目标的视觉强化学习/4.png" alt="以图片为目标的视觉强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E4%BB%A5%E5%9B%BE%E7%89%87%E4%B8%BA%E7%9B%AE%E6%A0%87%E7%9A%84%E8%A7%86%E8%A7%89%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">以图片为目标的视觉强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">    今天说一下发表于NIPS 2018的一篇文章，以图片为目标的视觉强化学习。
+
+
+
+    为了更直观的了解一下这篇论文解决的问题，可以看一下这个链接里的视频demo:
+
+https://sit</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">11 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

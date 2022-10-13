@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第二部分，讲因果归纳和half-sibling regression。     先考虑一个关于系外行星的研究。我们有一个开普勒望远镜，以某个角度在观察宇宙，任务是发现系外行星。     该望远镜的观察范围是3000光年。         那么理想状况下，如何判断一个恒星周围有行星在绕行呢？观察这个恒星的光的强度，如果如上图所示，间隔固定时间就有一段时间光的强度降低了一些，那么可以认为，有一个行星在绕这个恒星运行。     但是，理想归理想，现实很骨感，现实中观察到的数据充满了噪声，无法用上面那种简单的逻辑来分辨出行星的踪迹。     接下来，我们分析一下这个案例的信息构成。     我们没有观察到的信息，由我们需要的恒星系统的光强及系统噪声组成。我们观察到的信息，由对该恒星系统的观察和对宇宙其他部分的观察组成。对该恒星系统的观察由该恒星系统的光强和系统噪声组成，其他观察由系统噪声组成。     这些信息又呈什么关系呢，因为系统噪音和true signal是来自不同星体的信息，且间隔很远，相互之间的影响可以忽略不计，因此true signal和系统噪音是相互独立的。因此观察到的信息中measurement和other measurements中的共同部分一定是系统噪音。     将上图公式化，得下图：     我们要求的是Q，怎么得到呢？移除Y中所有可以被X解释的部分。     上图中展示了三种方法，第一种就是找到X和f(N)之间的映射关系，计算出f(N)，解出Q，这无疑是最理想的一种方式。第二种，假设X中只有少量噪声。第三种，假设有多个观察，即多个X。     具体去噪方法可以参考最后一幅图中的参考文献，这里就不仔细展开了，之后的几幅图展示了一下实验效果：     横轴是时间，中间断裂的部分是仪器的观测机制造成的，纵轴是观测数据，第一幅图是原始数据，第二幅图是去噪后的结果，可以发现，是可以明确发现行星的踪迹的。下图也一样：     上面这幅图就不做具体解释了，感兴趣可以看图中参考文献。    系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第二部分，讲因果归纳和half-sibling regression。     先考虑一个关于系外行星的研究。我们有一个开普勒望远镜，以某个角度在观察宇宙，任务是发现系外行星。     该望远镜的观察范围是3000光年。         那么理想状况下，如何判断一个恒星周围有行星在绕行呢？观察这个恒星的光的强度，如果如上图所示，间隔固定时间就有一段时间光的强度降低了一些，那么可以认为，有一个行星在绕这个恒星运行。     但是，理想归理想，现实很骨感，现实中观察到的数据充满了噪声，无法用上面那种简单的逻辑来分辨出行星的踪迹。     接下来，我们分析一下这个案例的信息构成。     我们没有观察到的信息，由我们需要的恒星系统的光强及系统噪声组成。我们观察到的信息，由对该恒星系统的观察和对宇宙其他部分的观察组成。对该恒星系统的观察由该恒星系统的光强和系统噪声组成，其他观察由系统噪声组成。     这些信息又呈什么关系呢，因为系统噪音和true signal是来自不同星体的信息，且间隔很远，相互之间的影响可以忽略不计，因此true signal和系统噪音是相互独立的。因此观察到的信息中measurement和other measurements中的共同部分一定是系统噪音。     将上图公式化，得下图：     我们要求的是Q，怎么得到呢？移除Y中所有可以被X解释的部分。     上图中展示了三种方法，第一种就是找到X和f(N)之间的映射关系，计算出f(N)，解出Q，这无疑是最理想的一种方式。第二种，假设X中只有少量噪声。第三种，假设有多个观察，即多个X。     具体去噪方法可以参考最后一幅图中的参考文献，这里就不仔细展开了，之后的几幅图展示了一下实验效果：     横轴是时间，中间断裂的部分是仪器的观测机制造成的，纵轴是观测数据，第一幅图是原始数据，第二幅图是去噪后的结果，可以发现，是可以明确发现行星的踪迹的。下图也一样：     上面这幅图就不做具体解释了，感兴趣可以看图中参考文献。    系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling%20regression/5.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-03-18T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第二部分，讲因果归纳和half-sibling regression。     先考虑一个关于系外行星的研究。我们有一个开普勒望远镜，以某个角度在观察宇宙，任务是发现系外行星。     该望远镜的观察范围是3000光年。         那么理想状况下，如何判断一个恒星周围有行星在绕行呢？观察这个恒星的光的强度，如果如上图所示，间隔固定时间就有一段时间光的强度降低了一些，那么可以认为，有一个行星在绕这个恒星运行。     但是，理想归理想，现实很骨感，现实中观察到的数据充满了噪声，无法用上面那种简单的逻辑来分辨出行星的踪迹。     接下来，我们分析一下这个案例的信息构成。     我们没有观察到的信息，由我们需要的恒星系统的光强及系统噪声组成。我们观察到的信息，由对该恒星系统的观察和对宇宙其他部分的观察组成。对该恒星系统的观察由该恒星系统的光强和系统噪声组成，其他观察由系统噪声组成。     这些信息又呈什么关系呢，因为系统噪音和true signal是来自不同星体的信息，且间隔很远，相互之间的影响可以忽略不计，因此true signal和系统噪音是相互独立的。因此观察到的信息中measurement和other measurements中的共同部分一定是系统噪音。     将上图公式化，得下图：     我们要求的是Q，怎么得到呢？移除Y中所有可以被X解释的部分。     上图中展示了三种方法，第一种就是找到X和f(N)之间的映射关系，计算出f(N)，解出Q，这无疑是最理想的一种方式。第二种，假设X中只有少量噪声。第三种，假设有多个观察，即多个X。     具体去噪方法可以参考最后一幅图中的参考文献，这里就不仔细展开了，之后的几幅图展示了一下实验效果：     横轴是时间，中间断裂的部分是仪器的观测机制造成的，纵轴是观测数据，第一幅图是原始数据，第二幅图是去噪后的结果，可以发现，是可以明确发现行星的踪迹的。下图也一样：     上面这幅图就不做具体解释了，感兴趣可以看图中参考文献。    系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling%20regression/5.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression","dateModified":"2021-03-18T00:00:00+08:00","datePublished":"2021-03-18T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-03-18">18 Mar 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484345&amp;idx=1&amp;sn=d00505013527868de0fd2ef7f70e686b&amp;chksm=c067617bf710e86dcbe22b9d6089a376474471ee08c55b4dd4a60f145e7dacd818d5ae6a4b4b&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</a></strong></p>
+
+<p>    这是这门课最后一部分的内容，因果归纳和机器学习。</p>
+
+<p>    总共分四个部分，这是第二部分，讲因果归纳和half-sibling regression。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/1.png" alt="" /></p>
+
+<p>    先考虑一个关于系外行星的研究。我们有一个开普勒望远镜，以某个角度在观察宇宙，任务是发现系外行星。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/2.png" alt="" /></p>
+
+<p>    该望远镜的观察范围是3000光年。    </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/3.png" alt="" /></p>
+
+<p>    那么理想状况下，如何判断一个恒星周围有行星在绕行呢？观察这个恒星的光的强度，如果如上图所示，间隔固定时间就有一段时间光的强度降低了一些，那么可以认为，有一个行星在绕这个恒星运行。</p>
+
+<p>    但是，理想归理想，现实很骨感，现实中观察到的数据充满了噪声，无法用上面那种简单的逻辑来分辨出行星的踪迹。</p>
+
+<p>    接下来，我们分析一下这个案例的信息构成。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/4.png" style="zoom:67%;" /></p>
+
+<p>    我们没有观察到的信息，由我们需要的恒星系统的光强及系统噪声组成。我们观察到的信息，由对该恒星系统的观察和对宇宙其他部分的观察组成。对该恒星系统的观察由该恒星系统的光强和系统噪声组成，其他观察由系统噪声组成。</p>
+
+<p>    这些信息又呈什么关系呢，因为系统噪音和true signal是来自不同星体的信息，且间隔很远，相互之间的影响可以忽略不计，因此true signal和系统噪音是相互独立的。因此观察到的信息中measurement和other measurements中的共同部分一定是系统噪音。</p>
+
+<p>    将上图公式化，得下图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" style="zoom:67%;" /></p>
+
+<p>    我们要求的是Q，怎么得到呢？移除Y中所有可以被X解释的部分。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/6.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/7.png" style="zoom:67%;" /></p>
+
+<p>    上图中展示了三种方法，第一种就是找到X和f(N)之间的映射关系，计算出f(N)，解出Q，这无疑是最理想的一种方式。第二种，假设X中只有少量噪声。第三种，假设有多个观察，即多个X。</p>
+
+<p>    具体去噪方法可以参考最后一幅图中的参考文献，这里就不仔细展开了，之后的几幅图展示了一下实验效果：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/8.png" style="zoom: 67%;" /></p>
+
+<p>    横轴是时间，中间断裂的部分是仪器的观测机制造成的，纵轴是观测数据，第一幅图是原始数据，第二幅图是去噪后的结果，可以发现，是可以明确发现行星的踪迹的。下图也一样：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/9.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/10.png" /></p>
+
+<p>    上面这幅图就不做具体解释了，感兴趣可以看图中参考文献。   </p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484345&amp;idx=1&amp;sn=d00505013527868de0fd2ef7f70e686b&amp;chksm=c067617bf710e86dcbe22b9d6089a376474471ee08c55b4dd4a60f145e7dacd818d5ae6a4b4b&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/4.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）
+
+    这是这门课最后一部分的内</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">17 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

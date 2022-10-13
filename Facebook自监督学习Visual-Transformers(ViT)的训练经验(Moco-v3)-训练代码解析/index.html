@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    我们来讲Moco v3的代码。     论文的主要内容，参考系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     官方代码链接： https://github.com/facebookresearch/moco-v3     但现在最佳的模型是微软的EsViT(Swin-B)，然后才是Moco v3，下面是来自https://paperswithcode.com/的统计：     这张图最后边的点是EsViT(Swin-B)，图中文字没显示出来。     这个模型也公开了源代码： https://github.com/microsoft/esvit     这个代码也会解析哦，心动就关注吧，又给自己挖了一个坑。     公开的Moco v3是用Pytorch实现的，包含自监督学习的Resnet和ViT。而原始的Moco v3其实是用tensorflow实现的，在TPU上做的实验。     准备工作有安装Python，Pytorch，等相关软件，下载ImageNet等，这里就不展开说了。     我们直接开始看预训练主函数main_moco.py，开始逐行解析（解析都在注释里）： import torchvision.models as torchvision_models torchvision_model_names = sorted(name for name in torchvision_models.__dict__ if name.islower() and not name.startswith(&quot;__&quot;) and callable(torchvision_models.__dict__[name])) # 产生所有可以用来进行预训练的模型的名称的集合 model_names = [&#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;, &#39;vit_conv_base&#39;] + torchvision_model_names     torchvision.models还可以用来加载预训练模型： # arch是需要加载的预训练模型名，比如：resnet18 model = torchvison.models.__dict__[arch](pretrained=True)      接下来看main函数： import torch.backends.cudnn as cudnn def main(): # 存入参数 args = parser.parse_args()     # seed默认是None     # 关于种子的正确设定方式     # 可以参考 https://pytorch.apachecn.org/docs/1.0/notes_randomness.html         if args.seed is not None: random.seed(args.seed) torch.manual_seed(args.seed) cudnn.deterministic = True warnings.warn(&#39;You have chosen to seed training. &#39; &#39;This will turn on the CUDNN deterministic setting, &#39; &#39;which can slow down your training considerably! &#39; &#39;You may see unexpected behavior when restarting &#39; &#39;from checkpoints.&#39;)         # cudnn.benchmark = False 这里应该还要加一行这个              # 默认是None，因为这个模型预训练工作量比较大，作者都是用几百片GPU或者TPU训练的。 if args.gpu is not None: warnings.warn(&#39;You have chosen a specific GPU. This will completely &#39; &#39;disable data parallelism.&#39;)     # dist_url默认值是&#39;tcp://224.66.41.62:23456&#39;，应当是作者服务器第一个节点的地址     # world_size默认值是-1     # WORLD_SIZE由torch.distributed.launch.py产生 具体数值为 nproc_per_node*node(服务器数量或者节点数) if args.dist_url == &quot;env://&quot; and args.world_size == -1: args.world_size = int(os.environ[&quot;WORLD_SIZE&quot;])     # multiprocessing_distributed的默认值为False     # 需要多进程运行程序时一定要使multiprocessing_distributed为True args.distributed = args.world_size &gt; 1 or args.multiprocessing_distributed     # 返回显卡数量     ngpus_per_node = torch.cuda.device_count() if args.multiprocessing_distributed:         # Since we have ngpus_per_node processes per node，         # the total world_size needs to be adjusted accordingly         # 计算总的GPU的数量 args.world_size = ngpus_per_node * args.world_size # Use torch.multiprocessing.spawn to launch distributed processes:         # the main_worker process function         # 开启多进程，每个进程调用main_worker函数，控制一个GPU。 mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args)) else: # Simply call main_worker function         # args.gpu默认是None，如果不采用分布式，则通过这个参数输入用来计算的GPU的编号         main_worker(args.gpu, ngpus_per_node, args)     这里需要注意的是，mp.spawn调用的main_worker其实有三个参数，但是mp.spawn后面的args却只给了后两个参数。而第一个参数的gpu的值会自动产生，调用的哪个gpu，就是那个gpu的编号。     接下来看main_worker函数，因为这个函数太长，会切成若干个代码框： import torch.distributed as dist import vits def main_worker(gpu, ngpus_per_node, args):     #gpu是运行这个函数使用的gpu编号，如果是None，则不调用gpu     args.gpu = gpu # suppress printing if not first GPU on each node     # 如果不是主节点上的GPU 0，则抑制打印     # rank默认是-1，所以在第一个主机运行程序的时候要指定rank为0     # 可以打印的进程是在第一个主机控制着GPU 0的进程。 if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0): def print_pass(*args): pass builtins.print = print_pass     if args.gpu is not None: print(&quot;Use GPU: {} for training&quot;.format(args.gpu))     # rank分两种，一种是全局rank, 可以理解为所有进程的编号。用于进程间通信。     # 一种是local rank, 每个节点上的进程的编号。用于本地设备分配。     # 以下rank都指全局rank     if args.distributed: if args.dist_url == &quot;env://&quot; and args.rank == -1: args.rank = int(os.environ[&quot;RANK&quot;]) if args.multiprocessing_distributed: # For multiprocessing distributed training,             # rank needs to be the global rank among all the processes             # 让每个进程都获得一个唯一的编号             # rank在作为参数输入的时候写的是节点编号 args.rank = args.rank * ngpus_per_node + gpu         # dist_backend默认的是nccl，一个多gpu卡通信框架 dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)         # 设置栅栏，同步进程 torch.distributed.barrier() # create model     # arch或a指模型的名称，默认是resnet50  print(&quot;=&gt; creating model &#39;{}&#39;&quot;.format(args.arch)) # 如果模型名称是以vit开头 if args.arch.startswith(&#39;vit&#39;): model = moco.builder.MoCo_ViT(             # 这里留意一下偏函数的应用，args.stop_grad_conv1默认是False partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),             # 默认分别是256，4096，1 args.moco_dim, args.moco_mlp_dim, args.moco_t)     else: model = moco.builder.MoCo_ResNet(             # 这里zero_init_residual会使残差分支中最后一个BatchNorm2d的初始值为0             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True),              args.moco_dim, args.moco_mlp_dim, args.moco_t)     上面这段代码主要是设置一些关键的参数，以及加载模型，接下来看第二部分代码main_worker[2]: # infer learning rate before changing batch size args.lr = args.lr * args.batch_size / 256 if not torch.cuda.is_available(): print(&#39;using CPU, this will be slow&#39;) elif args.distributed: # apply SyncBN，要理解SyncBN可以仔细看一下参考[1] # 简单理解SyncBN就是多卡模式的Batch Normalization (BN) # 把是或者继承了torch.nn.modules.batchnorm._BatchNorm的BN全部替换成SyncBN # 所以在写model时，BN必须用torch.nn.modules.batchnorm._BatchNorm来实现 # 否则就得自己写一个SyncBN model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model) # For multiprocessing distributed, DistributedDataParallel constructor # should always set the single device scope, otherwise, # DistributedDataParallel will use all available devices. if args.gpu is not None: torch.cuda.set_device(args.gpu) model.cuda(args.gpu) # When using a single GPU per process and per # DistributedDataParallel, we need to divide the batch size # ourselves based on the total number of GPUs we have # 把batch分一分 args.batch_size = int(args.batch_size / args.world_size) # 用来导入数据的进程数量，必须大于0，默认是32，这里为什么这么计算，不是很懂。 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node) # 构造DDP模型 model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu]) else: model.cuda() # DistributedDataParallel will divide and allocate batch_size to all # available GPUs if device_ids are not set model = torch.nn.parallel.DistributedDataParallel(model) elif args.gpu is not None: torch.cuda.set_device(args.gpu) model = model.cuda(args.gpu) # comment out the following line for debugging raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) else: # AllGather/rank implementation in this code only supports DistributedDataParallel. raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) print(model) # print model after SyncBatchNorm # optimizer默认是lars，resnet50用的是lars # weight_decay默认是1e-6，momentum默认是0.9 if args.optimizer == &#39;lars&#39;: optimizer = moco.optimizer.LARS(model.parameters(), args.lr, weight_decay=args.weight_decay, momentum=args.momentum)     # vit用adamw     # weight_decay需要被设定为0.1 elif args.optimizer == &#39;adamw&#39;: optimizer = torch.optim.AdamW(model.parameters(), args.lr,                                 weight_decay=args.weight_decay)     依旧是一些关键参数，以及把并行训练的一些配置，main_worker[3]: # 在训练最开始之前实例化一个GradScaler对象     # 自动混合精度的详细内容请参考[2]     scaler = torch.cuda.amp.GradScaler()     # 如果是第一进程，使用预设名称建立实体，具体请参考[3] summary_writer = SummaryWriter() if args.rank == 0 else None # optionally resume from a checkpoint     # resume默认为空     # 如果需要训练已经训练了一段时间的模型，可以通过resume输入模型地址 if args.resume: if os.path.isfile(args.resume): print(&quot;=&gt; loading checkpoint &#39;{}&#39;&quot;.format(args.resume)) if args.gpu is None: checkpoint = torch.load(args.resume) else: # Map model to be loaded to specified single gpu. loc = &#39;cuda:{}&#39;.format(args.gpu) checkpoint = torch.load(args.resume, map_location=loc) args.start_epoch = checkpoint[&#39;epoch&#39;] model.load_state_dict(checkpoint[&#39;state_dict&#39;]) optimizer.load_state_dict(checkpoint[&#39;optimizer&#39;]) scaler.load_state_dict(checkpoint[&#39;scaler&#39;]) print(&quot;=&gt; loaded checkpoint &#39;{}&#39; (epoch {})&quot; .format(args.resume, checkpoint[&#39;epoch&#39;])) else: print(&quot;=&gt; no checkpoint found at &#39;{}&#39;&quot;.format(args.resume))     # 在cuDNN中选择卷积算法，以加快训练速度，具体见参考[4] cudnn.benchmark = True # Data loading code     # 产生训练数据目录     traindir = os.path.join(args.data, &#39;train&#39;)     一些关键的设置，比如自动混合精度，归一化，以及是否是接续之前的训练，训练模型。main_worker[4]:     # transforms.Normalize公式input[channel] = (input[channel] - mean[channel]) / std[channel] # Normalize() 函数的作用是将数据转换为标准正太分布，使模型更容易收敛。 # mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225] # 是从 ImageNet 数据集的数百万张图片中随机抽样计算得到的。 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # follow BYOL&#39;s augmentation recipe: https://arxiv.org/abs/2006.07733 # 数据增强 augmentation1 = [ # 将给定图像随机裁剪为不同的大小和宽高比，然后缩放所裁剪得到的图像为制定的大小 # 即先随机采集，然后对裁剪得到的图像缩放为同一大小，默认scale=(0.08, 1.0) transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), # 以0.8的概率执行此动作， transforms.RandomApply([ # 改变图像的属性：亮度（brightness）、对比度（contrast）、饱和度（saturation）和色调（hue) # 怎么变的呢，将数字带入[max(0, 1 - offset), 1 + offset]获得区间 # 比如亮度位置上是0.4，则得到区间[0.6，1.4] # 那么新图的亮度会是这个区间的一个随机数 transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), # 依概率p将图片转换为灰度图 transforms.RandomGrayscale(p=0.2),         # 产生在[0.1，2]区间的随机数，对图片进行高斯模糊         # 调用的函数是ImageFilter.GaussianBlur transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=1.0),         # 依据概率p对PIL图片进行水平翻转 参数：p默认值为0.5 transforms.RandomHorizontalFlip(),         # 将PIL Image或者 ndarray 转换为tensor，并且归一化至[0-1] 注意事项：归一化至[0-1]是直接除以255，若自己的ndarray数据尺度有变化，则需要自行修改。 transforms.ToTensor(),         # 之前定义的归一化方式，归一化后，数值所在的区间大概是（-1，1） normalize ] augmentation2 = [ transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), transforms.RandomApply([ transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), transforms.RandomGrayscale(p=0.2),         # 高斯模糊的概率和augmentation1不一样 transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.1), # 以0.2的概率做Solarize         # 默认阈值是128，大于128的像素值，转换成二进制，然后做01反转         # 即0变1，1变0，得到新的像素值。 transforms.RandomApply([moco.loader.Solarize()], p=0.2), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize     ]     这部分主要是关于数据增强的设定，至于为什么这么做数据增强，作者有把参考的文章列在代码注释里，感兴趣的可以去看一下。接下来是这个函数的最后一个部分main_worker[5]:     # 在指定目录下做载入数据     # ImageFolder(root,transform=None,target_transform=None,loader=default_loader)     # transform：对图片进行预处理的操作（函数），原始图片作为输入，返回一个转换后的图片。     # 对图片类别进行预处理的操作，输入为 target，输出对其的转换。如果不传该参数，即对 target 不做任何转换。     # loader 默认操作是读取PIL image对象。     # 这里是模型很关键的一步，将每一幅图做两种不同的transform，得到两张图 train_dataset = datasets.ImageFolder( traindir,         # 输入im返回是[im1,im2]，分别按augmentation1和augmentation2做了变换 moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), transforms.Compose(augmentation2))) if args.distributed:         # 把数据划分成num_gpu份，不同的GPU拿自己那一份 train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) else: train_sampler = None     # sampler和shuffle是互斥的，有sampler，shuffle就可以是None了     # num_workers要大于0，0代表用主进程导入数据，大于0表示用num_workers个进程导入数据     # pin_memory: if True, the data loader will copy tensors into CUDA pinned memory before returning them     # 主机中的内存，有两种存在方式，一是锁页，二是不锁页，      # 锁页内存存放的内容在任何情况下都不会与主机的虚拟内存进行交换（注：虚拟内存就是硬盘），     # 而不锁页内存在主机内存不足时，数据会存放在虚拟内存中。     # 显卡中的显存全部是锁页内存,当计算机的内存充足的时候，可以设置pin_memory=True。     # 意味着生成的Tensor数据存放在锁页内存中，这样内存中的Tensor转移到GPU的显存会更快。     # 当系统卡住，或者交换内存使用过多的时候，设置pin_memory=False。     # 因为pin_memory与电脑硬件性能有关，pin_memory默认为False。     # drop_last: set to ``True`` to drop the last incomplete batch    train_loader = torch.utils.data.DataLoader( train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True) for epoch in range(args.start_epoch, args.epochs): if args.distributed:             # 加了这行，每次gpu才会拿到不同组合的batch             # 换句话说，加上这行，每个epoch才会被shuffle train_sampler.set_epoch(epoch)         # train for one epoch，这个接下来讲 train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)         #主进程存储训练过程中的模型，防止因为一些事情中断训练后，需要从头再来。 if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0): # only the first GPU saves checkpoint save_checkpoint({ &#39;epoch&#39;: epoch + 1, &#39;arch&#39;: args.arch, &#39;state_dict&#39;: model.state_dict(), &#39;optimizer&#39; : optimizer.state_dict(), &#39;scaler&#39;: scaler.state_dict(),             # 这个代码里没有做is_best判断             # 通常这个参数是用来保存训练过程中测试的效果最好的模型，防止过拟合。             }, is_best=False, filename=&#39;checkpoint_%04d.pth.tar&#39; % epoch) if args.rank == 0: summary_writer.close() 这部分代码主要内容：一、准备数据，二、训练，三、主进程保存节点模型。     接下来看train这个函数： def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):     # AverageMeter是作者自己定义的函数，用来计算循环中，一些过程的平均消耗 batch_time = AverageMeter(&#39;Time&#39;, &#39;:6.3f&#39;) data_time = AverageMeter(&#39;Data&#39;, &#39;:6.3f&#39;) learning_rates = AverageMeter(&#39;LR&#39;, &#39;:.4e&#39;) losses = AverageMeter(&#39;Loss&#39;, &#39;:.4e&#39;) progress = ProgressMeter( len(train_loader), [batch_time, data_time, learning_rates, losses], prefix=&quot;Epoch: [{}]&quot;.format(epoch)) # switch to train mode model.train() end = time.time() iters_per_epoch = len(train_loader) moco_m = args.moco_m for i, (images, _) in enumerate(train_loader): # measure data loading time         # 计算在循环中，载入数据平均消耗的时间。         data_time.update(time.time() - end) # adjust learning rate and momentum coefficient per iteration # adjust_learning_rate是作者自己定义的函数         # learning rate先由小变大，再由大变小。具体可以参考代码 lr = adjust_learning_rate(optimizer, epoch + i / iters_per_epoch, args)         # 更新在循环中，使用的lr的平均值 learning_rates.update(lr) if args.moco_m_cos:             #同样是作者自己定义的函数，moco_m则是由本来就很接近1（0.99），变得越来越接近1。 moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args) if args.gpu is not None: # 如果pin_memory=True的话，将数据放入GPU的时候， # 也应该把non_blocking打开，这样就只把数据放入GPU而不取出，访问时间会大大减少。 images[0] = images[0].cuda(args.gpu, non_blocking=True) images[1] = images[1].cuda(args.gpu, non_blocking=True) # compute output with torch.cuda.amp.autocast(True):             # moco_m: moco momentum of updating momentum encoder             # model下一篇说 loss = model(images[0], images[1], moco_m)         # loss平均值更新 losses.update(loss.item(), images[0].size(0)) if args.rank == 0: summary_writer.add_scalar(&quot;loss&quot;, loss.item(), epoch * iters_per_epoch + i) # compute gradient and do SGD step         # optimizer.zero_grad()意思是把梯度置零,         # 也就是把loss关于weight的导数变成0. optimizer.zero_grad() # Scales loss. 为了梯度放大. scaler原理可以参考[2] scaler.scale(loss).backward()         # scaler.step() 首先把梯度的值unscale回来. # 如果梯度的值不是 infs 或者 NaNs, 那么调用optimizer.step()来更新权重, # 否则，忽略step调用，从而保证权重不更新（不被破坏） scaler.step(optimizer) # 准备着，看是否要增大scaler scaler.update() # measure elapsed time batch_time.update(time.time() - end) end = time.time()         # print_ferq默认是10 if i % args.print_freq == 0:             progress.display(i)     这里就是Moco v3训练的主要代码，有些太过细枝末节又容易懂的就没有放进来。     代码主要特点和主要内容有： - 多卡，每张卡有多个gpu，每个进程管理一个gpu - 用了自动混合精度机制 不同的数据增强的配置 当然还有很多细节的设计，比如lr和moco_m参数的调整，数据存入gpu的方式等等，都是非常值得深入学习的，这篇只是浏览，具体原理可以参考我给的一些参考链接，自己搜索更有用的资料，或者去研读pytorch源代码。     下一篇讲Moco v3的模型代码。喜欢或者觉得有用就关注吧，可以的话，右下角点个“在看”吧。     参考： [1] 996黄金一代，[原创][深度][PyTorch] DDP系列第三篇：实战与技巧，知乎，2020 [2] Gemfield，PyTorch的自动混合精度（AMP），知乎，2020 [3] dexter，TensorBoardX 介紹 (在 PyTorch 中使用 Tensorboard），知乎，2018 [4] xiaopl，torch.backends.cudnn.benchmark ?!，知乎，2019" />
+<meta property="og:description" content="    我们来讲Moco v3的代码。     论文的主要内容，参考系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     官方代码链接： https://github.com/facebookresearch/moco-v3     但现在最佳的模型是微软的EsViT(Swin-B)，然后才是Moco v3，下面是来自https://paperswithcode.com/的统计：     这张图最后边的点是EsViT(Swin-B)，图中文字没显示出来。     这个模型也公开了源代码： https://github.com/microsoft/esvit     这个代码也会解析哦，心动就关注吧，又给自己挖了一个坑。     公开的Moco v3是用Pytorch实现的，包含自监督学习的Resnet和ViT。而原始的Moco v3其实是用tensorflow实现的，在TPU上做的实验。     准备工作有安装Python，Pytorch，等相关软件，下载ImageNet等，这里就不展开说了。     我们直接开始看预训练主函数main_moco.py，开始逐行解析（解析都在注释里）： import torchvision.models as torchvision_models torchvision_model_names = sorted(name for name in torchvision_models.__dict__ if name.islower() and not name.startswith(&quot;__&quot;) and callable(torchvision_models.__dict__[name])) # 产生所有可以用来进行预训练的模型的名称的集合 model_names = [&#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;, &#39;vit_conv_base&#39;] + torchvision_model_names     torchvision.models还可以用来加载预训练模型： # arch是需要加载的预训练模型名，比如：resnet18 model = torchvison.models.__dict__[arch](pretrained=True)      接下来看main函数： import torch.backends.cudnn as cudnn def main(): # 存入参数 args = parser.parse_args()     # seed默认是None     # 关于种子的正确设定方式     # 可以参考 https://pytorch.apachecn.org/docs/1.0/notes_randomness.html         if args.seed is not None: random.seed(args.seed) torch.manual_seed(args.seed) cudnn.deterministic = True warnings.warn(&#39;You have chosen to seed training. &#39; &#39;This will turn on the CUDNN deterministic setting, &#39; &#39;which can slow down your training considerably! &#39; &#39;You may see unexpected behavior when restarting &#39; &#39;from checkpoints.&#39;)         # cudnn.benchmark = False 这里应该还要加一行这个              # 默认是None，因为这个模型预训练工作量比较大，作者都是用几百片GPU或者TPU训练的。 if args.gpu is not None: warnings.warn(&#39;You have chosen a specific GPU. This will completely &#39; &#39;disable data parallelism.&#39;)     # dist_url默认值是&#39;tcp://224.66.41.62:23456&#39;，应当是作者服务器第一个节点的地址     # world_size默认值是-1     # WORLD_SIZE由torch.distributed.launch.py产生 具体数值为 nproc_per_node*node(服务器数量或者节点数) if args.dist_url == &quot;env://&quot; and args.world_size == -1: args.world_size = int(os.environ[&quot;WORLD_SIZE&quot;])     # multiprocessing_distributed的默认值为False     # 需要多进程运行程序时一定要使multiprocessing_distributed为True args.distributed = args.world_size &gt; 1 or args.multiprocessing_distributed     # 返回显卡数量     ngpus_per_node = torch.cuda.device_count() if args.multiprocessing_distributed:         # Since we have ngpus_per_node processes per node，         # the total world_size needs to be adjusted accordingly         # 计算总的GPU的数量 args.world_size = ngpus_per_node * args.world_size # Use torch.multiprocessing.spawn to launch distributed processes:         # the main_worker process function         # 开启多进程，每个进程调用main_worker函数，控制一个GPU。 mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args)) else: # Simply call main_worker function         # args.gpu默认是None，如果不采用分布式，则通过这个参数输入用来计算的GPU的编号         main_worker(args.gpu, ngpus_per_node, args)     这里需要注意的是，mp.spawn调用的main_worker其实有三个参数，但是mp.spawn后面的args却只给了后两个参数。而第一个参数的gpu的值会自动产生，调用的哪个gpu，就是那个gpu的编号。     接下来看main_worker函数，因为这个函数太长，会切成若干个代码框： import torch.distributed as dist import vits def main_worker(gpu, ngpus_per_node, args):     #gpu是运行这个函数使用的gpu编号，如果是None，则不调用gpu     args.gpu = gpu # suppress printing if not first GPU on each node     # 如果不是主节点上的GPU 0，则抑制打印     # rank默认是-1，所以在第一个主机运行程序的时候要指定rank为0     # 可以打印的进程是在第一个主机控制着GPU 0的进程。 if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0): def print_pass(*args): pass builtins.print = print_pass     if args.gpu is not None: print(&quot;Use GPU: {} for training&quot;.format(args.gpu))     # rank分两种，一种是全局rank, 可以理解为所有进程的编号。用于进程间通信。     # 一种是local rank, 每个节点上的进程的编号。用于本地设备分配。     # 以下rank都指全局rank     if args.distributed: if args.dist_url == &quot;env://&quot; and args.rank == -1: args.rank = int(os.environ[&quot;RANK&quot;]) if args.multiprocessing_distributed: # For multiprocessing distributed training,             # rank needs to be the global rank among all the processes             # 让每个进程都获得一个唯一的编号             # rank在作为参数输入的时候写的是节点编号 args.rank = args.rank * ngpus_per_node + gpu         # dist_backend默认的是nccl，一个多gpu卡通信框架 dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)         # 设置栅栏，同步进程 torch.distributed.barrier() # create model     # arch或a指模型的名称，默认是resnet50  print(&quot;=&gt; creating model &#39;{}&#39;&quot;.format(args.arch)) # 如果模型名称是以vit开头 if args.arch.startswith(&#39;vit&#39;): model = moco.builder.MoCo_ViT(             # 这里留意一下偏函数的应用，args.stop_grad_conv1默认是False partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),             # 默认分别是256，4096，1 args.moco_dim, args.moco_mlp_dim, args.moco_t)     else: model = moco.builder.MoCo_ResNet(             # 这里zero_init_residual会使残差分支中最后一个BatchNorm2d的初始值为0             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True),              args.moco_dim, args.moco_mlp_dim, args.moco_t)     上面这段代码主要是设置一些关键的参数，以及加载模型，接下来看第二部分代码main_worker[2]: # infer learning rate before changing batch size args.lr = args.lr * args.batch_size / 256 if not torch.cuda.is_available(): print(&#39;using CPU, this will be slow&#39;) elif args.distributed: # apply SyncBN，要理解SyncBN可以仔细看一下参考[1] # 简单理解SyncBN就是多卡模式的Batch Normalization (BN) # 把是或者继承了torch.nn.modules.batchnorm._BatchNorm的BN全部替换成SyncBN # 所以在写model时，BN必须用torch.nn.modules.batchnorm._BatchNorm来实现 # 否则就得自己写一个SyncBN model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model) # For multiprocessing distributed, DistributedDataParallel constructor # should always set the single device scope, otherwise, # DistributedDataParallel will use all available devices. if args.gpu is not None: torch.cuda.set_device(args.gpu) model.cuda(args.gpu) # When using a single GPU per process and per # DistributedDataParallel, we need to divide the batch size # ourselves based on the total number of GPUs we have # 把batch分一分 args.batch_size = int(args.batch_size / args.world_size) # 用来导入数据的进程数量，必须大于0，默认是32，这里为什么这么计算，不是很懂。 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node) # 构造DDP模型 model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu]) else: model.cuda() # DistributedDataParallel will divide and allocate batch_size to all # available GPUs if device_ids are not set model = torch.nn.parallel.DistributedDataParallel(model) elif args.gpu is not None: torch.cuda.set_device(args.gpu) model = model.cuda(args.gpu) # comment out the following line for debugging raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) else: # AllGather/rank implementation in this code only supports DistributedDataParallel. raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) print(model) # print model after SyncBatchNorm # optimizer默认是lars，resnet50用的是lars # weight_decay默认是1e-6，momentum默认是0.9 if args.optimizer == &#39;lars&#39;: optimizer = moco.optimizer.LARS(model.parameters(), args.lr, weight_decay=args.weight_decay, momentum=args.momentum)     # vit用adamw     # weight_decay需要被设定为0.1 elif args.optimizer == &#39;adamw&#39;: optimizer = torch.optim.AdamW(model.parameters(), args.lr,                                 weight_decay=args.weight_decay)     依旧是一些关键参数，以及把并行训练的一些配置，main_worker[3]: # 在训练最开始之前实例化一个GradScaler对象     # 自动混合精度的详细内容请参考[2]     scaler = torch.cuda.amp.GradScaler()     # 如果是第一进程，使用预设名称建立实体，具体请参考[3] summary_writer = SummaryWriter() if args.rank == 0 else None # optionally resume from a checkpoint     # resume默认为空     # 如果需要训练已经训练了一段时间的模型，可以通过resume输入模型地址 if args.resume: if os.path.isfile(args.resume): print(&quot;=&gt; loading checkpoint &#39;{}&#39;&quot;.format(args.resume)) if args.gpu is None: checkpoint = torch.load(args.resume) else: # Map model to be loaded to specified single gpu. loc = &#39;cuda:{}&#39;.format(args.gpu) checkpoint = torch.load(args.resume, map_location=loc) args.start_epoch = checkpoint[&#39;epoch&#39;] model.load_state_dict(checkpoint[&#39;state_dict&#39;]) optimizer.load_state_dict(checkpoint[&#39;optimizer&#39;]) scaler.load_state_dict(checkpoint[&#39;scaler&#39;]) print(&quot;=&gt; loaded checkpoint &#39;{}&#39; (epoch {})&quot; .format(args.resume, checkpoint[&#39;epoch&#39;])) else: print(&quot;=&gt; no checkpoint found at &#39;{}&#39;&quot;.format(args.resume))     # 在cuDNN中选择卷积算法，以加快训练速度，具体见参考[4] cudnn.benchmark = True # Data loading code     # 产生训练数据目录     traindir = os.path.join(args.data, &#39;train&#39;)     一些关键的设置，比如自动混合精度，归一化，以及是否是接续之前的训练，训练模型。main_worker[4]:     # transforms.Normalize公式input[channel] = (input[channel] - mean[channel]) / std[channel] # Normalize() 函数的作用是将数据转换为标准正太分布，使模型更容易收敛。 # mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225] # 是从 ImageNet 数据集的数百万张图片中随机抽样计算得到的。 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # follow BYOL&#39;s augmentation recipe: https://arxiv.org/abs/2006.07733 # 数据增强 augmentation1 = [ # 将给定图像随机裁剪为不同的大小和宽高比，然后缩放所裁剪得到的图像为制定的大小 # 即先随机采集，然后对裁剪得到的图像缩放为同一大小，默认scale=(0.08, 1.0) transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), # 以0.8的概率执行此动作， transforms.RandomApply([ # 改变图像的属性：亮度（brightness）、对比度（contrast）、饱和度（saturation）和色调（hue) # 怎么变的呢，将数字带入[max(0, 1 - offset), 1 + offset]获得区间 # 比如亮度位置上是0.4，则得到区间[0.6，1.4] # 那么新图的亮度会是这个区间的一个随机数 transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), # 依概率p将图片转换为灰度图 transforms.RandomGrayscale(p=0.2),         # 产生在[0.1，2]区间的随机数，对图片进行高斯模糊         # 调用的函数是ImageFilter.GaussianBlur transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=1.0),         # 依据概率p对PIL图片进行水平翻转 参数：p默认值为0.5 transforms.RandomHorizontalFlip(),         # 将PIL Image或者 ndarray 转换为tensor，并且归一化至[0-1] 注意事项：归一化至[0-1]是直接除以255，若自己的ndarray数据尺度有变化，则需要自行修改。 transforms.ToTensor(),         # 之前定义的归一化方式，归一化后，数值所在的区间大概是（-1，1） normalize ] augmentation2 = [ transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), transforms.RandomApply([ transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), transforms.RandomGrayscale(p=0.2),         # 高斯模糊的概率和augmentation1不一样 transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.1), # 以0.2的概率做Solarize         # 默认阈值是128，大于128的像素值，转换成二进制，然后做01反转         # 即0变1，1变0，得到新的像素值。 transforms.RandomApply([moco.loader.Solarize()], p=0.2), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize     ]     这部分主要是关于数据增强的设定，至于为什么这么做数据增强，作者有把参考的文章列在代码注释里，感兴趣的可以去看一下。接下来是这个函数的最后一个部分main_worker[5]:     # 在指定目录下做载入数据     # ImageFolder(root,transform=None,target_transform=None,loader=default_loader)     # transform：对图片进行预处理的操作（函数），原始图片作为输入，返回一个转换后的图片。     # 对图片类别进行预处理的操作，输入为 target，输出对其的转换。如果不传该参数，即对 target 不做任何转换。     # loader 默认操作是读取PIL image对象。     # 这里是模型很关键的一步，将每一幅图做两种不同的transform，得到两张图 train_dataset = datasets.ImageFolder( traindir,         # 输入im返回是[im1,im2]，分别按augmentation1和augmentation2做了变换 moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), transforms.Compose(augmentation2))) if args.distributed:         # 把数据划分成num_gpu份，不同的GPU拿自己那一份 train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) else: train_sampler = None     # sampler和shuffle是互斥的，有sampler，shuffle就可以是None了     # num_workers要大于0，0代表用主进程导入数据，大于0表示用num_workers个进程导入数据     # pin_memory: if True, the data loader will copy tensors into CUDA pinned memory before returning them     # 主机中的内存，有两种存在方式，一是锁页，二是不锁页，      # 锁页内存存放的内容在任何情况下都不会与主机的虚拟内存进行交换（注：虚拟内存就是硬盘），     # 而不锁页内存在主机内存不足时，数据会存放在虚拟内存中。     # 显卡中的显存全部是锁页内存,当计算机的内存充足的时候，可以设置pin_memory=True。     # 意味着生成的Tensor数据存放在锁页内存中，这样内存中的Tensor转移到GPU的显存会更快。     # 当系统卡住，或者交换内存使用过多的时候，设置pin_memory=False。     # 因为pin_memory与电脑硬件性能有关，pin_memory默认为False。     # drop_last: set to ``True`` to drop the last incomplete batch    train_loader = torch.utils.data.DataLoader( train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True) for epoch in range(args.start_epoch, args.epochs): if args.distributed:             # 加了这行，每次gpu才会拿到不同组合的batch             # 换句话说，加上这行，每个epoch才会被shuffle train_sampler.set_epoch(epoch)         # train for one epoch，这个接下来讲 train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)         #主进程存储训练过程中的模型，防止因为一些事情中断训练后，需要从头再来。 if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0): # only the first GPU saves checkpoint save_checkpoint({ &#39;epoch&#39;: epoch + 1, &#39;arch&#39;: args.arch, &#39;state_dict&#39;: model.state_dict(), &#39;optimizer&#39; : optimizer.state_dict(), &#39;scaler&#39;: scaler.state_dict(),             # 这个代码里没有做is_best判断             # 通常这个参数是用来保存训练过程中测试的效果最好的模型，防止过拟合。             }, is_best=False, filename=&#39;checkpoint_%04d.pth.tar&#39; % epoch) if args.rank == 0: summary_writer.close() 这部分代码主要内容：一、准备数据，二、训练，三、主进程保存节点模型。     接下来看train这个函数： def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):     # AverageMeter是作者自己定义的函数，用来计算循环中，一些过程的平均消耗 batch_time = AverageMeter(&#39;Time&#39;, &#39;:6.3f&#39;) data_time = AverageMeter(&#39;Data&#39;, &#39;:6.3f&#39;) learning_rates = AverageMeter(&#39;LR&#39;, &#39;:.4e&#39;) losses = AverageMeter(&#39;Loss&#39;, &#39;:.4e&#39;) progress = ProgressMeter( len(train_loader), [batch_time, data_time, learning_rates, losses], prefix=&quot;Epoch: [{}]&quot;.format(epoch)) # switch to train mode model.train() end = time.time() iters_per_epoch = len(train_loader) moco_m = args.moco_m for i, (images, _) in enumerate(train_loader): # measure data loading time         # 计算在循环中，载入数据平均消耗的时间。         data_time.update(time.time() - end) # adjust learning rate and momentum coefficient per iteration # adjust_learning_rate是作者自己定义的函数         # learning rate先由小变大，再由大变小。具体可以参考代码 lr = adjust_learning_rate(optimizer, epoch + i / iters_per_epoch, args)         # 更新在循环中，使用的lr的平均值 learning_rates.update(lr) if args.moco_m_cos:             #同样是作者自己定义的函数，moco_m则是由本来就很接近1（0.99），变得越来越接近1。 moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args) if args.gpu is not None: # 如果pin_memory=True的话，将数据放入GPU的时候， # 也应该把non_blocking打开，这样就只把数据放入GPU而不取出，访问时间会大大减少。 images[0] = images[0].cuda(args.gpu, non_blocking=True) images[1] = images[1].cuda(args.gpu, non_blocking=True) # compute output with torch.cuda.amp.autocast(True):             # moco_m: moco momentum of updating momentum encoder             # model下一篇说 loss = model(images[0], images[1], moco_m)         # loss平均值更新 losses.update(loss.item(), images[0].size(0)) if args.rank == 0: summary_writer.add_scalar(&quot;loss&quot;, loss.item(), epoch * iters_per_epoch + i) # compute gradient and do SGD step         # optimizer.zero_grad()意思是把梯度置零,         # 也就是把loss关于weight的导数变成0. optimizer.zero_grad() # Scales loss. 为了梯度放大. scaler原理可以参考[2] scaler.scale(loss).backward()         # scaler.step() 首先把梯度的值unscale回来. # 如果梯度的值不是 infs 或者 NaNs, 那么调用optimizer.step()来更新权重, # 否则，忽略step调用，从而保证权重不更新（不被破坏） scaler.step(optimizer) # 准备着，看是否要增大scaler scaler.update() # measure elapsed time batch_time.update(time.time() - end) end = time.time()         # print_ferq默认是10 if i % args.print_freq == 0:             progress.display(i)     这里就是Moco v3训练的主要代码，有些太过细枝末节又容易懂的就没有放进来。     代码主要特点和主要内容有： - 多卡，每张卡有多个gpu，每个进程管理一个gpu - 用了自动混合精度机制 不同的数据增强的配置 当然还有很多细节的设计，比如lr和moco_m参数的调整，数据存入gpu的方式等等，都是非常值得深入学习的，这篇只是浏览，具体原理可以参考我给的一些参考链接，自己搜索更有用的资料，或者去研读pytorch源代码。     下一篇讲Moco v3的模型代码。喜欢或者觉得有用就关注吧，可以的话，右下角点个“在看”吧。     参考： [1] 996黄金一代，[原创][深度][PyTorch] DDP系列第三篇：实战与技巧，知乎，2020 [2] Gemfield，PyTorch的自动混合精度（AMP），知乎，2020 [3] dexter，TensorBoardX 介紹 (在 PyTorch 中使用 Tensorboard），知乎，2018 [4] xiaopl，torch.backends.cudnn.benchmark ?!，知乎，2019" />
+<link rel="canonical" href="http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/" />
+<meta property="og:url" content="http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/3.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-10-18T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    我们来讲Moco v3的代码。     论文的主要内容，参考系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     官方代码链接： https://github.com/facebookresearch/moco-v3     但现在最佳的模型是微软的EsViT(Swin-B)，然后才是Moco v3，下面是来自https://paperswithcode.com/的统计：     这张图最后边的点是EsViT(Swin-B)，图中文字没显示出来。     这个模型也公开了源代码： https://github.com/microsoft/esvit     这个代码也会解析哦，心动就关注吧，又给自己挖了一个坑。     公开的Moco v3是用Pytorch实现的，包含自监督学习的Resnet和ViT。而原始的Moco v3其实是用tensorflow实现的，在TPU上做的实验。     准备工作有安装Python，Pytorch，等相关软件，下载ImageNet等，这里就不展开说了。     我们直接开始看预训练主函数main_moco.py，开始逐行解析（解析都在注释里）： import torchvision.models as torchvision_models torchvision_model_names = sorted(name for name in torchvision_models.__dict__ if name.islower() and not name.startswith(&quot;__&quot;) and callable(torchvision_models.__dict__[name])) # 产生所有可以用来进行预训练的模型的名称的集合 model_names = [&#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;, &#39;vit_conv_base&#39;] + torchvision_model_names     torchvision.models还可以用来加载预训练模型： # arch是需要加载的预训练模型名，比如：resnet18 model = torchvison.models.__dict__[arch](pretrained=True)      接下来看main函数： import torch.backends.cudnn as cudnn def main(): # 存入参数 args = parser.parse_args()     # seed默认是None     # 关于种子的正确设定方式     # 可以参考 https://pytorch.apachecn.org/docs/1.0/notes_randomness.html         if args.seed is not None: random.seed(args.seed) torch.manual_seed(args.seed) cudnn.deterministic = True warnings.warn(&#39;You have chosen to seed training. &#39; &#39;This will turn on the CUDNN deterministic setting, &#39; &#39;which can slow down your training considerably! &#39; &#39;You may see unexpected behavior when restarting &#39; &#39;from checkpoints.&#39;)         # cudnn.benchmark = False 这里应该还要加一行这个              # 默认是None，因为这个模型预训练工作量比较大，作者都是用几百片GPU或者TPU训练的。 if args.gpu is not None: warnings.warn(&#39;You have chosen a specific GPU. This will completely &#39; &#39;disable data parallelism.&#39;)     # dist_url默认值是&#39;tcp://224.66.41.62:23456&#39;，应当是作者服务器第一个节点的地址     # world_size默认值是-1     # WORLD_SIZE由torch.distributed.launch.py产生 具体数值为 nproc_per_node*node(服务器数量或者节点数) if args.dist_url == &quot;env://&quot; and args.world_size == -1: args.world_size = int(os.environ[&quot;WORLD_SIZE&quot;])     # multiprocessing_distributed的默认值为False     # 需要多进程运行程序时一定要使multiprocessing_distributed为True args.distributed = args.world_size &gt; 1 or args.multiprocessing_distributed     # 返回显卡数量     ngpus_per_node = torch.cuda.device_count() if args.multiprocessing_distributed:         # Since we have ngpus_per_node processes per node，         # the total world_size needs to be adjusted accordingly         # 计算总的GPU的数量 args.world_size = ngpus_per_node * args.world_size # Use torch.multiprocessing.spawn to launch distributed processes:         # the main_worker process function         # 开启多进程，每个进程调用main_worker函数，控制一个GPU。 mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args)) else: # Simply call main_worker function         # args.gpu默认是None，如果不采用分布式，则通过这个参数输入用来计算的GPU的编号         main_worker(args.gpu, ngpus_per_node, args)     这里需要注意的是，mp.spawn调用的main_worker其实有三个参数，但是mp.spawn后面的args却只给了后两个参数。而第一个参数的gpu的值会自动产生，调用的哪个gpu，就是那个gpu的编号。     接下来看main_worker函数，因为这个函数太长，会切成若干个代码框： import torch.distributed as dist import vits def main_worker(gpu, ngpus_per_node, args):     #gpu是运行这个函数使用的gpu编号，如果是None，则不调用gpu     args.gpu = gpu # suppress printing if not first GPU on each node     # 如果不是主节点上的GPU 0，则抑制打印     # rank默认是-1，所以在第一个主机运行程序的时候要指定rank为0     # 可以打印的进程是在第一个主机控制着GPU 0的进程。 if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0): def print_pass(*args): pass builtins.print = print_pass     if args.gpu is not None: print(&quot;Use GPU: {} for training&quot;.format(args.gpu))     # rank分两种，一种是全局rank, 可以理解为所有进程的编号。用于进程间通信。     # 一种是local rank, 每个节点上的进程的编号。用于本地设备分配。     # 以下rank都指全局rank     if args.distributed: if args.dist_url == &quot;env://&quot; and args.rank == -1: args.rank = int(os.environ[&quot;RANK&quot;]) if args.multiprocessing_distributed: # For multiprocessing distributed training,             # rank needs to be the global rank among all the processes             # 让每个进程都获得一个唯一的编号             # rank在作为参数输入的时候写的是节点编号 args.rank = args.rank * ngpus_per_node + gpu         # dist_backend默认的是nccl，一个多gpu卡通信框架 dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)         # 设置栅栏，同步进程 torch.distributed.barrier() # create model     # arch或a指模型的名称，默认是resnet50  print(&quot;=&gt; creating model &#39;{}&#39;&quot;.format(args.arch)) # 如果模型名称是以vit开头 if args.arch.startswith(&#39;vit&#39;): model = moco.builder.MoCo_ViT(             # 这里留意一下偏函数的应用，args.stop_grad_conv1默认是False partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),             # 默认分别是256，4096，1 args.moco_dim, args.moco_mlp_dim, args.moco_t)     else: model = moco.builder.MoCo_ResNet(             # 这里zero_init_residual会使残差分支中最后一个BatchNorm2d的初始值为0             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True),              args.moco_dim, args.moco_mlp_dim, args.moco_t)     上面这段代码主要是设置一些关键的参数，以及加载模型，接下来看第二部分代码main_worker[2]: # infer learning rate before changing batch size args.lr = args.lr * args.batch_size / 256 if not torch.cuda.is_available(): print(&#39;using CPU, this will be slow&#39;) elif args.distributed: # apply SyncBN，要理解SyncBN可以仔细看一下参考[1] # 简单理解SyncBN就是多卡模式的Batch Normalization (BN) # 把是或者继承了torch.nn.modules.batchnorm._BatchNorm的BN全部替换成SyncBN # 所以在写model时，BN必须用torch.nn.modules.batchnorm._BatchNorm来实现 # 否则就得自己写一个SyncBN model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model) # For multiprocessing distributed, DistributedDataParallel constructor # should always set the single device scope, otherwise, # DistributedDataParallel will use all available devices. if args.gpu is not None: torch.cuda.set_device(args.gpu) model.cuda(args.gpu) # When using a single GPU per process and per # DistributedDataParallel, we need to divide the batch size # ourselves based on the total number of GPUs we have # 把batch分一分 args.batch_size = int(args.batch_size / args.world_size) # 用来导入数据的进程数量，必须大于0，默认是32，这里为什么这么计算，不是很懂。 args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node) # 构造DDP模型 model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu]) else: model.cuda() # DistributedDataParallel will divide and allocate batch_size to all # available GPUs if device_ids are not set model = torch.nn.parallel.DistributedDataParallel(model) elif args.gpu is not None: torch.cuda.set_device(args.gpu) model = model.cuda(args.gpu) # comment out the following line for debugging raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) else: # AllGather/rank implementation in this code only supports DistributedDataParallel. raise NotImplementedError(&quot;Only DistributedDataParallel is supported.&quot;) print(model) # print model after SyncBatchNorm # optimizer默认是lars，resnet50用的是lars # weight_decay默认是1e-6，momentum默认是0.9 if args.optimizer == &#39;lars&#39;: optimizer = moco.optimizer.LARS(model.parameters(), args.lr, weight_decay=args.weight_decay, momentum=args.momentum)     # vit用adamw     # weight_decay需要被设定为0.1 elif args.optimizer == &#39;adamw&#39;: optimizer = torch.optim.AdamW(model.parameters(), args.lr,                                 weight_decay=args.weight_decay)     依旧是一些关键参数，以及把并行训练的一些配置，main_worker[3]: # 在训练最开始之前实例化一个GradScaler对象     # 自动混合精度的详细内容请参考[2]     scaler = torch.cuda.amp.GradScaler()     # 如果是第一进程，使用预设名称建立实体，具体请参考[3] summary_writer = SummaryWriter() if args.rank == 0 else None # optionally resume from a checkpoint     # resume默认为空     # 如果需要训练已经训练了一段时间的模型，可以通过resume输入模型地址 if args.resume: if os.path.isfile(args.resume): print(&quot;=&gt; loading checkpoint &#39;{}&#39;&quot;.format(args.resume)) if args.gpu is None: checkpoint = torch.load(args.resume) else: # Map model to be loaded to specified single gpu. loc = &#39;cuda:{}&#39;.format(args.gpu) checkpoint = torch.load(args.resume, map_location=loc) args.start_epoch = checkpoint[&#39;epoch&#39;] model.load_state_dict(checkpoint[&#39;state_dict&#39;]) optimizer.load_state_dict(checkpoint[&#39;optimizer&#39;]) scaler.load_state_dict(checkpoint[&#39;scaler&#39;]) print(&quot;=&gt; loaded checkpoint &#39;{}&#39; (epoch {})&quot; .format(args.resume, checkpoint[&#39;epoch&#39;])) else: print(&quot;=&gt; no checkpoint found at &#39;{}&#39;&quot;.format(args.resume))     # 在cuDNN中选择卷积算法，以加快训练速度，具体见参考[4] cudnn.benchmark = True # Data loading code     # 产生训练数据目录     traindir = os.path.join(args.data, &#39;train&#39;)     一些关键的设置，比如自动混合精度，归一化，以及是否是接续之前的训练，训练模型。main_worker[4]:     # transforms.Normalize公式input[channel] = (input[channel] - mean[channel]) / std[channel] # Normalize() 函数的作用是将数据转换为标准正太分布，使模型更容易收敛。 # mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225] # 是从 ImageNet 数据集的数百万张图片中随机抽样计算得到的。 normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) # follow BYOL&#39;s augmentation recipe: https://arxiv.org/abs/2006.07733 # 数据增强 augmentation1 = [ # 将给定图像随机裁剪为不同的大小和宽高比，然后缩放所裁剪得到的图像为制定的大小 # 即先随机采集，然后对裁剪得到的图像缩放为同一大小，默认scale=(0.08, 1.0) transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), # 以0.8的概率执行此动作， transforms.RandomApply([ # 改变图像的属性：亮度（brightness）、对比度（contrast）、饱和度（saturation）和色调（hue) # 怎么变的呢，将数字带入[max(0, 1 - offset), 1 + offset]获得区间 # 比如亮度位置上是0.4，则得到区间[0.6，1.4] # 那么新图的亮度会是这个区间的一个随机数 transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), # 依概率p将图片转换为灰度图 transforms.RandomGrayscale(p=0.2),         # 产生在[0.1，2]区间的随机数，对图片进行高斯模糊         # 调用的函数是ImageFilter.GaussianBlur transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=1.0),         # 依据概率p对PIL图片进行水平翻转 参数：p默认值为0.5 transforms.RandomHorizontalFlip(),         # 将PIL Image或者 ndarray 转换为tensor，并且归一化至[0-1] 注意事项：归一化至[0-1]是直接除以255，若自己的ndarray数据尺度有变化，则需要自行修改。 transforms.ToTensor(),         # 之前定义的归一化方式，归一化后，数值所在的区间大概是（-1，1） normalize ] augmentation2 = [ transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)), transforms.RandomApply([ transforms.ColorJitter(0.4, 0.4, 0.2, 0.1) # not strengthened ], p=0.8), transforms.RandomGrayscale(p=0.2),         # 高斯模糊的概率和augmentation1不一样 transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.1), # 以0.2的概率做Solarize         # 默认阈值是128，大于128的像素值，转换成二进制，然后做01反转         # 即0变1，1变0，得到新的像素值。 transforms.RandomApply([moco.loader.Solarize()], p=0.2), transforms.RandomHorizontalFlip(), transforms.ToTensor(), normalize     ]     这部分主要是关于数据增强的设定，至于为什么这么做数据增强，作者有把参考的文章列在代码注释里，感兴趣的可以去看一下。接下来是这个函数的最后一个部分main_worker[5]:     # 在指定目录下做载入数据     # ImageFolder(root,transform=None,target_transform=None,loader=default_loader)     # transform：对图片进行预处理的操作（函数），原始图片作为输入，返回一个转换后的图片。     # 对图片类别进行预处理的操作，输入为 target，输出对其的转换。如果不传该参数，即对 target 不做任何转换。     # loader 默认操作是读取PIL image对象。     # 这里是模型很关键的一步，将每一幅图做两种不同的transform，得到两张图 train_dataset = datasets.ImageFolder( traindir,         # 输入im返回是[im1,im2]，分别按augmentation1和augmentation2做了变换 moco.loader.TwoCropsTransform(transforms.Compose(augmentation1), transforms.Compose(augmentation2))) if args.distributed:         # 把数据划分成num_gpu份，不同的GPU拿自己那一份 train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset) else: train_sampler = None     # sampler和shuffle是互斥的，有sampler，shuffle就可以是None了     # num_workers要大于0，0代表用主进程导入数据，大于0表示用num_workers个进程导入数据     # pin_memory: if True, the data loader will copy tensors into CUDA pinned memory before returning them     # 主机中的内存，有两种存在方式，一是锁页，二是不锁页，      # 锁页内存存放的内容在任何情况下都不会与主机的虚拟内存进行交换（注：虚拟内存就是硬盘），     # 而不锁页内存在主机内存不足时，数据会存放在虚拟内存中。     # 显卡中的显存全部是锁页内存,当计算机的内存充足的时候，可以设置pin_memory=True。     # 意味着生成的Tensor数据存放在锁页内存中，这样内存中的Tensor转移到GPU的显存会更快。     # 当系统卡住，或者交换内存使用过多的时候，设置pin_memory=False。     # 因为pin_memory与电脑硬件性能有关，pin_memory默认为False。     # drop_last: set to ``True`` to drop the last incomplete batch    train_loader = torch.utils.data.DataLoader( train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None), num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True) for epoch in range(args.start_epoch, args.epochs): if args.distributed:             # 加了这行，每次gpu才会拿到不同组合的batch             # 换句话说，加上这行，每个epoch才会被shuffle train_sampler.set_epoch(epoch)         # train for one epoch，这个接下来讲 train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)         #主进程存储训练过程中的模型，防止因为一些事情中断训练后，需要从头再来。 if not args.multiprocessing_distributed or (args.multiprocessing_distributed and args.rank == 0): # only the first GPU saves checkpoint save_checkpoint({ &#39;epoch&#39;: epoch + 1, &#39;arch&#39;: args.arch, &#39;state_dict&#39;: model.state_dict(), &#39;optimizer&#39; : optimizer.state_dict(), &#39;scaler&#39;: scaler.state_dict(),             # 这个代码里没有做is_best判断             # 通常这个参数是用来保存训练过程中测试的效果最好的模型，防止过拟合。             }, is_best=False, filename=&#39;checkpoint_%04d.pth.tar&#39; % epoch) if args.rank == 0: summary_writer.close() 这部分代码主要内容：一、准备数据，二、训练，三、主进程保存节点模型。     接下来看train这个函数： def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):     # AverageMeter是作者自己定义的函数，用来计算循环中，一些过程的平均消耗 batch_time = AverageMeter(&#39;Time&#39;, &#39;:6.3f&#39;) data_time = AverageMeter(&#39;Data&#39;, &#39;:6.3f&#39;) learning_rates = AverageMeter(&#39;LR&#39;, &#39;:.4e&#39;) losses = AverageMeter(&#39;Loss&#39;, &#39;:.4e&#39;) progress = ProgressMeter( len(train_loader), [batch_time, data_time, learning_rates, losses], prefix=&quot;Epoch: [{}]&quot;.format(epoch)) # switch to train mode model.train() end = time.time() iters_per_epoch = len(train_loader) moco_m = args.moco_m for i, (images, _) in enumerate(train_loader): # measure data loading time         # 计算在循环中，载入数据平均消耗的时间。         data_time.update(time.time() - end) # adjust learning rate and momentum coefficient per iteration # adjust_learning_rate是作者自己定义的函数         # learning rate先由小变大，再由大变小。具体可以参考代码 lr = adjust_learning_rate(optimizer, epoch + i / iters_per_epoch, args)         # 更新在循环中，使用的lr的平均值 learning_rates.update(lr) if args.moco_m_cos:             #同样是作者自己定义的函数，moco_m则是由本来就很接近1（0.99），变得越来越接近1。 moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args) if args.gpu is not None: # 如果pin_memory=True的话，将数据放入GPU的时候， # 也应该把non_blocking打开，这样就只把数据放入GPU而不取出，访问时间会大大减少。 images[0] = images[0].cuda(args.gpu, non_blocking=True) images[1] = images[1].cuda(args.gpu, non_blocking=True) # compute output with torch.cuda.amp.autocast(True):             # moco_m: moco momentum of updating momentum encoder             # model下一篇说 loss = model(images[0], images[1], moco_m)         # loss平均值更新 losses.update(loss.item(), images[0].size(0)) if args.rank == 0: summary_writer.add_scalar(&quot;loss&quot;, loss.item(), epoch * iters_per_epoch + i) # compute gradient and do SGD step         # optimizer.zero_grad()意思是把梯度置零,         # 也就是把loss关于weight的导数变成0. optimizer.zero_grad() # Scales loss. 为了梯度放大. scaler原理可以参考[2] scaler.scale(loss).backward()         # scaler.step() 首先把梯度的值unscale回来. # 如果梯度的值不是 infs 或者 NaNs, 那么调用optimizer.step()来更新权重, # 否则，忽略step调用，从而保证权重不更新（不被破坏） scaler.step(optimizer) # 准备着，看是否要增大scaler scaler.update() # measure elapsed time batch_time.update(time.time() - end) end = time.time()         # print_ferq默认是10 if i % args.print_freq == 0:             progress.display(i)     这里就是Moco v3训练的主要代码，有些太过细枝末节又容易懂的就没有放进来。     代码主要特点和主要内容有： - 多卡，每张卡有多个gpu，每个进程管理一个gpu - 用了自动混合精度机制 不同的数据增强的配置 当然还有很多细节的设计，比如lr和moco_m参数的调整，数据存入gpu的方式等等，都是非常值得深入学习的，这篇只是浏览，具体原理可以参考我给的一些参考链接，自己搜索更有用的资料，或者去研读pytorch源代码。     下一篇讲Moco v3的模型代码。喜欢或者觉得有用就关注吧，可以的话，右下角点个“在看”吧。     参考： [1] 996黄金一代，[原创][深度][PyTorch] DDP系列第三篇：实战与技巧，知乎，2020 [2] Gemfield，PyTorch的自动混合精度（AMP），知乎，2020 [3] dexter，TensorBoardX 介紹 (在 PyTorch 中使用 Tensorboard），知乎，2018 [4] xiaopl，torch.backends.cudnn.benchmark ?!，知乎，2019","url":"http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/","image":"http://localhost:4000/assets/images/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/3.png","@type":"BlogPosting","headline":"Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析","dateModified":"2021-10-18T00:00:00+08:00","datePublished":"2021-10-18T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-10-18">18 Oct 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/3.png" alt="Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/1.png" alt="" /></p>
+
+<p>    我们来讲Moco v3的代码<img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/2.png" style="zoom:50%;" />。</p>
+
+<p>    论文的主要内容，参考系列首篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484512&amp;idx=1&amp;sn=23438dac5f58698c6d809e53b8a90078&amp;chksm=c06766a2f710efb4c7deafe9619d3dcc4a4590691a99d9d8bb83c4a8205be4f7f37a4f2bc334&amp;scene=21#wechat_redirect">自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析</a></p>
+
+<p>    官方代码链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/facebookresearch/moco-v3
+</code></pre></div></div>
+
+<p>    但现在最佳的模型是微软的EsViT(Swin-B)，然后才是Moco v3，下面是来自https://paperswithcode.com/的统计：</p>
+
+<p><img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/3.png" style="zoom:80%;" /></p>
+
+<p>    这张图最后边的点是EsViT(Swin-B)，图中文字没显示出来。</p>
+
+<p>    这个模型也公开了源代码：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/microsoft/esvit
+</code></pre></div></div>
+
+<p>    这个代码也会解析哦，心动就关注吧<img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/4.png" style="zoom:50%;" />，又给自己挖了一个坑<img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析/5.png" style="zoom:50%;" />。</p>
+
+<p>    公开的Moco v3是用Pytorch实现的，包含自监督学习的Resnet和ViT。而原始的Moco v3其实是用tensorflow实现的，在TPU上做的实验。</p>
+
+<p>    准备工作有安装Python，Pytorch，等相关软件，下载ImageNet等，这里就不展开说了。</p>
+
+<p>    我们直接开始看预训练主函数<strong>main_moco.py</strong>，开始逐行解析（解析都在注释里）：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span><span class="err"> </span><span class="n">torchvision</span><span class="p">.</span><span class="n">models</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">torchvision_models</span>
+<span class="n">torchvision_model_names</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">sorted</span><span class="p">(</span><span class="n">name</span><span class="err"> </span><span class="k">for</span><span class="err"> </span><span class="n">name</span><span class="err"> </span><span class="ow">in</span><span class="err"> </span><span class="n">torchvision_models</span><span class="p">.</span><span class="n">__dict__</span>
+    <span class="k">if</span> <span class="n">name</span><span class="p">.</span><span class="n">islower</span><span class="p">()</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">name</span><span class="p">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">"__"</span><span class="p">)</span>
+    <span class="ow">and</span> <span class="nb">callable</span><span class="p">(</span><span class="n">torchvision_models</span><span class="p">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">name</span><span class="p">]))</span>
+<span class="c1"># 产生所有可以用来进行预训练的模型的名称的集合
+</span><span class="n">model_names</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">[</span><span class="s">'vit_small'</span><span class="p">,</span><span class="err"> </span><span class="s">'vit_base'</span><span class="p">,</span><span class="err"> </span><span class="s">'vit_conv_small'</span><span class="p">,</span><span class="err"> </span><span class="s">'vit_conv_base'</span><span class="p">]</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">torchvision_model_names</span>
+</code></pre></div></div>
+
+<p>    torchvision.models还可以用来加载预训练模型：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># arch是需要加载的预训练模型名，比如：resnet18
+</span><span class="n">model</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torchvison</span><span class="p">.</span><span class="n">models</span><span class="p">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">arch</span><span class="p">](</span><span class="n">pretrained</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span><span class="err"> </span>
+</code></pre></div></div>
+
+<p>    接下来看<strong>main</strong>函数：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">torch.backends.cudnn</span> <span class="k">as</span> <span class="n">cudnn</span>
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="c1"># 存入参数
+</span>    <span class="n">args</span> <span class="o">=</span> <span class="n">parser</span><span class="p">.</span><span class="n">parse_args</span><span class="p">()</span>
+<span class="err">    </span><span class="c1"># seed默认是None
+</span><span class="err">    </span><span class="c1"># 关于种子的正确设定方式
+</span><span class="err">    </span><span class="c1"># 可以参考 https://pytorch.apachecn.org/docs/1.0/notes_randomness.html        
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">seed</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">random</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">seed</span><span class="p">)</span>
+        <span class="n">torch</span><span class="p">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">seed</span><span class="p">)</span>
+        <span class="n">cudnn</span><span class="p">.</span><span class="n">deterministic</span> <span class="o">=</span> <span class="bp">True</span>
+        <span class="n">warnings</span><span class="p">.</span><span class="n">warn</span><span class="p">(</span><span class="s">'You have chosen to seed training. '</span>
+                      <span class="s">'This will turn on the CUDNN deterministic setting, '</span>
+                      <span class="s">'which can slow down your training considerably! '</span>
+                      <span class="s">'You may see unexpected behavior when restarting '</span>
+                      <span class="s">'from checkpoints.'</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># cudnn.benchmark = False 这里应该还要加一行这个
+</span><span class="err">        </span>
+<span class="err">    </span><span class="c1"># 默认是None，因为这个模型预训练工作量比较大，作者都是用几百片GPU或者TPU训练的。
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">warnings</span><span class="p">.</span><span class="n">warn</span><span class="p">(</span><span class="s">'You have chosen a specific GPU. This will completely '</span>
+                      <span class="s">'disable data parallelism.'</span><span class="p">)</span>
+
+
+<span class="err">    </span><span class="c1"># dist_url默认值是'tcp://224.66.41.62:23456'，应当是作者服务器第一个节点的地址
+</span><span class="err">    </span><span class="c1"># world_size默认值是-1
+</span><span class="err">    </span><span class="c1"># WORLD_SIZE由torch.distributed.launch.py产生 具体数值为 nproc_per_node*node(服务器数量或者节点数)
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">dist_url</span> <span class="o">==</span> <span class="s">"env://"</span> <span class="ow">and</span> <span class="n">args</span><span class="p">.</span><span class="n">world_size</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+        <span class="n">args</span><span class="p">.</span><span class="n">world_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">environ</span><span class="p">[</span><span class="s">"WORLD_SIZE"</span><span class="p">])</span>
+
+
+<span class="err">    </span><span class="c1"># multiprocessing_distributed的默认值为False
+</span><span class="err">    </span><span class="c1"># 需要多进程运行程序时一定要使multiprocessing_distributed为True
+</span>    <span class="n">args</span><span class="p">.</span><span class="n">distributed</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">world_size</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="ow">or</span> <span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span>
+
+
+<span class="err">    </span><span class="c1"># 返回显卡数量
+</span><span class="err">    </span><span class="n">ngpus_per_node</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">device_count</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span><span class="p">:</span>
+<span class="err">        </span><span class="c1"># Since we have ngpus_per_node processes per node，
+</span><span class="err">        </span><span class="c1"># the total world_size needs to be adjusted accordingly
+</span><span class="err">        </span><span class="c1"># 计算总的GPU的数量
+</span>        <span class="n">args</span><span class="p">.</span><span class="n">world_size</span> <span class="o">=</span> <span class="n">ngpus_per_node</span> <span class="o">*</span> <span class="n">args</span><span class="p">.</span><span class="n">world_size</span>
+        <span class="c1"># Use torch.multiprocessing.spawn to launch distributed processes: 
+</span><span class="err">        </span><span class="c1"># the main_worker process function
+</span><span class="err">        </span><span class="c1"># 开启多进程，每个进程调用main_worker函数，控制一个GPU。
+</span>        <span class="n">mp</span><span class="p">.</span><span class="n">spawn</span><span class="p">(</span><span class="n">main_worker</span><span class="p">,</span> <span class="n">nprocs</span><span class="o">=</span><span class="n">ngpus_per_node</span><span class="p">,</span> <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">ngpus_per_node</span><span class="p">,</span> <span class="n">args</span><span class="p">))</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># Simply call main_worker function
+</span><span class="err">        </span><span class="c1"># args.gpu默认是None，如果不采用分布式，则通过这个参数输入用来计算的GPU的编号
+</span><span class="err">        </span><span class="n">main_worker</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">,</span><span class="err"> </span><span class="n">ngpus_per_node</span><span class="p">,</span><span class="err"> </span><span class="n">args</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    这里需要注意的是，mp.spawn调用的main_worker其实有三个参数，但是mp.spawn后面的args却只给了后两个参数。而第一个参数的gpu的值会自动产生，调用的哪个gpu，就是那个gpu的编号。</p>
+
+<p>    接下来看<strong>main_worker</strong>函数，因为这个函数太长，会切成若干个代码框：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">torch.distributed</span> <span class="k">as</span> <span class="n">dist</span>
+<span class="kn">import</span> <span class="nn">vits</span>
+<span class="k">def</span> <span class="nf">main_worker</span><span class="p">(</span><span class="n">gpu</span><span class="p">,</span> <span class="n">ngpus_per_node</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+<span class="err">    </span><span class="c1">#gpu是运行这个函数使用的gpu编号，如果是None，则不调用gpu
+</span><span class="err">    </span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">gpu</span>
+    <span class="c1"># suppress printing if not first GPU on each node
+</span><span class="err">    </span><span class="c1"># 如果不是主节点上的GPU 0，则抑制打印
+</span><span class="err">    </span><span class="c1"># rank默认是-1，所以在第一个主机运行程序的时候要指定rank为0
+</span><span class="err">    </span><span class="c1"># 可以打印的进程是在第一个主机控制着GPU 0的进程。
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span> <span class="ow">and</span> <span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">):</span>
+        <span class="k">def</span> <span class="nf">print_pass</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">):</span>
+            <span class="k">pass</span>
+        <span class="n">builtins</span><span class="p">.</span><span class="k">print</span> <span class="o">=</span> <span class="n">print_pass</span>
+<span class="err">   </span>
+    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">"Use GPU: {} for training"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">))</span>
+
+
+<span class="err">    </span><span class="c1"># rank分两种，一种是全局rank, 可以理解为所有进程的编号。用于进程间通信。
+</span><span class="err">    </span><span class="c1"># 一种是local rank, 每个节点上的进程的编号。用于本地设备分配。
+</span><span class="err">    </span><span class="c1"># 以下rank都指全局rank
+</span><span class="err">    </span><span class="k">if</span><span class="err"> </span><span class="n">args</span><span class="p">.</span><span class="n">distributed</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">dist_url</span> <span class="o">==</span> <span class="s">"env://"</span> <span class="ow">and</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+            <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">environ</span><span class="p">[</span><span class="s">"RANK"</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span><span class="p">:</span>
+            <span class="c1"># For multiprocessing distributed training, 
+</span><span class="err">            </span><span class="c1"># rank needs to be the global rank among all the processes
+</span><span class="err">            </span><span class="c1"># 让每个进程都获得一个唯一的编号
+</span><span class="err">            </span><span class="c1"># rank在作为参数输入的时候写的是节点编号
+</span>            <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">*</span> <span class="n">ngpus_per_node</span> <span class="o">+</span> <span class="n">gpu</span>
+<span class="err">        </span><span class="c1"># dist_backend默认的是nccl，一个多gpu卡通信框架
+</span>        <span class="n">dist</span><span class="p">.</span><span class="n">init_process_group</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">dist_backend</span><span class="p">,</span> <span class="n">init_method</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">dist_url</span><span class="p">,</span>
+                                <span class="n">world_size</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">world_size</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">rank</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># 设置栅栏，同步进程
+</span>        <span class="n">torch</span><span class="p">.</span><span class="n">distributed</span><span class="p">.</span><span class="n">barrier</span><span class="p">()</span>
+    <span class="c1"># create model
+</span><span class="err">    </span><span class="c1"># arch或a指模型的名称，默认是resnet50 
+</span>    <span class="k">print</span><span class="p">(</span><span class="s">"=&gt; creating model '{}'"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">arch</span><span class="p">))</span>
+    <span class="c1"># 如果模型名称是以vit开头
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">arch</span><span class="p">.</span><span class="n">startswith</span><span class="p">(</span><span class="s">'vit'</span><span class="p">):</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">moco</span><span class="p">.</span><span class="n">builder</span><span class="p">.</span><span class="n">MoCo_ViT</span><span class="p">(</span>
+<span class="err">            </span><span class="c1"># 这里留意一下偏函数的应用，args.stop_grad_conv1默认是False
+</span>            <span class="n">partial</span><span class="p">(</span><span class="n">vits</span><span class="p">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">args</span><span class="p">.</span><span class="n">arch</span><span class="p">],</span> <span class="n">stop_grad_conv1</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">stop_grad_conv1</span><span class="p">),</span>
+<span class="err">            </span><span class="c1"># 默认分别是256，4096，1
+</span>            <span class="n">args</span><span class="p">.</span><span class="n">moco_dim</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">moco_mlp_dim</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">moco_t</span><span class="p">)</span>
+<span class="err">    </span><span class="k">else</span><span class="p">:</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">moco</span><span class="p">.</span><span class="n">builder</span><span class="p">.</span><span class="n">MoCo_ResNet</span><span class="p">(</span>
+<span class="err">            </span><span class="c1"># 这里zero_init_residual会使残差分支中最后一个BatchNorm2d的初始值为0
+</span><span class="err">            </span><span class="n">partial</span><span class="p">(</span><span class="n">torchvision_models</span><span class="p">.</span><span class="n">__dict__</span><span class="p">[</span><span class="n">args</span><span class="p">.</span><span class="n">arch</span><span class="p">],</span><span class="err"> </span><span class="n">zero_init_residual</span><span class="o">=</span><span class="bp">True</span><span class="p">),</span><span class="err"> </span>
+<span class="err">            </span><span class="n">args</span><span class="p">.</span><span class="n">moco_dim</span><span class="p">,</span><span class="err"> </span><span class="n">args</span><span class="p">.</span><span class="n">moco_mlp_dim</span><span class="p">,</span><span class="err"> </span><span class="n">args</span><span class="p">.</span><span class="n">moco_t</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    上面这段代码主要是设置一些关键的参数，以及加载模型，接下来看第二部分代码<strong>main_worker[2]</strong>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="c1"># infer learning rate before changing batch size
+</span>    <span class="n">args</span><span class="p">.</span><span class="n">lr</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">lr</span> <span class="o">*</span> <span class="n">args</span><span class="p">.</span><span class="n">batch_size</span> <span class="o">/</span> <span class="mi">256</span>
+
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">is_available</span><span class="p">():</span>
+        <span class="k">print</span><span class="p">(</span><span class="s">'using CPU, this will be slow'</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="p">.</span><span class="n">distributed</span><span class="p">:</span>
+        <span class="c1"># apply SyncBN，要理解SyncBN可以仔细看一下参考[1]
+</span>        <span class="c1"># 简单理解SyncBN就是多卡模式的Batch Normalization (BN)
+</span>        <span class="c1"># 把是或者继承了torch.nn.modules.batchnorm._BatchNorm的BN全部替换成SyncBN
+</span>        <span class="c1"># 所以在写model时，BN必须用torch.nn.modules.batchnorm._BatchNorm来实现
+</span>        <span class="c1"># 否则就得自己写一个SyncBN
+</span>        <span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">SyncBatchNorm</span><span class="p">.</span><span class="n">convert_sync_batchnorm</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+        <span class="c1"># For multiprocessing distributed, DistributedDataParallel constructor
+</span>        <span class="c1"># should always set the single device scope, otherwise,
+</span>        <span class="c1"># DistributedDataParallel will use all available devices.
+</span>        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">set_device</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">)</span>
+            <span class="n">model</span><span class="p">.</span><span class="n">cuda</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">)</span>
+            <span class="c1"># When using a single GPU per process and per
+</span>            <span class="c1"># DistributedDataParallel, we need to divide the batch size
+</span>            <span class="c1"># ourselves based on the total number of GPUs we have
+</span>            <span class="c1"># 把batch分一分
+</span>            <span class="n">args</span><span class="p">.</span><span class="n">batch_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">batch_size</span> <span class="o">/</span> <span class="n">args</span><span class="p">.</span><span class="n">world_size</span><span class="p">)</span>
+            <span class="c1"># 用来导入数据的进程数量，必须大于0，默认是32，这里为什么这么计算，不是很懂。
+</span>            <span class="n">args</span><span class="p">.</span><span class="n">workers</span> <span class="o">=</span> <span class="nb">int</span><span class="p">((</span><span class="n">args</span><span class="p">.</span><span class="n">workers</span> <span class="o">+</span> <span class="n">ngpus_per_node</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">ngpus_per_node</span><span class="p">)</span>
+            <span class="c1"># 构造DDP模型
+</span>            <span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">parallel</span><span class="p">.</span><span class="n">DistributedDataParallel</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">device_ids</span><span class="o">=</span><span class="p">[</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">])</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">model</span><span class="p">.</span><span class="n">cuda</span><span class="p">()</span>
+            <span class="c1"># DistributedDataParallel will divide and allocate batch_size to all
+</span>            <span class="c1"># available GPUs if device_ids are not set
+</span>            <span class="n">model</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">nn</span><span class="p">.</span><span class="n">parallel</span><span class="p">.</span><span class="n">DistributedDataParallel</span><span class="p">(</span><span class="n">model</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+        <span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">set_device</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">)</span>
+        <span class="n">model</span> <span class="o">=</span> <span class="n">model</span><span class="p">.</span><span class="n">cuda</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">)</span>
+        <span class="c1"># comment out the following line for debugging
+</span>        <span class="k">raise</span> <span class="nb">NotImplementedError</span><span class="p">(</span><span class="s">"Only DistributedDataParallel is supported."</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="c1"># AllGather/rank implementation in this code only supports DistributedDataParallel.
+</span>        <span class="k">raise</span> <span class="nb">NotImplementedError</span><span class="p">(</span><span class="s">"Only DistributedDataParallel is supported."</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="c1"># print model after SyncBatchNorm
+</span>    <span class="c1"># optimizer默认是lars，resnet50用的是lars
+</span>    <span class="c1"># weight_decay默认是1e-6，momentum默认是0.9
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">optimizer</span> <span class="o">==</span> <span class="s">'lars'</span><span class="p">:</span>
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">moco</span><span class="p">.</span><span class="n">optimizer</span><span class="p">.</span><span class="n">LARS</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">args</span><span class="p">.</span><span class="n">lr</span><span class="p">,</span>
+                                        <span class="n">weight_decay</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">weight_decay</span><span class="p">,</span>
+                                        <span class="n">momentum</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">momentum</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># vit用adamw
+</span><span class="err">    </span><span class="c1"># weight_decay需要被设定为0.1
+</span>    <span class="k">elif</span> <span class="n">args</span><span class="p">.</span><span class="n">optimizer</span> <span class="o">==</span> <span class="s">'adamw'</span><span class="p">:</span>
+        <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">optim</span><span class="p">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">model</span><span class="p">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">args</span><span class="p">.</span><span class="n">lr</span><span class="p">,</span>
+<span class="err">                                </span><span class="n">weight_decay</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">weight_decay</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    依旧是一些关键参数，以及把并行训练的一些配置，<strong>main_worker[3]</strong>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code>    <span class="c1"># 在训练最开始之前实例化一个GradScaler对象
+</span><span class="err">    </span><span class="c1"># 自动混合精度的详细内容请参考[2]
+</span><span class="err">    </span><span class="n">scaler</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">amp</span><span class="p">.</span><span class="n">GradScaler</span><span class="p">()</span>
+<span class="err">    </span><span class="c1"># 如果是第一进程，使用预设名称建立实体，具体请参考[3]
+</span>    <span class="n">summary_writer</span> <span class="o">=</span> <span class="n">SummaryWriter</span><span class="p">()</span> <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span> <span class="bp">None</span>
+
+
+    <span class="c1"># optionally resume from a checkpoint
+</span><span class="err">    </span><span class="c1"># resume默认为空
+</span><span class="err">    </span><span class="c1"># 如果需要训练已经训练了一段时间的模型，可以通过resume输入模型地址
+</span>    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">isfile</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">):</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">"=&gt; loading checkpoint '{}'"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">))</span>
+            <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+                <span class="n">checkpoint</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Map model to be loaded to specified single gpu.
+</span>                <span class="n">loc</span> <span class="o">=</span> <span class="s">'cuda:{}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">)</span>
+                <span class="n">checkpoint</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">,</span> <span class="n">map_location</span><span class="o">=</span><span class="n">loc</span><span class="p">)</span>
+            <span class="n">args</span><span class="p">.</span><span class="n">start_epoch</span> <span class="o">=</span> <span class="n">checkpoint</span><span class="p">[</span><span class="s">'epoch'</span><span class="p">]</span>
+            <span class="n">model</span><span class="p">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">checkpoint</span><span class="p">[</span><span class="s">'state_dict'</span><span class="p">])</span>
+            <span class="n">optimizer</span><span class="p">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">checkpoint</span><span class="p">[</span><span class="s">'optimizer'</span><span class="p">])</span>
+            <span class="n">scaler</span><span class="p">.</span><span class="n">load_state_dict</span><span class="p">(</span><span class="n">checkpoint</span><span class="p">[</span><span class="s">'scaler'</span><span class="p">])</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">"=&gt; loaded checkpoint '{}' (epoch {})"</span>
+                  <span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">,</span> <span class="n">checkpoint</span><span class="p">[</span><span class="s">'epoch'</span><span class="p">]))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">print</span><span class="p">(</span><span class="s">"=&gt; no checkpoint found at '{}'"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">resume</span><span class="p">))</span>
+<span class="err">    </span><span class="c1"># 在cuDNN中选择卷积算法，以加快训练速度，具体见参考[4]
+</span>    <span class="n">cudnn</span><span class="p">.</span><span class="n">benchmark</span> <span class="o">=</span> <span class="bp">True</span>
+
+
+    <span class="c1"># Data loading code
+</span><span class="err">    </span><span class="c1"># 产生训练数据目录
+</span><span class="err">    </span><span class="n">traindir</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">data</span><span class="p">,</span><span class="err"> </span><span class="s">'train'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    一些关键的设置，比如自动混合精度，归一化，以及是否是接续之前的训练，训练模型。<strong>main_worker[4]</strong>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">    </span><span class="c1"># transforms.Normalize公式input[channel] = (input[channel] - mean[channel]) / std[channel]
+</span>    <span class="c1"># Normalize() 函数的作用是将数据转换为标准正太分布，使模型更容易收敛。
+</span>    <span class="c1"># mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225] 
+</span>    <span class="c1"># 是从 ImageNet 数据集的数百万张图片中随机抽样计算得到的。
+</span>    <span class="n">normalize</span> <span class="o">=</span> <span class="n">transforms</span><span class="p">.</span><span class="n">Normalize</span><span class="p">(</span><span class="n">mean</span><span class="o">=</span><span class="p">[</span><span class="mf">0.485</span><span class="p">,</span> <span class="mf">0.456</span><span class="p">,</span> <span class="mf">0.406</span><span class="p">],</span>
+                                     <span class="n">std</span><span class="o">=</span><span class="p">[</span><span class="mf">0.229</span><span class="p">,</span> <span class="mf">0.224</span><span class="p">,</span> <span class="mf">0.225</span><span class="p">])</span>
+    <span class="c1"># follow BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
+</span>    <span class="c1"># 数据增强
+</span>    <span class="n">augmentation1</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="c1"># 将给定图像随机裁剪为不同的大小和宽高比，然后缩放所裁剪得到的图像为制定的大小
+</span>        <span class="c1"># 即先随机采集，然后对裁剪得到的图像缩放为同一大小，默认scale=(0.08, 1.0)
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomResizedCrop</span><span class="p">(</span><span class="mi">224</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">crop_min</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)),</span>
+        <span class="c1"># 以0.8的概率执行此动作，
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomApply</span><span class="p">([</span>
+            <span class="c1"># 改变图像的属性：亮度（brightness）、对比度（contrast）、饱和度（saturation）和色调（hue)
+</span>            <span class="c1"># 怎么变的呢，将数字带入[max(0, 1 - offset), 1 + offset]获得区间
+</span>            <span class="c1"># 比如亮度位置上是0.4，则得到区间[0.6，1.4]
+</span>            <span class="c1"># 那么新图的亮度会是这个区间的一个随机数
+</span>            <span class="n">transforms</span><span class="p">.</span><span class="n">ColorJitter</span><span class="p">(</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span>  <span class="c1"># not strengthened
+</span>        <span class="p">],</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.8</span><span class="p">),</span>
+        <span class="c1"># 依概率p将图片转换为灰度图
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomGrayscale</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mf">0.2</span><span class="p">),</span>
+<span class="err">        </span><span class="c1"># 产生在[0.1，2]区间的随机数，对图片进行高斯模糊
+</span><span class="err">        </span><span class="c1"># 调用的函数是ImageFilter.GaussianBlur
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomApply</span><span class="p">([</span><span class="n">moco</span><span class="p">.</span><span class="n">loader</span><span class="p">.</span><span class="n">GaussianBlur</span><span class="p">([.</span><span class="mi">1</span><span class="p">,</span> <span class="mf">2.</span><span class="p">])],</span> <span class="n">p</span><span class="o">=</span><span class="mf">1.0</span><span class="p">),</span>
+<span class="err">        </span><span class="c1"># 依据概率p对PIL图片进行水平翻转 参数：p默认值为0.5
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomHorizontalFlip</span><span class="p">(),</span>
+<span class="err">        </span><span class="c1"># 将PIL Image或者 ndarray 转换为tensor，并且归一化至[0-1] 注意事项：归一化至[0-1]是直接除以255，若自己的ndarray数据尺度有变化，则需要自行修改。
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">ToTensor</span><span class="p">(),</span>
+<span class="err">        </span><span class="c1"># 之前定义的归一化方式，归一化后，数值所在的区间大概是（-1，1）
+</span>        <span class="n">normalize</span>
+    <span class="p">]</span>
+
+
+    <span class="n">augmentation2</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomResizedCrop</span><span class="p">(</span><span class="mi">224</span><span class="p">,</span> <span class="n">scale</span><span class="o">=</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">crop_min</span><span class="p">,</span> <span class="mf">1.</span><span class="p">)),</span>
+        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomApply</span><span class="p">([</span>
+            <span class="n">transforms</span><span class="p">.</span><span class="n">ColorJitter</span><span class="p">(</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span>  <span class="c1"># not strengthened
+</span>        <span class="p">],</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.8</span><span class="p">),</span>
+        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomGrayscale</span><span class="p">(</span><span class="n">p</span><span class="o">=</span><span class="mf">0.2</span><span class="p">),</span>
+<span class="err">        </span><span class="c1"># 高斯模糊的概率和augmentation1不一样
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomApply</span><span class="p">([</span><span class="n">moco</span><span class="p">.</span><span class="n">loader</span><span class="p">.</span><span class="n">GaussianBlur</span><span class="p">([.</span><span class="mi">1</span><span class="p">,</span> <span class="mf">2.</span><span class="p">])],</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.1</span><span class="p">),</span>
+        <span class="c1"># 以0.2的概率做Solarize
+</span><span class="err">        </span><span class="c1"># 默认阈值是128，大于128的像素值，转换成二进制，然后做01反转
+</span><span class="err">        </span><span class="c1"># 即0变1，1变0，得到新的像素值。
+</span>        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomApply</span><span class="p">([</span><span class="n">moco</span><span class="p">.</span><span class="n">loader</span><span class="p">.</span><span class="n">Solarize</span><span class="p">()],</span> <span class="n">p</span><span class="o">=</span><span class="mf">0.2</span><span class="p">),</span>
+        <span class="n">transforms</span><span class="p">.</span><span class="n">RandomHorizontalFlip</span><span class="p">(),</span>
+        <span class="n">transforms</span><span class="p">.</span><span class="n">ToTensor</span><span class="p">(),</span>
+        <span class="n">normalize</span>
+<span class="err">    </span><span class="p">]</span>
+</code></pre></div></div>
+
+<p>    这部分主要是关于数据增强的设定，至于为什么这么做数据增强，作者有把参考的文章列在代码注释里，感兴趣的可以去看一下。接下来是这个函数的最后一个部分<strong>main_worker[5]</strong>:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">    </span><span class="c1"># 在指定目录下做载入数据
+</span><span class="err">    </span><span class="c1"># ImageFolder(root,transform=None,target_transform=None,loader=default_loader)
+</span><span class="err">    </span><span class="c1"># transform：对图片进行预处理的操作（函数），原始图片作为输入，返回一个转换后的图片。
+</span><span class="err">    </span><span class="c1"># 对图片类别进行预处理的操作，输入为 target，输出对其的转换。如果不传该参数，即对 target 不做任何转换。
+</span><span class="err">    </span><span class="c1"># loader 默认操作是读取PIL image对象。
+</span><span class="err">    </span><span class="c1"># 这里是模型很关键的一步，将每一幅图做两种不同的transform，得到两张图
+</span>    <span class="n">train_dataset</span> <span class="o">=</span> <span class="n">datasets</span><span class="p">.</span><span class="n">ImageFolder</span><span class="p">(</span>
+        <span class="n">traindir</span><span class="p">,</span>
+<span class="err">        </span><span class="c1"># 输入im返回是[im1,im2]，分别按augmentation1和augmentation2做了变换
+</span>        <span class="n">moco</span><span class="p">.</span><span class="n">loader</span><span class="p">.</span><span class="n">TwoCropsTransform</span><span class="p">(</span><span class="n">transforms</span><span class="p">.</span><span class="n">Compose</span><span class="p">(</span><span class="n">augmentation1</span><span class="p">),</span> 
+                                      <span class="n">transforms</span><span class="p">.</span><span class="n">Compose</span><span class="p">(</span><span class="n">augmentation2</span><span class="p">)))</span>
+
+
+    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">distributed</span><span class="p">:</span>
+<span class="err">        </span><span class="c1"># 把数据划分成num_gpu份，不同的GPU拿自己那一份
+</span>        <span class="n">train_sampler</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">utils</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">distributed</span><span class="p">.</span><span class="n">DistributedSampler</span><span class="p">(</span><span class="n">train_dataset</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">train_sampler</span> <span class="o">=</span> <span class="bp">None</span>
+<span class="err">    </span><span class="c1"># sampler和shuffle是互斥的，有sampler，shuffle就可以是None了
+</span><span class="err">    </span><span class="c1"># num_workers要大于0，0代表用主进程导入数据，大于0表示用num_workers个进程导入数据
+</span><span class="err">    </span><span class="c1"># pin_memory: if True, the data loader will copy tensors into CUDA pinned memory before returning them
+</span><span class="err">    </span><span class="c1"># 主机中的内存，有两种存在方式，一是锁页，二是不锁页， 
+</span><span class="err">    </span><span class="c1"># 锁页内存存放的内容在任何情况下都不会与主机的虚拟内存进行交换（注：虚拟内存就是硬盘），
+</span><span class="err">    </span><span class="c1"># 而不锁页内存在主机内存不足时，数据会存放在虚拟内存中。
+</span><span class="err">    </span><span class="c1"># 显卡中的显存全部是锁页内存,当计算机的内存充足的时候，可以设置pin_memory=True。
+</span><span class="err">    </span><span class="c1"># 意味着生成的Tensor数据存放在锁页内存中，这样内存中的Tensor转移到GPU的显存会更快。 
+</span><span class="err">    </span><span class="c1"># 当系统卡住，或者交换内存使用过多的时候，设置pin_memory=False。
+</span><span class="err">    </span><span class="c1"># 因为pin_memory与电脑硬件性能有关，pin_memory默认为False。
+</span><span class="err">    </span><span class="c1"># drop_last: set to ``True`` to drop the last incomplete batch   
+</span>    <span class="n">train_loader</span> <span class="o">=</span> <span class="n">torch</span><span class="p">.</span><span class="n">utils</span><span class="p">.</span><span class="n">data</span><span class="p">.</span><span class="n">DataLoader</span><span class="p">(</span>
+        <span class="n">train_dataset</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">shuffle</span><span class="o">=</span><span class="p">(</span><span class="n">train_sampler</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">),</span>
+        <span class="n">num_workers</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">workers</span><span class="p">,</span> <span class="n">pin_memory</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span> <span class="n">sampler</span><span class="o">=</span><span class="n">train_sampler</span><span class="p">,</span> <span class="n">drop_last</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+
+    <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">start_epoch</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">epochs</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">distributed</span><span class="p">:</span>
+<span class="err">            </span><span class="c1"># 加了这行，每次gpu才会拿到不同组合的batch
+</span><span class="err">            </span><span class="c1"># 换句话说，加上这行，每个epoch才会被shuffle
+</span>            <span class="n">train_sampler</span><span class="p">.</span><span class="n">set_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span>
+
+
+<span class="err">        </span><span class="c1"># train for one epoch，这个接下来讲
+</span>        <span class="n">train</span><span class="p">(</span><span class="n">train_loader</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">scaler</span><span class="p">,</span> <span class="n">summary_writer</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+<span class="err">        </span><span class="c1">#主进程存储训练过程中的模型，防止因为一些事情中断训练后，需要从头再来。
+</span>        <span class="k">if</span> <span class="ow">not</span> <span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span> <span class="ow">or</span> <span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">multiprocessing_distributed</span>
+                <span class="ow">and</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">):</span> <span class="c1"># only the first GPU saves checkpoint
+</span>            <span class="n">save_checkpoint</span><span class="p">({</span>
+                <span class="s">'epoch'</span><span class="p">:</span> <span class="n">epoch</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span>
+                <span class="s">'arch'</span><span class="p">:</span> <span class="n">args</span><span class="p">.</span><span class="n">arch</span><span class="p">,</span>
+                <span class="s">'state_dict'</span><span class="p">:</span> <span class="n">model</span><span class="p">.</span><span class="n">state_dict</span><span class="p">(),</span>
+                <span class="s">'optimizer'</span> <span class="p">:</span> <span class="n">optimizer</span><span class="p">.</span><span class="n">state_dict</span><span class="p">(),</span>
+                <span class="s">'scaler'</span><span class="p">:</span> <span class="n">scaler</span><span class="p">.</span><span class="n">state_dict</span><span class="p">(),</span>
+<span class="err">            </span><span class="c1"># 这个代码里没有做is_best判断
+</span><span class="err">            </span><span class="c1"># 通常这个参数是用来保存训练过程中测试的效果最好的模型，防止过拟合。
+</span><span class="err">            </span><span class="p">},</span><span class="err"> </span><span class="n">is_best</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span><span class="err"> </span><span class="n">filename</span><span class="o">=</span><span class="s">'checkpoint_%04d.pth.tar'</span><span class="err"> </span><span class="o">%</span><span class="err"> </span><span class="n">epoch</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">summary_writer</span><span class="p">.</span><span class="n">close</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>这部分代码主要内容：一、准备数据，二、训练，三、主进程保存节点模型。</p>
+
+<p>    接下来看<strong>train</strong>这个函数：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">train</span><span class="p">(</span><span class="n">train_loader</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">optimizer</span><span class="p">,</span> <span class="n">scaler</span><span class="p">,</span> <span class="n">summary_writer</span><span class="p">,</span> <span class="n">epoch</span><span class="p">,</span> <span class="n">args</span><span class="p">):</span>
+<span class="err">    </span><span class="c1"># AverageMeter是作者自己定义的函数，用来计算循环中，一些过程的平均消耗
+</span>    <span class="n">batch_time</span> <span class="o">=</span> <span class="n">AverageMeter</span><span class="p">(</span><span class="s">'Time'</span><span class="p">,</span> <span class="s">':6.3f'</span><span class="p">)</span>
+    <span class="n">data_time</span> <span class="o">=</span> <span class="n">AverageMeter</span><span class="p">(</span><span class="s">'Data'</span><span class="p">,</span> <span class="s">':6.3f'</span><span class="p">)</span>
+    <span class="n">learning_rates</span> <span class="o">=</span> <span class="n">AverageMeter</span><span class="p">(</span><span class="s">'LR'</span><span class="p">,</span> <span class="s">':.4e'</span><span class="p">)</span>
+    <span class="n">losses</span> <span class="o">=</span> <span class="n">AverageMeter</span><span class="p">(</span><span class="s">'Loss'</span><span class="p">,</span> <span class="s">':.4e'</span><span class="p">)</span>
+    <span class="n">progress</span> <span class="o">=</span> <span class="n">ProgressMeter</span><span class="p">(</span>
+        <span class="nb">len</span><span class="p">(</span><span class="n">train_loader</span><span class="p">),</span>
+        <span class="p">[</span><span class="n">batch_time</span><span class="p">,</span> <span class="n">data_time</span><span class="p">,</span> <span class="n">learning_rates</span><span class="p">,</span> <span class="n">losses</span><span class="p">],</span>
+        <span class="n">prefix</span><span class="o">=</span><span class="s">"Epoch: [{}]"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">epoch</span><span class="p">))</span>
+
+
+    <span class="c1"># switch to train mode
+</span>    <span class="n">model</span><span class="p">.</span><span class="n">train</span><span class="p">()</span>
+
+
+    <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="p">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">iters_per_epoch</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">train_loader</span><span class="p">)</span>
+    <span class="n">moco_m</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">moco_m</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="p">(</span><span class="n">images</span><span class="p">,</span> <span class="n">_</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">train_loader</span><span class="p">):</span>
+        <span class="c1"># measure data loading time
+</span><span class="err">        </span><span class="c1"># 计算在循环中，载入数据平均消耗的时间。
+</span><span class="err">        </span><span class="n">data_time</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="n">time</span><span class="p">()</span><span class="err"> </span><span class="o">-</span><span class="err"> </span><span class="n">end</span><span class="p">)</span>
+        <span class="c1"># adjust learning rate and momentum coefficient per iteration
+</span>        <span class="c1"># adjust_learning_rate是作者自己定义的函数
+</span><span class="err">        </span><span class="c1"># learning rate先由小变大，再由大变小。具体可以参考代码
+</span>        <span class="n">lr</span> <span class="o">=</span> <span class="n">adjust_learning_rate</span><span class="p">(</span><span class="n">optimizer</span><span class="p">,</span> <span class="n">epoch</span> <span class="o">+</span> <span class="n">i</span> <span class="o">/</span> <span class="n">iters_per_epoch</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># 更新在循环中，使用的lr的平均值
+</span>        <span class="n">learning_rates</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">lr</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">moco_m_cos</span><span class="p">:</span>
+<span class="err">            </span><span class="c1">#同样是作者自己定义的函数，moco_m则是由本来就很接近1（0.99），变得越来越接近1。
+</span>            <span class="n">moco_m</span> <span class="o">=</span> <span class="n">adjust_moco_momentum</span><span class="p">(</span><span class="n">epoch</span> <span class="o">+</span> <span class="n">i</span> <span class="o">/</span> <span class="n">iters_per_epoch</span><span class="p">,</span> <span class="n">args</span><span class="p">)</span>
+
+
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">gpu</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c1"># 如果pin_memory=True的话，将数据放入GPU的时候，
+</span>            <span class="c1"># 也应该把non_blocking打开，这样就只把数据放入GPU而不取出，访问时间会大大减少。
+</span>            <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">cuda</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">images</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">images</span><span class="p">[</span><span class="mi">1</span><span class="p">].</span><span class="n">cuda</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">gpu</span><span class="p">,</span> <span class="n">non_blocking</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+
+        <span class="c1"># compute output
+</span>        <span class="k">with</span> <span class="n">torch</span><span class="p">.</span><span class="n">cuda</span><span class="p">.</span><span class="n">amp</span><span class="p">.</span><span class="n">autocast</span><span class="p">(</span><span class="bp">True</span><span class="p">):</span>
+<span class="err">            </span><span class="c1"># moco_m: moco momentum of updating momentum encoder
+</span><span class="err">            </span><span class="c1"># model下一篇说
+</span>            <span class="n">loss</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">images</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">moco_m</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># loss平均值更新
+</span>        <span class="n">losses</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">loss</span><span class="p">.</span><span class="n">item</span><span class="p">(),</span> <span class="n">images</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">rank</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">summary_writer</span><span class="p">.</span><span class="n">add_scalar</span><span class="p">(</span><span class="s">"loss"</span><span class="p">,</span> <span class="n">loss</span><span class="p">.</span><span class="n">item</span><span class="p">(),</span> <span class="n">epoch</span> <span class="o">*</span> <span class="n">iters_per_epoch</span> <span class="o">+</span> <span class="n">i</span><span class="p">)</span>
+
+
+        <span class="c1"># compute gradient and do SGD step
+</span><span class="err">        </span><span class="c1"># optimizer.zero_grad()意思是把梯度置零,
+</span><span class="err">        </span><span class="c1"># 也就是把loss关于weight的导数变成0.
+</span>        <span class="n">optimizer</span><span class="p">.</span><span class="n">zero_grad</span><span class="p">()</span>
+        <span class="c1"># Scales loss. 为了梯度放大. scaler原理可以参考[2]
+</span>        <span class="n">scaler</span><span class="p">.</span><span class="n">scale</span><span class="p">(</span><span class="n">loss</span><span class="p">).</span><span class="n">backward</span><span class="p">()</span>
+<span class="err">        </span><span class="c1"># scaler.step() 首先把梯度的值unscale回来.
+</span>        <span class="c1"># 如果梯度的值不是 infs 或者 NaNs, 那么调用optimizer.step()来更新权重,
+</span>        <span class="c1"># 否则，忽略step调用，从而保证权重不更新（不被破坏）
+</span>        <span class="n">scaler</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">optimizer</span><span class="p">)</span>
+        <span class="c1"># 准备着，看是否要增大scaler  scaler.update()
+</span>
+
+        <span class="c1"># measure elapsed time
+</span>        <span class="n">batch_time</span><span class="p">.</span><span class="n">update</span><span class="p">(</span><span class="n">time</span><span class="p">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">end</span><span class="p">)</span>
+        <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="p">.</span><span class="n">time</span><span class="p">()</span>
+<span class="err">        </span><span class="c1"># print_ferq默认是10
+</span>        <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="n">args</span><span class="p">.</span><span class="n">print_freq</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+<span class="err">            </span><span class="n">progress</span><span class="p">.</span><span class="n">display</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    这里就是Moco v3训练的主要代码，有些太过细枝末节又容易懂的就没有放进来。</p>
+
+<p>    代码主要特点和主要内容有：
+		- 多卡，每张卡有多个gpu，每个进程管理一个gpu
+		- 用了自动混合精度机制</p>
+
+<ul>
+  <li>
+    <p>不同的数据增强的配置</p>
+
+    <p>当然还有很多细节的设计，比如lr和moco_m参数的调整，数据存入gpu的方式等等，都是非常值得深入学习的，这篇只是浏览，具体原理可以参考我给的一些参考链接，自己搜索更有用的资料，或者去研读pytorch源代码。</p>
+  </li>
+</ul>
+
+<p>    下一篇讲Moco v3的模型代码。喜欢或者觉得有用就关注吧，可以的话，右下角点个“在看”吧。    </p>
+
+<p>参考：</p>
+
+<p>[1] 996黄金一代，[原创][深度][PyTorch] DDP系列第三篇：实战与技巧，知乎，2020</p>
+
+<p>[2] Gemfield，PyTorch的自动混合精度（AMP），知乎，2020</p>
+
+<p>[3] dexter，TensorBoardX 介紹 (在 PyTorch 中使用 Tensorboard），知乎，2018</p>
+
+<p>[4] xiaopl，torch.backends.cudnn.benchmark ?!，知乎，2019</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 训练代码解析&url=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%AD%E7%BB%83%E4%BB%A3%E7%A0%81%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Representation-Learning">Representation Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#ViT">ViT</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/piano_trans_paper_2020/0.png" alt="钢琴曲转谱（Solo Piano Transcription）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">钢琴曲转谱（Solo Piano Transcription）</a>
+                
+            </h2>
+            <h4 class="card-text">​    今天来看一篇钢琴琴谱翻译的文章，出自ByteDance字节跳动，Giant-Piano（GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集）采用的转谱模型就是这个：
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jun 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

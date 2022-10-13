@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 相关和因果 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 相关和因果 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 相关和因果" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="一、因果关系的意义     看下面这两张图：         &lt;div align=center&gt;&lt;/div&gt;     两张图分别是基因A, B活跃度变化的时候，phentype的变化，那么现在我们来思考一个问题，如果我们把基因A或B单独删掉，抑制其活跃性，那么phenotype的值会落在哪个区间?     看删掉基因A的结果:     如果删掉基因A，phenotype的值会降到红色线条所示的区间，因为A的活跃度影响着phenotype的值，两个元素之间成因果关系。     再看删掉基因B的结果：     如果删掉基因B，phenotype的值还在原来的区间，没有产生明显的变化，因为基因B和phenotype同时被另一个元素confounder影响，它们之间本身不构成因果关系，只是单纯的相关关系。     通过上面的示例，可以大概了解到，通常我们都在研究相关关系，而因果关系是不同的，检验是因果还是相关，可能需要主动干预，形成对照。     毫无疑问，因果关系的确立有助于我们判断事物的发展。 二、因果模型     因果模型是什么？                     &lt;div align=center&gt;&lt;/div&gt;     以结构化因果模型（Structral Causal Models, SCMs）为例，因果模型应该包含如上图所示的四个部分：     1. Distribution，SCMs要能解释数据的分布状况     2. Causal Graph，生成可以表现因果关系，因果结构的因果图     3. Intervention Distribution，模型能预测干预后系统的反馈     4. Counterfactuals，模型可以做反事实推断     这里比较难解释的是反事实推断，第一个部分是现在的机器学习和深度学习方法可以轻易实现的，即挖掘数据和数据，数据和概念等等之间的相关性，比如人类拥有的感知外界的功能，看见一只鸟，传入眼睛的是光折射出的图案，但人有能力将这个图案和鸟这个概念关联起来，现在计算机也可以。第三个部分是干预，即人类偶尔知道做什么样的行为，可能能得到自己想要的结果，比如他看见一只鸟，他知道如果他想吃到鸟肉，他得把这只鸟打下来，要把这只鸟打下来，他得有弓箭，猎枪或者其他杀伤性武器。第四部分则是反事实推断的能力，即能够做如果…，那么…的假设和推断，“如果那天我没有把那只鸟打下来，吃上肉，我现在还活着吗？”，“如果当时那只鸟飞得再高一点，我还能打到它吗？”，这对应的是人类想象，回顾和理解的能力。关于这部分概念，可以参考《The Book of Why》的第一章和第八章。     接下来看因果推理和因果学习的概念，上图是因果学习和推理对照概率模型的示意图，如概率模型一样，如果有了模型，那么就可以根据观察到的数据进行推理，如果有完整的观察到的数据和数据对应的结果，则可以进行模型训练，学习。但因果学习和概率模型的学习有很不一样的地方，假设你有无限多的数据，即你知道每一种可能和其对应的答案，那么训练概率模型就没有必要了，而因果模型却还是要经过学习，发现的过程才能得到。 三、因果关系相关的案例     1. 巧克力和诺贝尔奖     上面这幅图中，横坐标是人均每年吃的巧克力的量，纵坐标则是每千万人中获得诺贝尔奖的数量。根据上面的图，可以轻易的得出结论，巧克力的消耗量和诺贝尔奖的获奖数量是强相关的。因此就有了下面的一些报道： 吃巧克力，可以增加获诺贝尔奖的人数，以及下面这则新闻，聪明的人似乎更爱吃巧克力。 这是一个典型把相关性当成因果关系的案例。          2. 抽烟和肝癌     上面这篇发表于1950年的文章，证明了吸烟和肝癌之间存在强相关性：     所以政府想说，哎呀，吸烟导致肝癌啊，那推出烟草税吧，烟草公司就不乐意了，站出来说，并不一定是吸烟导致了肝癌，或者提高了得肝癌的几率，也有可能是一个不知名的原因，共同导致了抽烟过多和肝癌呢？     怎么判断抽烟和肝癌之间存在因果关系，还是它们两个有一个共同的原因导致，是关键的问题。     3. 夜间光照与近视     左边这幅图出自一个关于近视的研究，这个研究表明，被家长更多地提供夜间照明的孩子们反而更多的患上了近视。也就是夜间照明和近视强相关，夜间照明极有可能是近视的一个诱因。     因此，有专利就把夜间照明和近视当成因果关系，做了发明。但它们其实不算是因果关系，只是有可能是因果关系。     4. 肾结石的两个治疗方案     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石这种情况，而B方案则主要用在了治愈率较高的小结石这种情况，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以以下图表示：     5.  广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的时候，经常会被推送一些广告，如下图：     下面这个研究则通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作和一些其他的数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些又会一定程度上决定用户的行为。     6. 基因的相互作用     上面这个研究中，有6170个基因，图中的横坐标表示基因5954的活性，纵坐标表示基因4710的活性。有160笔观察数据，左边这张图就是观察数据画出来的，可以发现，两个基因的活性表现出了一定的相关性。这个实验还有1479笔干预数据，即对一些基因做删除动作，总共有1479个不同的删除动作，中间的图则是被干预后基因5954和4710的活性的变化，更可以发现这两种基因的活性是强相关的。     这个研究的目的其实是要发现这些基因之间的因果关系。但非常有意思的是，这些数据可以支持一个论点，即因果关系通常在系统中是稳定的。在试验中，基因5954是基因4710的因，右图中当对基因5954做了干预后，4710的活性也随着产生了明显的变化。由中间那幅图的实验，1479次的干预来看，不论删掉系统中哪个部分，基因5954和基因4710都是强相关的。可见因果关系在系统中是一种稳定的关系。     举个例子，有如下因果关系：x&lt;-w-&gt;z-&gt;y，z和y是因果关系，x和z之间不存在因果关系，则改变x的状态，对z和y的状态不会造成影响，改变w的值，那么z和y会跟着一起改变。 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018" />
+<meta property="og:description" content="一、因果关系的意义     看下面这两张图：         &lt;div align=center&gt;&lt;/div&gt;     两张图分别是基因A, B活跃度变化的时候，phentype的变化，那么现在我们来思考一个问题，如果我们把基因A或B单独删掉，抑制其活跃性，那么phenotype的值会落在哪个区间?     看删掉基因A的结果:     如果删掉基因A，phenotype的值会降到红色线条所示的区间，因为A的活跃度影响着phenotype的值，两个元素之间成因果关系。     再看删掉基因B的结果：     如果删掉基因B，phenotype的值还在原来的区间，没有产生明显的变化，因为基因B和phenotype同时被另一个元素confounder影响，它们之间本身不构成因果关系，只是单纯的相关关系。     通过上面的示例，可以大概了解到，通常我们都在研究相关关系，而因果关系是不同的，检验是因果还是相关，可能需要主动干预，形成对照。     毫无疑问，因果关系的确立有助于我们判断事物的发展。 二、因果模型     因果模型是什么？                     &lt;div align=center&gt;&lt;/div&gt;     以结构化因果模型（Structral Causal Models, SCMs）为例，因果模型应该包含如上图所示的四个部分：     1. Distribution，SCMs要能解释数据的分布状况     2. Causal Graph，生成可以表现因果关系，因果结构的因果图     3. Intervention Distribution，模型能预测干预后系统的反馈     4. Counterfactuals，模型可以做反事实推断     这里比较难解释的是反事实推断，第一个部分是现在的机器学习和深度学习方法可以轻易实现的，即挖掘数据和数据，数据和概念等等之间的相关性，比如人类拥有的感知外界的功能，看见一只鸟，传入眼睛的是光折射出的图案，但人有能力将这个图案和鸟这个概念关联起来，现在计算机也可以。第三个部分是干预，即人类偶尔知道做什么样的行为，可能能得到自己想要的结果，比如他看见一只鸟，他知道如果他想吃到鸟肉，他得把这只鸟打下来，要把这只鸟打下来，他得有弓箭，猎枪或者其他杀伤性武器。第四部分则是反事实推断的能力，即能够做如果…，那么…的假设和推断，“如果那天我没有把那只鸟打下来，吃上肉，我现在还活着吗？”，“如果当时那只鸟飞得再高一点，我还能打到它吗？”，这对应的是人类想象，回顾和理解的能力。关于这部分概念，可以参考《The Book of Why》的第一章和第八章。     接下来看因果推理和因果学习的概念，上图是因果学习和推理对照概率模型的示意图，如概率模型一样，如果有了模型，那么就可以根据观察到的数据进行推理，如果有完整的观察到的数据和数据对应的结果，则可以进行模型训练，学习。但因果学习和概率模型的学习有很不一样的地方，假设你有无限多的数据，即你知道每一种可能和其对应的答案，那么训练概率模型就没有必要了，而因果模型却还是要经过学习，发现的过程才能得到。 三、因果关系相关的案例     1. 巧克力和诺贝尔奖     上面这幅图中，横坐标是人均每年吃的巧克力的量，纵坐标则是每千万人中获得诺贝尔奖的数量。根据上面的图，可以轻易的得出结论，巧克力的消耗量和诺贝尔奖的获奖数量是强相关的。因此就有了下面的一些报道： 吃巧克力，可以增加获诺贝尔奖的人数，以及下面这则新闻，聪明的人似乎更爱吃巧克力。 这是一个典型把相关性当成因果关系的案例。          2. 抽烟和肝癌     上面这篇发表于1950年的文章，证明了吸烟和肝癌之间存在强相关性：     所以政府想说，哎呀，吸烟导致肝癌啊，那推出烟草税吧，烟草公司就不乐意了，站出来说，并不一定是吸烟导致了肝癌，或者提高了得肝癌的几率，也有可能是一个不知名的原因，共同导致了抽烟过多和肝癌呢？     怎么判断抽烟和肝癌之间存在因果关系，还是它们两个有一个共同的原因导致，是关键的问题。     3. 夜间光照与近视     左边这幅图出自一个关于近视的研究，这个研究表明，被家长更多地提供夜间照明的孩子们反而更多的患上了近视。也就是夜间照明和近视强相关，夜间照明极有可能是近视的一个诱因。     因此，有专利就把夜间照明和近视当成因果关系，做了发明。但它们其实不算是因果关系，只是有可能是因果关系。     4. 肾结石的两个治疗方案     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石这种情况，而B方案则主要用在了治愈率较高的小结石这种情况，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以以下图表示：     5.  广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的时候，经常会被推送一些广告，如下图：     下面这个研究则通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作和一些其他的数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些又会一定程度上决定用户的行为。     6. 基因的相互作用     上面这个研究中，有6170个基因，图中的横坐标表示基因5954的活性，纵坐标表示基因4710的活性。有160笔观察数据，左边这张图就是观察数据画出来的，可以发现，两个基因的活性表现出了一定的相关性。这个实验还有1479笔干预数据，即对一些基因做删除动作，总共有1479个不同的删除动作，中间的图则是被干预后基因5954和4710的活性的变化，更可以发现这两种基因的活性是强相关的。     这个研究的目的其实是要发现这些基因之间的因果关系。但非常有意思的是，这些数据可以支持一个论点，即因果关系通常在系统中是稳定的。在试验中，基因5954是基因4710的因，右图中当对基因5954做了干预后，4710的活性也随着产生了明显的变化。由中间那幅图的实验，1479次的干预来看，不论删掉系统中哪个部分，基因5954和基因4710都是强相关的。可见因果关系在系统中是一种稳定的关系。     举个例子，有如下因果关系：x&lt;-w-&gt;z-&gt;y，z和y是因果关系，x和z之间不存在因果关系，则改变x的状态，对z和y的状态不会造成影响，改变w的值，那么z和y会跟着一起改变。 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-06-05T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"一、因果关系的意义     看下面这两张图：         &lt;div align=center&gt;&lt;/div&gt;     两张图分别是基因A, B活跃度变化的时候，phentype的变化，那么现在我们来思考一个问题，如果我们把基因A或B单独删掉，抑制其活跃性，那么phenotype的值会落在哪个区间?     看删掉基因A的结果:     如果删掉基因A，phenotype的值会降到红色线条所示的区间，因为A的活跃度影响着phenotype的值，两个元素之间成因果关系。     再看删掉基因B的结果：     如果删掉基因B，phenotype的值还在原来的区间，没有产生明显的变化，因为基因B和phenotype同时被另一个元素confounder影响，它们之间本身不构成因果关系，只是单纯的相关关系。     通过上面的示例，可以大概了解到，通常我们都在研究相关关系，而因果关系是不同的，检验是因果还是相关，可能需要主动干预，形成对照。     毫无疑问，因果关系的确立有助于我们判断事物的发展。 二、因果模型     因果模型是什么？                     &lt;div align=center&gt;&lt;/div&gt;     以结构化因果模型（Structral Causal Models, SCMs）为例，因果模型应该包含如上图所示的四个部分：     1. Distribution，SCMs要能解释数据的分布状况     2. Causal Graph，生成可以表现因果关系，因果结构的因果图     3. Intervention Distribution，模型能预测干预后系统的反馈     4. Counterfactuals，模型可以做反事实推断     这里比较难解释的是反事实推断，第一个部分是现在的机器学习和深度学习方法可以轻易实现的，即挖掘数据和数据，数据和概念等等之间的相关性，比如人类拥有的感知外界的功能，看见一只鸟，传入眼睛的是光折射出的图案，但人有能力将这个图案和鸟这个概念关联起来，现在计算机也可以。第三个部分是干预，即人类偶尔知道做什么样的行为，可能能得到自己想要的结果，比如他看见一只鸟，他知道如果他想吃到鸟肉，他得把这只鸟打下来，要把这只鸟打下来，他得有弓箭，猎枪或者其他杀伤性武器。第四部分则是反事实推断的能力，即能够做如果…，那么…的假设和推断，“如果那天我没有把那只鸟打下来，吃上肉，我现在还活着吗？”，“如果当时那只鸟飞得再高一点，我还能打到它吗？”，这对应的是人类想象，回顾和理解的能力。关于这部分概念，可以参考《The Book of Why》的第一章和第八章。     接下来看因果推理和因果学习的概念，上图是因果学习和推理对照概率模型的示意图，如概率模型一样，如果有了模型，那么就可以根据观察到的数据进行推理，如果有完整的观察到的数据和数据对应的结果，则可以进行模型训练，学习。但因果学习和概率模型的学习有很不一样的地方，假设你有无限多的数据，即你知道每一种可能和其对应的答案，那么训练概率模型就没有必要了，而因果模型却还是要经过学习，发现的过程才能得到。 三、因果关系相关的案例     1. 巧克力和诺贝尔奖     上面这幅图中，横坐标是人均每年吃的巧克力的量，纵坐标则是每千万人中获得诺贝尔奖的数量。根据上面的图，可以轻易的得出结论，巧克力的消耗量和诺贝尔奖的获奖数量是强相关的。因此就有了下面的一些报道： 吃巧克力，可以增加获诺贝尔奖的人数，以及下面这则新闻，聪明的人似乎更爱吃巧克力。 这是一个典型把相关性当成因果关系的案例。          2. 抽烟和肝癌     上面这篇发表于1950年的文章，证明了吸烟和肝癌之间存在强相关性：     所以政府想说，哎呀，吸烟导致肝癌啊，那推出烟草税吧，烟草公司就不乐意了，站出来说，并不一定是吸烟导致了肝癌，或者提高了得肝癌的几率，也有可能是一个不知名的原因，共同导致了抽烟过多和肝癌呢？     怎么判断抽烟和肝癌之间存在因果关系，还是它们两个有一个共同的原因导致，是关键的问题。     3. 夜间光照与近视     左边这幅图出自一个关于近视的研究，这个研究表明，被家长更多地提供夜间照明的孩子们反而更多的患上了近视。也就是夜间照明和近视强相关，夜间照明极有可能是近视的一个诱因。     因此，有专利就把夜间照明和近视当成因果关系，做了发明。但它们其实不算是因果关系，只是有可能是因果关系。     4. 肾结石的两个治疗方案     肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石这种情况，而B方案则主要用在了治愈率较高的小结石这种情况，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以以下图表示：     5.  广告推荐     当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的时候，经常会被推送一些广告，如下图：     下面这个研究则通过研究推送广告过程中的因果关系来优化模型： 用户的意图会决定用户的操作和一些其他的数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些又会一定程度上决定用户的行为。     6. 基因的相互作用     上面这个研究中，有6170个基因，图中的横坐标表示基因5954的活性，纵坐标表示基因4710的活性。有160笔观察数据，左边这张图就是观察数据画出来的，可以发现，两个基因的活性表现出了一定的相关性。这个实验还有1479笔干预数据，即对一些基因做删除动作，总共有1479个不同的删除动作，中间的图则是被干预后基因5954和4710的活性的变化，更可以发现这两种基因的活性是强相关的。     这个研究的目的其实是要发现这些基因之间的因果关系。但非常有意思的是，这些数据可以支持一个论点，即因果关系通常在系统中是稳定的。在试验中，基因5954是基因4710的因，右图中当对基因5954做了干预后，4710的活性也随着产生了明显的变化。由中间那幅图的实验，1479次的干预来看，不论删掉系统中哪个部分，基因5954和基因4710都是强相关的。可见因果关系在系统中是一种稳定的关系。     举个例子，有如下因果关系：x&lt;-w-&gt;z-&gt;y，z和y是因果关系，x和z之间不存在因果关系，则改变x的状态，对z和y的状态不会造成影响，改变w的值，那么z和y会跟着一起改变。 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/1.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 相关和因果","dateModified":"2020-06-05T00:00:00+08:00","datePublished":"2020-06-05T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 相关和因果</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-06-05">05 Jun 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 相关和因果/1.png" alt="MIT因果迷你课笔记 —— 相关和因果">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>一、因果关系的意义</strong></p>
+
+<p>    看下面这两张图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/1.png" style="zoom:80%;" /></p>
+
+<p>        &lt;div align=center&gt;<img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/2.png" style="zoom:80%;" />&lt;/div&gt;</p>
+
+<p>    两张图分别是基因A, B活跃度变化的时候，phentype的变化，那么现在我们来思考一个问题，如果我们把基因A或B单独删掉，抑制其活跃性，那么phenotype的值会落在哪个区间?</p>
+
+<p>    看删掉基因A的结果:</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/3.png" style="zoom:80%;" /></p>
+
+<p>    如果删掉基因A，phenotype的值会降到红色线条所示的区间，因为A的活跃度影响着phenotype的值，两个元素之间成因果关系。</p>
+
+<p>    再看删掉基因B的结果：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/4.png" style="zoom:80%;" /></p>
+
+<p>    如果删掉基因B，phenotype的值还在原来的区间，没有产生明显的变化，因为基因B和phenotype同时被另一个元素confounder影响，它们之间本身不构成因果关系，只是单纯的相关关系。</p>
+
+<p>    通过上面的示例，可以大概了解到，通常我们都在研究相关关系，而因果关系是不同的，检验是因果还是相关，可能需要主动干预，形成对照。</p>
+
+<p>    毫无疑问，因果关系的确立有助于我们判断事物的发展。</p>
+
+<p><strong>二、因果模型</strong></p>
+
+<p>    因果模型是什么？</p>
+
+<p>                    &lt;div align=center&gt;<img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/5.png" style="zoom: 50%;" />&lt;/div&gt;</p>
+
+<p>    以结构化因果模型（Structral Causal Models, SCMs）为例，因果模型应该包含如上图所示的四个部分：</p>
+
+<p>    1. Distribution，SCMs要能解释数据的分布状况
+          2. Causal Graph，生成可以表现因果关系，因果结构的因果图
+          3. Intervention Distribution，模型能预测干预后系统的反馈
+             4. Counterfactuals，模型可以做反事实推断</p>
+
+<p>    这里比较难解释的是反事实推断，第一个部分是现在的机器学习和深度学习方法可以轻易实现的，即挖掘数据和数据，数据和概念等等之间的相关性，比如人类拥有的感知外界的功能，看见一只鸟，传入眼睛的是光折射出的图案，但人有能力将这个图案和鸟这个概念关联起来，现在计算机也可以。第三个部分是干预，即人类偶尔知道做什么样的行为，可能能得到自己想要的结果，比如他看见一只鸟，他知道如果他想吃到鸟肉，他得把这只鸟打下来，要把这只鸟打下来，他得有弓箭，猎枪或者其他杀伤性武器。第四部分则是反事实推断的能力，即能够做如果…，那么…的假设和推断，“如果那天我没有把那只鸟打下来，吃上肉，我现在还活着吗？”，“如果当时那只鸟飞得再高一点，我还能打到它吗？”，这对应的是人类想象，回顾和理解的能力。关于这部分概念，可以参考《The Book of Why》的第一章和第八章。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/6.png" style="zoom: 80%;" /></p>
+
+<p>    接下来看因果推理和因果学习的概念，上图是因果学习和推理对照概率模型的示意图，如概率模型一样，如果有了模型，那么就可以根据观察到的数据进行推理，如果有完整的观察到的数据和数据对应的结果，则可以进行模型训练，学习。但因果学习和概率模型的学习有很不一样的地方，假设你有无限多的数据，即你知道每一种可能和其对应的答案，那么训练概率模型就没有必要了，而因果模型却还是要经过学习，发现的过程才能得到。</p>
+
+<p><strong>三、因果关系相关的案例</strong></p>
+
+<p>    1. 巧克力和诺贝尔奖</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/7.png" alt="" /></p>
+
+<p>    上面这幅图中，横坐标是人均每年吃的巧克力的量，纵坐标则是每千万人中获得诺贝尔奖的数量。根据上面的图，可以轻易的得出结论，巧克力的消耗量和诺贝尔奖的获奖数量是强相关的。因此就有了下面的一些报道：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/8.png" style="zoom:80%;" /></p>
+
+<p>吃巧克力，可以增加获诺贝尔奖的人数，以及下面这则新闻，聪明的人似乎更爱吃巧克力。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/9.jpeg" style="zoom:80%;" /></p>
+
+<p>这是一个典型把相关性当成因果关系的案例。</p>
+
+<p>    </p>
+
+<p>    2. 抽烟和肝癌</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/10.png" style="zoom:80%;" /></p>
+
+<p>    上面这篇发表于1950年的文章，证明了吸烟和肝癌之间存在强相关性：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/11.png" style="zoom:80%;" /></p>
+
+<p>    所以政府想说，哎呀，吸烟导致肝癌啊，那推出烟草税吧，烟草公司就不乐意了，站出来说，并不一定是吸烟导致了肝癌，或者提高了得肝癌的几率，也有可能是一个不知名的原因，共同导致了抽烟过多和肝癌呢？</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/12.png" style="zoom: 67%;" /></p>
+
+<p>    怎么判断抽烟和肝癌之间存在因果关系，还是它们两个有一个共同的原因导致，是关键的问题。</p>
+
+<p>    3. 夜间光照与近视</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/13.png" style="zoom:80%;" /></p>
+
+<p>    左边这幅图出自一个关于近视的研究，这个研究表明，被家长更多地提供夜间照明的孩子们反而更多的患上了近视。也就是夜间照明和近视强相关，夜间照明极有可能是近视的一个诱因。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/14.png" style="zoom: 80%;" /></p>
+
+<p>    因此，有专利就把夜间照明和近视当成因果关系，做了发明。但它们其实不算是因果关系，只是有可能是因果关系。</p>
+
+<p>    4. 肾结石的两个治疗方案</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/15.png" style="zoom: 67%;" /></p>
+
+<p>    肾结石有两个治疗方案，A和B，如果看总的治愈率会发现，B方案明显好于A方案。但是肾结石的石头又可分为大小两种情况，从这两种情况的治愈率来看，A方案又明显好于B方案，造成这种结果的原因是，治愈率不但和治疗方案有关，还和结石大小有关，A方案的治愈率虽然高，但主要用在了治愈率较低的大结石这种情况，而B方案则主要用在了治愈率较高的小结石这种情况，因此，简单地比较总的治愈率，对A方案来说是不公平的。治愈率，结石大小，和治疗方案的因果关系可以以下图表示：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/16.png" style="zoom:80%;" /></p>
+
+<p>    5.  广告推荐</p>
+
+<p>    当我们使用搜索引擎搜索一些东西的时候，或者做一些其他和网络互动的时候，经常会被推送一些广告，如下图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/17.png" style="zoom:80%;" /></p>
+
+<p>    下面这个研究则通过研究推送广告过程中的因果关系来优化模型：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/18.png" style="zoom:80%;" /></p>
+
+<p>用户的意图会决定用户的操作和一些其他的数据，而通过分析用户的数据，我们来决定给他推送什么样的广告，以及推送多少广告，而这些又会一定程度上决定用户的行为。</p>
+
+<p>    6. 基因的相互作用</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 相关和因果/19.png" style="zoom:80%;" /></p>
+
+<p>    上面这个研究中，有6170个基因，图中的横坐标表示基因5954的活性，纵坐标表示基因4710的活性。有160笔观察数据，左边这张图就是观察数据画出来的，可以发现，两个基因的活性表现出了一定的相关性。这个实验还有1479笔干预数据，即对一些基因做删除动作，总共有1479个不同的删除动作，中间的图则是被干预后基因5954和4710的活性的变化，更可以发现这两种基因的活性是强相关的。</p>
+
+<p>    这个研究的目的其实是要发现这些基因之间的因果关系。但非常有意思的是，这些数据可以支持一个论点，即因果关系通常在系统中是稳定的。在试验中，基因5954是基因4710的因，右图中当对基因5954做了干预后，4710的活性也随着产生了明显的变化。由中间那幅图的实验，1479次的干预来看，不论删掉系统中哪个部分，基因5954和基因4710都是强相关的。可见因果关系在系统中是一种稳定的关系。</p>
+
+<p>    举个例子，有如下因果关系：x&lt;-w-&gt;z-&gt;y，z和y是因果关系，x和z之间不存在因果关系，则改变x的状态，对z和y的状态不会造成影响，改变w的值，那么z和y会跟着一起改变。</p>
+
+<p>此系列未完待续，敬请关注^_^。</p>
+
+<p>声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Judea Pearl and Dana Mackenzie, <strong>The Book of Why</strong>, 2018</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 相关和因果&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E7%9B%B8%E5%85%B3%E5%92%8C%E5%9B%A0%E6%9E%9C/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

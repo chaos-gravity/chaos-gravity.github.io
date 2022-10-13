@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 7：自监督学习（Self Supervised Learning）     之前的自回归模型是这样生成的，有了x1之后，生成x2，两个都有了之后生成x3。这样的依赖关系，让生成图片特别慢，要生成一个28*28的图片，就得把模型跑28*28次。     流模型虽然也用了潜变量来生成，但是流模型的潜变量和样本变量是一对一的，也就是说要生成的图片有多大，那么潜变量就得有多大。潜变量在流模型中不是一个更抽象的存在。这一讲中的研究，就会用更抽象的潜变量来生成，如果要生成一个超级大的图，不一定需要一个很大的潜变量。     下面这种图，其实可以被简短的语言描述，三只柯基，每只是什么颜色，有什么与众不同的特征，背景是什么样子的，有些什么，通常你把这些信息告诉一个画家，画家便可以为你创作出一幅画来。因此生成图，其实并不一定需要一个和图差不多大小的潜变量，一个很小的向量，也许就可以。     理论上，潜变量是可以有明确的意义的，比如你通过潜变量来生成人像图，向量第一个值可以代表发色，第二个值代表眼睛的大小，第三个值代表肤色，总之可以让潜变量中的每个值有明确的意义，使得图像生成可以随人心所欲。虽然现在主流生成模型很少去定义潜变量的意义，但这种生成方式正被积极研究。     接下来这一篇，都在讲怎么基于潜变量，生成样本。            若z中的每个值都服从伯努利分布，那么p(x|z)实质上也是服从伯努利分布。     这篇讨论的内容包括：    1. 采样/生成：     2.  模型评估，极大似然函数： 上面的公式就是训练目标。    3. 数据表现(representation)：     样本转换为计算机更容易理解的抽象表达。 模型训练     模型训练的目标：     分两种情况：     一种情况是z的可取值就那么几个，几十个或者几百个，总之不算多，比如下面这种情况，z只有三种可能，且每种可能发生的概率是三分之一：     假设p(x|z)服从多元高斯分布（Multivariate Gaussian Distribution），那么则有如下训练目标：     看一个可以用以上方法解的实例：     通过对训练数据的观察，很容易发现样本集分三个群，有遵循高斯分布的感觉，不过这个图画得不特别明显，可以点再细些，看看是不是每个群离中心点越远，样本越稀疏。如果用上面的假设来训练，最后可以很好地生成类似的样本分布图。当然也可以做其他假设，可以尝试不同假设，然后取效果最好的那个使用。     第二种情况是如果z可以有很多很多不同的值呢？     一种方法是可以采用对z进行采样。z的概率就由采样的状况决定了。但这种方式有一个很大的缺点，如果z的可能性太多，那么z的采样效率会很低很低，比如z是一个长度为100的二值向量，那么z就有2的100次方个可能性，如果对z进行全域均匀采样，每个样本x匹配到对应的z的概率就是2的一百次方分之一。 就现在的计算能力来看，就是没什么可能能让样本x匹配到对应的z。     毫无疑问，均匀采样是不可行的，那么要怎么采样呢？接下来了解一下重要性采样（Importance Sampling）。     如果z服从pz分布，那么函数f(z)的期望值如何计算：     计算这个可能会有两个问题，一个问题是pz这个分布过于特殊或者复杂，或者其他什么原因，让你没有办法正常采样。另一个问题是说z的可能性太多，一般的采样方式效率非常非常低，采样出来的z可以提供的信息非常少。这篇遇到的是第二个问题。     为了解决这些问题，可以进行一些转换： 既然在分布pz上采样不可行，那么自然要找到适合采样的分布q，那么f(z)的期望值(z服从pz)问题则转换成了求(pz(z)/q(z))f(z)的期望值，z服从q分布。       那么训练目标也更新了：     现在的问题在于，如何求这个分布q。理论上，可以如下方式求：     但分母恰是我们本来要求的问题。所以这个方法不可行。求精确的不行，那么求个大概也许可行，比如可以假设q(z)服从高斯分布： 而接下来要做的就是求这个高斯分布的参数，使得q(z)尽可能接近： 但是这个方法呢，也有一个问题，就是对每个样本都得求它对应的z的q分布。而过程又是一致的。因此，可不可以直接交给神经网络来呢？与其对每个样本都来求一次它对应的z的分布，不如求一个一般的神经网络，使得输入样本后便能输出对应的z的分布。 Amortized formulation: （PS：终于绕到这个公式了，以前觉得理所应当就应该这样的，没想到原来是这么九曲回肠地绕过来的。） 如上图所示，生成模型实实在在想做的事情是图中实线所示的事情，但是为了求得能完成实线功能的模型，得把实现虚线功能的模型也求了。 Importance Weighted AutoEncoder (IWAE) 目标是最大化： 而因为z的采样问题，同时需要最小化 所以要做的就是最大化公式一减去公式二的值 定义wi和Lk如下： log是凸函数，根据Jensen不等式，先log再期望小于等于先期望再log。     有研究人员在2015年证明，Lk是一直小于等于logp(x)的，k的数值越大，越接近logp(x)，当k趋近于正无穷时，Lk = logp(x)。 证明如下： Variational Lower Bound (VLB)/ Evidence Lower Bound (ELBO) 以上推理过程如果想把不等式转换成等式，那么不能单单只优化θ，还得优化Φ，反复不断优化θ和Φ，获得更好的q分布和p分布。当q是最佳时： 再有一种写法： 在上面的写法中，如果q不是最佳，那么求得的期望值就会小于等于logp(x)。那么差多少呢？ 这种写法和上面那种就是多了后面KL散度的部分，第一种写法我们知道期望值与logp(x)有差，这一种方法我们可以知道差的就是KL散度部分。当KL散度求值结果为0时，那么logp(x)就和后面的期望值一致了。 而在优化的过程中，KL散度是不需要被考虑的，VLB的部分才是需要计算的： 优化算法可以用梯度下降的方式，那么首先我们得求梯度： 课程中介绍了两种方式，这里我们还参考了另外一个课程[3]，和一篇博客[4]，首先，当我们要微分的变量存在于分布中时，我们用likelihood ratio gradient estimator： 当我们要微分的变量存在于待求的期望的函数中时，我们用pathwise derivative： 关于likelihood ratio gradient estimator可以看参考[4]，这里就贴一下推导公式： 上面公式是我们要求梯度的函数，而现实实验中，我们通常没有办法直接得到分布函数，能得到的是一堆样本，因此： 梯度公式的求导过程如下： likelihood ratio gradient estimator在绝大多数场景中都可以使用，而pathwise derivative在一些场景中效果会比likelihood ratio gradient estimator好很多，即使只有极小量数据也能取得好的结果。     我们要用的其实是θ，但要得到好的θ，得同时交叉优化Φ。 极大似然估计（likelihood ratio）： pathwise derivative （这个方法是有前提的，q得遵循高斯分布，p也是，但两个是不一样的参数）： 来看VAE的生成数字的效果图： VAE是将概率图模型的思想和AE（Auto Encoder）的结合体。[6] 接下来看几个典型的VAE模型的变种：  VQ-VAE **发表于2017年，几乎没有被关注，大家的注意力都在GAN那里。直到两年后第二篇文章发表，效果非常好，两篇文章才引起了关注。 这个算法就不细讲了，感兴趣的可以看看参考[5]和论文原文，上图中带箭头的线条，蓝色是推理，红色是反向传播。损失函数中有一个比较重要的概念是Straight-Through Estimator，前向传播时，sg符号无用，忽略掉即可，反向传播时，sg标记的部分不进行调整，保持不变。 VQ-VAE重建图片的能力如上图所示，左边是原图，右边是重构的图片。 VQ-VAE图像生成的效果，如上图所示。 2. VQ-VAE 2.0 这里就直接摘参考[5]的文字描述了：     “这是VQ-VAE的升级版, 可以生成非常清晰的高分辨率图片。主要变化就是把VQ-VAE的encoder和decoder进行了分层, bottom层对local feature进行建模, top层对global feature进行建模; 为了让top层能更有效地提取global信息, 在网络中加入了self attention。除此之外, 在prior上进行采样的时候, 考虑到autoregressive的sample会累积误差, 即如果x1出现了一点误差, 那么x2|x1的误差会更大, 因此加入了rejection sampling, 即生成某类的图片后, 通过一个classifier判断一下生成的图片像不像这个类的sample, 如果不像就弃掉. 文章效果很惊艳, 但是理论上没有特别大的改进。” 那接下来看看惊艳的效果： ​ 可以和BigGAN比了，右边的图是BigGAN生成的，左边的是VQ-VAE生成的。可以发现，左边的图其实更多样化一点。 3. z和decoder ​ 到目前为止，所用的decoder都特别简单（p(x|z)遵循的分布都是简单的），因此没有办法携带大量信息，基本上有用的信息都会压缩到潜变量z里。     前面推导过： 因此： VLB最大可以是logp(x)，如果KL部分是0。 如果p(x|z) = pdata(x)，则有： 这个时候，训练模型q(z|x)会去接近p(z)，那么z中就没有什么有用信息了。p(x|z) = pdata(x)要怎么做到呢？即decoder包含了所有信息。因此，如果z中信息越少，decoder越强大，信息越多，那么VLB越接近理想值。因此许多工作都往这个方向去努力了，但是这样的话，就没有办法很好地进行生成了。这个问题在许多工作中有被描述： 为了解决这个问题，需要弱化decoder： 其中，第二个是VLAE，这个方法是想让z去掌握全局信息，而decoder去掌握细节信息，decoder用的是浅层PixelCNN，适合挖掘局部细节信息。但也有很多方法想让z不仅掌握粗粒度的全局信息，还想让他表达细节，这里是一些动态训练的方法： 4. Disentanglement: Beta VAE ​ 与VAE不同的地方就是损失函数KL散度那部分，前面加了一个beta，当beta是1的时候，就是标准的VAE，当beta大于1的时候，z的信息丰富度会降低，但是解纠缠的能力会提高。解纠缠的能力可以理解为representation的能力，即z中的值可以表达特定的意义的能力，比如生成人脸，我们会希望z中的值有特定意义，比如脸的宽度，眼睛的大小等，这样可以通过调整z中某个值来变化人脸的局部特征。当beta变大时，会让训练出来的结果更趋近于高斯分布，而每个高斯分布的参数又相互独立，因此可以更好的解纠缠。下图就展现了，用这种方法训练出的可以通过调整z中的值来生成不同肤色，年龄，性别的人像的模型。 其他 1. Variational Dequantization (Flow++)     在训练这类模型的时候，有一个问题，就是图像数据（像素值，0-255）是离散数据，而我们要输出的概率密度函数，是连续的。如果不对数据进行处理，那么出来的结果可能是整数点上的概率密度值都很高（比如3，78，255），但是他们周边就很低（比如3.1，77.9，244.7），因此需要对输入的数据做一些处理，这个处理叫解量化（Dequantization）。也有其他一些方法，比如Uniform Dequantization： 但由于VAE会用Jensen’s inequality做一个近似转换，这样一来，噪音项又被消掉了。所以不管用。 还有一种方法是，flow++中的Variational Dequantization： 添加一个可训练的噪音项，效果如下图： 2. Mutual Information Estimation      互信息（Mutual Information）： ​ 首先来回顾一下什么是信息熵，可以参考Cross Entropy Loss，H(X)是X的信息熵（信息量的期望值，即表达这个事件需要的编码的位数的期望值）： 可以发现，互信息可以用来表达两个变量的依赖程度。 互信息的应用场景： 这些可能之后会提到。VAE中会用到的是，计算z和x的互信息值： 第三行(logp(z x)-logq(z x))构成KL散度。为了提高z和x的相关度，我们需要做的是最大化公式最后一行的内容。 声明：文中所有图片和原理均来自课程和参考。同时所有参考都是推荐扩展阅读的内容。 参考： [1] Jeremy Zhang, Importance Sampling Introduction, 2019 [2] Bo’s Blog，Importance Weighted Autoencoders and Jackknife Methods，2019 [3] Katerina Fragkiadaki, ‘Pathwise derivatives, DDPG, Multigoal RL’, in Deep Reinforcement Learning and Control, Carnegie Mellon [4] Timvieira, The likelihood-ratio gradient，Graduate Descent，2019，https://timvieira.github.io/blog/post/2019/04/20/the-likelihood-ratio-gradient/ [5] Elijha，VQ-VAE解读，知乎，2019 [6] 大象, VAE系解纠缠：从VAE到βVAE，再到β-TCVAE, 知乎，2019  " />
+<meta property="og:description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 7：自监督学习（Self Supervised Learning）     之前的自回归模型是这样生成的，有了x1之后，生成x2，两个都有了之后生成x3。这样的依赖关系，让生成图片特别慢，要生成一个28*28的图片，就得把模型跑28*28次。     流模型虽然也用了潜变量来生成，但是流模型的潜变量和样本变量是一对一的，也就是说要生成的图片有多大，那么潜变量就得有多大。潜变量在流模型中不是一个更抽象的存在。这一讲中的研究，就会用更抽象的潜变量来生成，如果要生成一个超级大的图，不一定需要一个很大的潜变量。     下面这种图，其实可以被简短的语言描述，三只柯基，每只是什么颜色，有什么与众不同的特征，背景是什么样子的，有些什么，通常你把这些信息告诉一个画家，画家便可以为你创作出一幅画来。因此生成图，其实并不一定需要一个和图差不多大小的潜变量，一个很小的向量，也许就可以。     理论上，潜变量是可以有明确的意义的，比如你通过潜变量来生成人像图，向量第一个值可以代表发色，第二个值代表眼睛的大小，第三个值代表肤色，总之可以让潜变量中的每个值有明确的意义，使得图像生成可以随人心所欲。虽然现在主流生成模型很少去定义潜变量的意义，但这种生成方式正被积极研究。     接下来这一篇，都在讲怎么基于潜变量，生成样本。            若z中的每个值都服从伯努利分布，那么p(x|z)实质上也是服从伯努利分布。     这篇讨论的内容包括：    1. 采样/生成：     2.  模型评估，极大似然函数： 上面的公式就是训练目标。    3. 数据表现(representation)：     样本转换为计算机更容易理解的抽象表达。 模型训练     模型训练的目标：     分两种情况：     一种情况是z的可取值就那么几个，几十个或者几百个，总之不算多，比如下面这种情况，z只有三种可能，且每种可能发生的概率是三分之一：     假设p(x|z)服从多元高斯分布（Multivariate Gaussian Distribution），那么则有如下训练目标：     看一个可以用以上方法解的实例：     通过对训练数据的观察，很容易发现样本集分三个群，有遵循高斯分布的感觉，不过这个图画得不特别明显，可以点再细些，看看是不是每个群离中心点越远，样本越稀疏。如果用上面的假设来训练，最后可以很好地生成类似的样本分布图。当然也可以做其他假设，可以尝试不同假设，然后取效果最好的那个使用。     第二种情况是如果z可以有很多很多不同的值呢？     一种方法是可以采用对z进行采样。z的概率就由采样的状况决定了。但这种方式有一个很大的缺点，如果z的可能性太多，那么z的采样效率会很低很低，比如z是一个长度为100的二值向量，那么z就有2的100次方个可能性，如果对z进行全域均匀采样，每个样本x匹配到对应的z的概率就是2的一百次方分之一。 就现在的计算能力来看，就是没什么可能能让样本x匹配到对应的z。     毫无疑问，均匀采样是不可行的，那么要怎么采样呢？接下来了解一下重要性采样（Importance Sampling）。     如果z服从pz分布，那么函数f(z)的期望值如何计算：     计算这个可能会有两个问题，一个问题是pz这个分布过于特殊或者复杂，或者其他什么原因，让你没有办法正常采样。另一个问题是说z的可能性太多，一般的采样方式效率非常非常低，采样出来的z可以提供的信息非常少。这篇遇到的是第二个问题。     为了解决这些问题，可以进行一些转换： 既然在分布pz上采样不可行，那么自然要找到适合采样的分布q，那么f(z)的期望值(z服从pz)问题则转换成了求(pz(z)/q(z))f(z)的期望值，z服从q分布。       那么训练目标也更新了：     现在的问题在于，如何求这个分布q。理论上，可以如下方式求：     但分母恰是我们本来要求的问题。所以这个方法不可行。求精确的不行，那么求个大概也许可行，比如可以假设q(z)服从高斯分布： 而接下来要做的就是求这个高斯分布的参数，使得q(z)尽可能接近： 但是这个方法呢，也有一个问题，就是对每个样本都得求它对应的z的q分布。而过程又是一致的。因此，可不可以直接交给神经网络来呢？与其对每个样本都来求一次它对应的z的分布，不如求一个一般的神经网络，使得输入样本后便能输出对应的z的分布。 Amortized formulation: （PS：终于绕到这个公式了，以前觉得理所应当就应该这样的，没想到原来是这么九曲回肠地绕过来的。） 如上图所示，生成模型实实在在想做的事情是图中实线所示的事情，但是为了求得能完成实线功能的模型，得把实现虚线功能的模型也求了。 Importance Weighted AutoEncoder (IWAE) 目标是最大化： 而因为z的采样问题，同时需要最小化 所以要做的就是最大化公式一减去公式二的值 定义wi和Lk如下： log是凸函数，根据Jensen不等式，先log再期望小于等于先期望再log。     有研究人员在2015年证明，Lk是一直小于等于logp(x)的，k的数值越大，越接近logp(x)，当k趋近于正无穷时，Lk = logp(x)。 证明如下： Variational Lower Bound (VLB)/ Evidence Lower Bound (ELBO) 以上推理过程如果想把不等式转换成等式，那么不能单单只优化θ，还得优化Φ，反复不断优化θ和Φ，获得更好的q分布和p分布。当q是最佳时： 再有一种写法： 在上面的写法中，如果q不是最佳，那么求得的期望值就会小于等于logp(x)。那么差多少呢？ 这种写法和上面那种就是多了后面KL散度的部分，第一种写法我们知道期望值与logp(x)有差，这一种方法我们可以知道差的就是KL散度部分。当KL散度求值结果为0时，那么logp(x)就和后面的期望值一致了。 而在优化的过程中，KL散度是不需要被考虑的，VLB的部分才是需要计算的： 优化算法可以用梯度下降的方式，那么首先我们得求梯度： 课程中介绍了两种方式，这里我们还参考了另外一个课程[3]，和一篇博客[4]，首先，当我们要微分的变量存在于分布中时，我们用likelihood ratio gradient estimator： 当我们要微分的变量存在于待求的期望的函数中时，我们用pathwise derivative： 关于likelihood ratio gradient estimator可以看参考[4]，这里就贴一下推导公式： 上面公式是我们要求梯度的函数，而现实实验中，我们通常没有办法直接得到分布函数，能得到的是一堆样本，因此： 梯度公式的求导过程如下： likelihood ratio gradient estimator在绝大多数场景中都可以使用，而pathwise derivative在一些场景中效果会比likelihood ratio gradient estimator好很多，即使只有极小量数据也能取得好的结果。     我们要用的其实是θ，但要得到好的θ，得同时交叉优化Φ。 极大似然估计（likelihood ratio）： pathwise derivative （这个方法是有前提的，q得遵循高斯分布，p也是，但两个是不一样的参数）： 来看VAE的生成数字的效果图： VAE是将概率图模型的思想和AE（Auto Encoder）的结合体。[6] 接下来看几个典型的VAE模型的变种：  VQ-VAE **发表于2017年，几乎没有被关注，大家的注意力都在GAN那里。直到两年后第二篇文章发表，效果非常好，两篇文章才引起了关注。 这个算法就不细讲了，感兴趣的可以看看参考[5]和论文原文，上图中带箭头的线条，蓝色是推理，红色是反向传播。损失函数中有一个比较重要的概念是Straight-Through Estimator，前向传播时，sg符号无用，忽略掉即可，反向传播时，sg标记的部分不进行调整，保持不变。 VQ-VAE重建图片的能力如上图所示，左边是原图，右边是重构的图片。 VQ-VAE图像生成的效果，如上图所示。 2. VQ-VAE 2.0 这里就直接摘参考[5]的文字描述了：     “这是VQ-VAE的升级版, 可以生成非常清晰的高分辨率图片。主要变化就是把VQ-VAE的encoder和decoder进行了分层, bottom层对local feature进行建模, top层对global feature进行建模; 为了让top层能更有效地提取global信息, 在网络中加入了self attention。除此之外, 在prior上进行采样的时候, 考虑到autoregressive的sample会累积误差, 即如果x1出现了一点误差, 那么x2|x1的误差会更大, 因此加入了rejection sampling, 即生成某类的图片后, 通过一个classifier判断一下生成的图片像不像这个类的sample, 如果不像就弃掉. 文章效果很惊艳, 但是理论上没有特别大的改进。” 那接下来看看惊艳的效果： ​ 可以和BigGAN比了，右边的图是BigGAN生成的，左边的是VQ-VAE生成的。可以发现，左边的图其实更多样化一点。 3. z和decoder ​ 到目前为止，所用的decoder都特别简单（p(x|z)遵循的分布都是简单的），因此没有办法携带大量信息，基本上有用的信息都会压缩到潜变量z里。     前面推导过： 因此： VLB最大可以是logp(x)，如果KL部分是0。 如果p(x|z) = pdata(x)，则有： 这个时候，训练模型q(z|x)会去接近p(z)，那么z中就没有什么有用信息了。p(x|z) = pdata(x)要怎么做到呢？即decoder包含了所有信息。因此，如果z中信息越少，decoder越强大，信息越多，那么VLB越接近理想值。因此许多工作都往这个方向去努力了，但是这样的话，就没有办法很好地进行生成了。这个问题在许多工作中有被描述： 为了解决这个问题，需要弱化decoder： 其中，第二个是VLAE，这个方法是想让z去掌握全局信息，而decoder去掌握细节信息，decoder用的是浅层PixelCNN，适合挖掘局部细节信息。但也有很多方法想让z不仅掌握粗粒度的全局信息，还想让他表达细节，这里是一些动态训练的方法： 4. Disentanglement: Beta VAE ​ 与VAE不同的地方就是损失函数KL散度那部分，前面加了一个beta，当beta是1的时候，就是标准的VAE，当beta大于1的时候，z的信息丰富度会降低，但是解纠缠的能力会提高。解纠缠的能力可以理解为representation的能力，即z中的值可以表达特定的意义的能力，比如生成人脸，我们会希望z中的值有特定意义，比如脸的宽度，眼睛的大小等，这样可以通过调整z中某个值来变化人脸的局部特征。当beta变大时，会让训练出来的结果更趋近于高斯分布，而每个高斯分布的参数又相互独立，因此可以更好的解纠缠。下图就展现了，用这种方法训练出的可以通过调整z中的值来生成不同肤色，年龄，性别的人像的模型。 其他 1. Variational Dequantization (Flow++)     在训练这类模型的时候，有一个问题，就是图像数据（像素值，0-255）是离散数据，而我们要输出的概率密度函数，是连续的。如果不对数据进行处理，那么出来的结果可能是整数点上的概率密度值都很高（比如3，78，255），但是他们周边就很低（比如3.1，77.9，244.7），因此需要对输入的数据做一些处理，这个处理叫解量化（Dequantization）。也有其他一些方法，比如Uniform Dequantization： 但由于VAE会用Jensen’s inequality做一个近似转换，这样一来，噪音项又被消掉了。所以不管用。 还有一种方法是，flow++中的Variational Dequantization： 添加一个可训练的噪音项，效果如下图： 2. Mutual Information Estimation      互信息（Mutual Information）： ​ 首先来回顾一下什么是信息熵，可以参考Cross Entropy Loss，H(X)是X的信息熵（信息量的期望值，即表达这个事件需要的编码的位数的期望值）： 可以发现，互信息可以用来表达两个变量的依赖程度。 互信息的应用场景： 这些可能之后会提到。VAE中会用到的是，计算z和x的互信息值： 第三行(logp(z x)-logq(z x))构成KL散度。为了提高z和x的相关度，我们需要做的是最大化公式最后一行的内容。 声明：文中所有图片和原理均来自课程和参考。同时所有参考都是推荐扩展阅读的内容。 参考： [1] Jeremy Zhang, Importance Sampling Introduction, 2019 [2] Bo’s Blog，Importance Weighted Autoencoders and Jackknife Methods，2019 [3] Katerina Fragkiadaki, ‘Pathwise derivatives, DDPG, Multigoal RL’, in Deep Reinforcement Learning and Control, Carnegie Mellon [4] Timvieira, The likelihood-ratio gradient，Graduate Descent，2019，https://timvieira.github.io/blog/post/2019/04/20/the-likelihood-ratio-gradient/ [5] Elijha，VQ-VAE解读，知乎，2019 [6] 大象, VAE系解纠缠：从VAE到βVAE，再到β-TCVAE, 知乎，2019  " />
+<link rel="canonical" href="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/" />
+<meta property="og:url" content="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--Latent%20Variable%20Models%20--%20VAE(%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B--VAE)/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-05-06T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 3：UC Berkeley非监督学习–流模型（Flow Models）         Lecture 7：自监督学习（Self Supervised Learning）     之前的自回归模型是这样生成的，有了x1之后，生成x2，两个都有了之后生成x3。这样的依赖关系，让生成图片特别慢，要生成一个28*28的图片，就得把模型跑28*28次。     流模型虽然也用了潜变量来生成，但是流模型的潜变量和样本变量是一对一的，也就是说要生成的图片有多大，那么潜变量就得有多大。潜变量在流模型中不是一个更抽象的存在。这一讲中的研究，就会用更抽象的潜变量来生成，如果要生成一个超级大的图，不一定需要一个很大的潜变量。     下面这种图，其实可以被简短的语言描述，三只柯基，每只是什么颜色，有什么与众不同的特征，背景是什么样子的，有些什么，通常你把这些信息告诉一个画家，画家便可以为你创作出一幅画来。因此生成图，其实并不一定需要一个和图差不多大小的潜变量，一个很小的向量，也许就可以。     理论上，潜变量是可以有明确的意义的，比如你通过潜变量来生成人像图，向量第一个值可以代表发色，第二个值代表眼睛的大小，第三个值代表肤色，总之可以让潜变量中的每个值有明确的意义，使得图像生成可以随人心所欲。虽然现在主流生成模型很少去定义潜变量的意义，但这种生成方式正被积极研究。     接下来这一篇，都在讲怎么基于潜变量，生成样本。            若z中的每个值都服从伯努利分布，那么p(x|z)实质上也是服从伯努利分布。     这篇讨论的内容包括：    1. 采样/生成：     2.  模型评估，极大似然函数： 上面的公式就是训练目标。    3. 数据表现(representation)：     样本转换为计算机更容易理解的抽象表达。 模型训练     模型训练的目标：     分两种情况：     一种情况是z的可取值就那么几个，几十个或者几百个，总之不算多，比如下面这种情况，z只有三种可能，且每种可能发生的概率是三分之一：     假设p(x|z)服从多元高斯分布（Multivariate Gaussian Distribution），那么则有如下训练目标：     看一个可以用以上方法解的实例：     通过对训练数据的观察，很容易发现样本集分三个群，有遵循高斯分布的感觉，不过这个图画得不特别明显，可以点再细些，看看是不是每个群离中心点越远，样本越稀疏。如果用上面的假设来训练，最后可以很好地生成类似的样本分布图。当然也可以做其他假设，可以尝试不同假设，然后取效果最好的那个使用。     第二种情况是如果z可以有很多很多不同的值呢？     一种方法是可以采用对z进行采样。z的概率就由采样的状况决定了。但这种方式有一个很大的缺点，如果z的可能性太多，那么z的采样效率会很低很低，比如z是一个长度为100的二值向量，那么z就有2的100次方个可能性，如果对z进行全域均匀采样，每个样本x匹配到对应的z的概率就是2的一百次方分之一。 就现在的计算能力来看，就是没什么可能能让样本x匹配到对应的z。     毫无疑问，均匀采样是不可行的，那么要怎么采样呢？接下来了解一下重要性采样（Importance Sampling）。     如果z服从pz分布，那么函数f(z)的期望值如何计算：     计算这个可能会有两个问题，一个问题是pz这个分布过于特殊或者复杂，或者其他什么原因，让你没有办法正常采样。另一个问题是说z的可能性太多，一般的采样方式效率非常非常低，采样出来的z可以提供的信息非常少。这篇遇到的是第二个问题。     为了解决这些问题，可以进行一些转换： 既然在分布pz上采样不可行，那么自然要找到适合采样的分布q，那么f(z)的期望值(z服从pz)问题则转换成了求(pz(z)/q(z))f(z)的期望值，z服从q分布。       那么训练目标也更新了：     现在的问题在于，如何求这个分布q。理论上，可以如下方式求：     但分母恰是我们本来要求的问题。所以这个方法不可行。求精确的不行，那么求个大概也许可行，比如可以假设q(z)服从高斯分布： 而接下来要做的就是求这个高斯分布的参数，使得q(z)尽可能接近： 但是这个方法呢，也有一个问题，就是对每个样本都得求它对应的z的q分布。而过程又是一致的。因此，可不可以直接交给神经网络来呢？与其对每个样本都来求一次它对应的z的分布，不如求一个一般的神经网络，使得输入样本后便能输出对应的z的分布。 Amortized formulation: （PS：终于绕到这个公式了，以前觉得理所应当就应该这样的，没想到原来是这么九曲回肠地绕过来的。） 如上图所示，生成模型实实在在想做的事情是图中实线所示的事情，但是为了求得能完成实线功能的模型，得把实现虚线功能的模型也求了。 Importance Weighted AutoEncoder (IWAE) 目标是最大化： 而因为z的采样问题，同时需要最小化 所以要做的就是最大化公式一减去公式二的值 定义wi和Lk如下： log是凸函数，根据Jensen不等式，先log再期望小于等于先期望再log。     有研究人员在2015年证明，Lk是一直小于等于logp(x)的，k的数值越大，越接近logp(x)，当k趋近于正无穷时，Lk = logp(x)。 证明如下： Variational Lower Bound (VLB)/ Evidence Lower Bound (ELBO) 以上推理过程如果想把不等式转换成等式，那么不能单单只优化θ，还得优化Φ，反复不断优化θ和Φ，获得更好的q分布和p分布。当q是最佳时： 再有一种写法： 在上面的写法中，如果q不是最佳，那么求得的期望值就会小于等于logp(x)。那么差多少呢？ 这种写法和上面那种就是多了后面KL散度的部分，第一种写法我们知道期望值与logp(x)有差，这一种方法我们可以知道差的就是KL散度部分。当KL散度求值结果为0时，那么logp(x)就和后面的期望值一致了。 而在优化的过程中，KL散度是不需要被考虑的，VLB的部分才是需要计算的： 优化算法可以用梯度下降的方式，那么首先我们得求梯度： 课程中介绍了两种方式，这里我们还参考了另外一个课程[3]，和一篇博客[4]，首先，当我们要微分的变量存在于分布中时，我们用likelihood ratio gradient estimator： 当我们要微分的变量存在于待求的期望的函数中时，我们用pathwise derivative： 关于likelihood ratio gradient estimator可以看参考[4]，这里就贴一下推导公式： 上面公式是我们要求梯度的函数，而现实实验中，我们通常没有办法直接得到分布函数，能得到的是一堆样本，因此： 梯度公式的求导过程如下： likelihood ratio gradient estimator在绝大多数场景中都可以使用，而pathwise derivative在一些场景中效果会比likelihood ratio gradient estimator好很多，即使只有极小量数据也能取得好的结果。     我们要用的其实是θ，但要得到好的θ，得同时交叉优化Φ。 极大似然估计（likelihood ratio）： pathwise derivative （这个方法是有前提的，q得遵循高斯分布，p也是，但两个是不一样的参数）： 来看VAE的生成数字的效果图： VAE是将概率图模型的思想和AE（Auto Encoder）的结合体。[6] 接下来看几个典型的VAE模型的变种：  VQ-VAE **发表于2017年，几乎没有被关注，大家的注意力都在GAN那里。直到两年后第二篇文章发表，效果非常好，两篇文章才引起了关注。 这个算法就不细讲了，感兴趣的可以看看参考[5]和论文原文，上图中带箭头的线条，蓝色是推理，红色是反向传播。损失函数中有一个比较重要的概念是Straight-Through Estimator，前向传播时，sg符号无用，忽略掉即可，反向传播时，sg标记的部分不进行调整，保持不变。 VQ-VAE重建图片的能力如上图所示，左边是原图，右边是重构的图片。 VQ-VAE图像生成的效果，如上图所示。 2. VQ-VAE 2.0 这里就直接摘参考[5]的文字描述了：     “这是VQ-VAE的升级版, 可以生成非常清晰的高分辨率图片。主要变化就是把VQ-VAE的encoder和decoder进行了分层, bottom层对local feature进行建模, top层对global feature进行建模; 为了让top层能更有效地提取global信息, 在网络中加入了self attention。除此之外, 在prior上进行采样的时候, 考虑到autoregressive的sample会累积误差, 即如果x1出现了一点误差, 那么x2|x1的误差会更大, 因此加入了rejection sampling, 即生成某类的图片后, 通过一个classifier判断一下生成的图片像不像这个类的sample, 如果不像就弃掉. 文章效果很惊艳, 但是理论上没有特别大的改进。” 那接下来看看惊艳的效果： ​ 可以和BigGAN比了，右边的图是BigGAN生成的，左边的是VQ-VAE生成的。可以发现，左边的图其实更多样化一点。 3. z和decoder ​ 到目前为止，所用的decoder都特别简单（p(x|z)遵循的分布都是简单的），因此没有办法携带大量信息，基本上有用的信息都会压缩到潜变量z里。     前面推导过： 因此： VLB最大可以是logp(x)，如果KL部分是0。 如果p(x|z) = pdata(x)，则有： 这个时候，训练模型q(z|x)会去接近p(z)，那么z中就没有什么有用信息了。p(x|z) = pdata(x)要怎么做到呢？即decoder包含了所有信息。因此，如果z中信息越少，decoder越强大，信息越多，那么VLB越接近理想值。因此许多工作都往这个方向去努力了，但是这样的话，就没有办法很好地进行生成了。这个问题在许多工作中有被描述： 为了解决这个问题，需要弱化decoder： 其中，第二个是VLAE，这个方法是想让z去掌握全局信息，而decoder去掌握细节信息，decoder用的是浅层PixelCNN，适合挖掘局部细节信息。但也有很多方法想让z不仅掌握粗粒度的全局信息，还想让他表达细节，这里是一些动态训练的方法： 4. Disentanglement: Beta VAE ​ 与VAE不同的地方就是损失函数KL散度那部分，前面加了一个beta，当beta是1的时候，就是标准的VAE，当beta大于1的时候，z的信息丰富度会降低，但是解纠缠的能力会提高。解纠缠的能力可以理解为representation的能力，即z中的值可以表达特定的意义的能力，比如生成人脸，我们会希望z中的值有特定意义，比如脸的宽度，眼睛的大小等，这样可以通过调整z中某个值来变化人脸的局部特征。当beta变大时，会让训练出来的结果更趋近于高斯分布，而每个高斯分布的参数又相互独立，因此可以更好的解纠缠。下图就展现了，用这种方法训练出的可以通过调整z中的值来生成不同肤色，年龄，性别的人像的模型。 其他 1. Variational Dequantization (Flow++)     在训练这类模型的时候，有一个问题，就是图像数据（像素值，0-255）是离散数据，而我们要输出的概率密度函数，是连续的。如果不对数据进行处理，那么出来的结果可能是整数点上的概率密度值都很高（比如3，78，255），但是他们周边就很低（比如3.1，77.9，244.7），因此需要对输入的数据做一些处理，这个处理叫解量化（Dequantization）。也有其他一些方法，比如Uniform Dequantization： 但由于VAE会用Jensen’s inequality做一个近似转换，这样一来，噪音项又被消掉了。所以不管用。 还有一种方法是，flow++中的Variational Dequantization： 添加一个可训练的噪音项，效果如下图： 2. Mutual Information Estimation      互信息（Mutual Information）： ​ 首先来回顾一下什么是信息熵，可以参考Cross Entropy Loss，H(X)是X的信息熵（信息量的期望值，即表达这个事件需要的编码的位数的期望值）： 可以发现，互信息可以用来表达两个变量的依赖程度。 互信息的应用场景： 这些可能之后会提到。VAE中会用到的是，计算z和x的互信息值： 第三行(logp(z x)-logq(z x))构成KL散度。为了提高z和x的相关度，我们需要做的是最大化公式最后一行的内容。 声明：文中所有图片和原理均来自课程和参考。同时所有参考都是推荐扩展阅读的内容。 参考： [1] Jeremy Zhang, Importance Sampling Introduction, 2019 [2] Bo’s Blog，Importance Weighted Autoencoders and Jackknife Methods，2019 [3] Katerina Fragkiadaki, ‘Pathwise derivatives, DDPG, Multigoal RL’, in Deep Reinforcement Learning and Control, Carnegie Mellon [4] Timvieira, The likelihood-ratio gradient，Graduate Descent，2019，https://timvieira.github.io/blog/post/2019/04/20/the-likelihood-ratio-gradient/ [5] Elijha，VQ-VAE解读，知乎，2019 [6] 大象, VAE系解纠缠：从VAE到βVAE，再到β-TCVAE, 知乎，2019  ","url":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/","image":"http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--Latent%20Variable%20Models%20--%20VAE(%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B--VAE)/1.png","@type":"BlogPosting","headline":"UC Berkeley非监督学习–Latent Variable Models – VAE（潜变量模型–VAE）","dateModified":"2022-05-06T00:00:00+08:00","datePublished":"2022-05-06T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-05-06">06 May 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲<strong>Latent Variable Models – VAE</strong>。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="" /></p>
+
+<p>    这个课程总共十二讲，官方链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://sites.google.com/view/berkeley-cs294-158-sp20/home
+</code></pre></div></div>
+
+<p>    目前已整理过：</p>
+
+<p>        Lecture 1：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484985&amp;idx=1&amp;sn=87564039ce87c9618bbd7fd68cb83339&amp;chksm=c06764fbf710eded7815eeeec344ab1b1807534664d18973ca9a3d566d8b7f1d37d62e2f2e8c&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–介绍</a></p>
+
+<p>        Lecture 2：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247485197&amp;idx=1&amp;sn=7c51b8ec0198f627d562fbf0dc0ddb1c&amp;chksm=c06765cff710ecd97a813a6550272be127ac5ea844764a08b2d33646c84e539fc45f212dfe0a&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–自回归模型</a></p>
+
+<p>        Lecture 3：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247485497&amp;idx=1&amp;sn=2e073fa7a62a656f0a145ad5380a8fe8&amp;chksm=c0676afbf710e3ed62622aee58404b13fd1175145afb21112efd6732f88003413b3127b1d031&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–流模型（Flow Models）</a></p>
+
+<p>        Lecture 7：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a></p>
+
+<p>    之前的自回归模型是这样生成的，有了x1之后，生成x2，两个都有了之后生成x3。这样的依赖关系，让生成图片特别慢，要生成一个28*28的图片，就得把模型跑28*28次。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/2.png" style="zoom: 25%;" /></p>
+
+<p>    流模型虽然也用了潜变量来生成，但是流模型的潜变量和样本变量是一对一的，也就是说要生成的图片有多大，那么潜变量就得有多大。潜变量在流模型中不是一个更抽象的存在。这一讲中的研究，就会用更抽象的潜变量来生成，如果要生成一个超级大的图，不一定需要一个很大的潜变量。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/3.png" style="zoom:25%;" /></p>
+
+<p>    下面这种图，其实可以被简短的语言描述，三只柯基，每只是什么颜色，有什么与众不同的特征，背景是什么样子的，有些什么，通常你把这些信息告诉一个画家，画家便可以为你创作出一幅画来。因此生成图，其实并不一定需要一个和图差不多大小的潜变量，一个很小的向量，也许就可以。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/4.png" style="zoom:80%;" /></p>
+
+<p>    理论上，潜变量是可以有明确的意义的，比如你通过潜变量来生成人像图，向量第一个值可以代表发色，第二个值代表眼睛的大小，第三个值代表肤色，总之可以让潜变量中的每个值有明确的意义，使得图像生成可以随人心所欲。虽然现在主流生成模型很少去定义潜变量的意义，但这种生成方式正被积极研究。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/5.png" style="zoom: 25%;" /></p>
+
+<p>    接下来这一篇，都在讲怎么基于潜变量，生成样本。       </p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/6.png" style="zoom:67%;" /></p>
+
+<p>    若z中的每个值都服从伯努利分布，那么p(x|z)实质上也是服从伯努利分布。</p>
+
+<p>    这篇讨论的内容包括：</p>
+
+<p>   <strong>1. 采样/生成：</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/7.png" style="zoom: 33%;" /></p>
+
+<p>    <strong>2.  模型评估，极大似然函数：</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/8.png" style="zoom: 33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/9.png" style="zoom: 50%;" /></p>
+
+<p>上面的公式就是训练目标。</p>
+
+<p>   <strong>3. 数据表现(representation)：</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/10.png" style="zoom: 33%;" /></p>
+
+<p>    样本转换为计算机更容易理解的抽象表达。</p>
+
+<p><strong>模型训练</strong></p>
+
+<p>    模型训练的目标：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/11.png" style="zoom: 67%;" /></p>
+
+<p>    分两种情况：</p>
+
+<p>    一种情况是z的可取值就那么几个，几十个或者几百个，总之不算多，比如下面这种情况，z只有三种可能，且每种可能发生的概率是三分之一：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/12.png" style="zoom: 67%;" /></p>
+
+<p>    假设p(x|z)服从多元高斯分布（Multivariate Gaussian Distribution），那么则有如下训练目标：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/13.png" style="zoom:80%;" /></p>
+
+<p>    看一个可以用以上方法解的实例：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/14.png" alt="" /></p>
+
+<p>    通过对训练数据的观察，很容易发现样本集分三个群，有遵循高斯分布的感觉，不过这个图画得不特别明显，可以点再细些，看看是不是每个群离中心点越远，样本越稀疏。如果用上面的假设来训练，最后可以很好地生成类似的样本分布图。当然也可以做其他假设，可以尝试不同假设，然后取效果最好的那个使用。</p>
+
+<p>    第二种情况是如果z可以有很多很多不同的值呢？</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/15.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/16.png" style="zoom:33%;" /></p>
+
+<p>    一种方法是可以采用对z进行采样。z的概率就由采样的状况决定了。但这种方式有一个很大的缺点，如果z的可能性太多，那么z的采样效率会很低很低，比如z是一个长度为100的二值向量，那么z就有2的100次方个可能性，如果对z进行全域均匀采样，每个样本x匹配到对应的z的概率就是2的一百次方分之一。 就现在的计算能力来看，就是没什么可能能让样本x匹配到对应的z。</p>
+
+<p>    毫无疑问，均匀采样是不可行的，那么要怎么采样呢？接下来了解一下<strong>重要性采样（Importance Sampling）。</strong></p>
+
+<p>    如果z服从pz分布，那么函数f(z)的期望值如何计算：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/17.png" style="zoom: 25%;" /></p>
+
+<p>    计算这个可能会有两个问题，一个问题是pz这个分布过于特殊或者复杂，或者其他什么原因，让你没有办法正常采样。另一个问题是说z的可能性太多，一般的采样方式效率非常非常低，采样出来的z可以提供的信息非常少。这篇遇到的是第二个问题。</p>
+
+<p>    为了解决这些问题，可以进行一些转换：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/18.png" style="zoom:67%;" /></p>
+
+<p>既然在分布pz上采样不可行，那么自然要找到适合采样的分布q，那么f(z)的期望值(z服从pz)问题则转换成了求(pz(z)/q(z))f(z)的期望值，z服从q分布。  </p>
+
+<p>    那么训练目标也更新了：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/19.png" style="zoom:80%;" /></p>
+
+<p>    现在的问题在于，如何求这个分布q。理论上，可以如下方式求：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/20.png" style="zoom: 50%;" /></p>
+
+<p>    但分母恰是我们本来要求的问题。所以这个方法不可行。求精确的不行，那么求个大概也许可行，比如可以假设q(z)服从高斯分布：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/21.png" style="zoom:25%;" /></p>
+
+<p>而接下来要做的就是求这个高斯分布的参数，使得q(z)尽可能接近：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/22.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/23.png" alt="" /></p>
+
+<p>但是这个方法呢，也有一个问题，就是对每个样本都得求它对应的z的q分布。而过程又是一致的。因此，可不可以直接交给神经网络来呢？与其对每个样本都来求一次它对应的z的分布，不如求一个一般的神经网络，使得输入样本后便能输出对应的z的分布。</p>
+
+<p><strong>Amortized formulation:</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/24.png" style="zoom: 50%;" /></p>
+
+<p>（PS：终于绕到这个公式了，以前觉得理所应当就应该这样的，没想到原来是这么九曲回肠地绕过来的。）</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/25.png" style="zoom:50%;" /></p>
+
+<p>如上图所示，生成模型实实在在想做的事情是图中实线所示的事情，但是为了求得能完成实线功能的模型，得把实现虚线功能的模型也求了。</p>
+
+<p><strong>Importance Weighted AutoEncoder (IWAE)</strong></p>
+
+<p>目标是最大化：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/26.png" style="zoom: 67%;" /></p>
+
+<p>而因为z的采样问题，同时需要最小化</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/27.png" style="zoom:50%;" /></p>
+
+<p>所以要做的就是最大化公式一减去公式二的值</p>
+
+<p>定义wi和Lk如下：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/28.png" style="zoom:67%;" /></p>
+
+<p>log是凸函数，根据Jensen不等式，先log再期望小于等于先期望再log。</p>
+
+<p>    有研究人员在2015年证明，Lk是一直小于等于logp(x)的，k的数值越大，越接近logp(x)，当k趋近于正无穷时，Lk = logp(x)。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/29.png" style="zoom:80%;" /></p>
+
+<p>证明如下：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/30.png" style="zoom: 67%;" /></p>
+
+<p><strong>Variational Lower Bound (VLB)/ Evidence Lower Bound (ELBO)</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/31.png" style="zoom:80%;" /></p>
+
+<p>以上推理过程如果想把不等式转换成等式，那么不能单单只优化θ，还得优化Φ，反复不断优化θ和Φ，获得更好的q分布和p分布。当q是最佳时：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/32.jpeg" alt="" /></p>
+
+<p>再有一种写法：</p>
+
+<p>在上面的写法中，如果q不是最佳，那么求得的期望值就会小于等于logp(x)。那么差多少呢？</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/33.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/34.png" style="zoom:80%;" /></p>
+
+<p>这种写法和上面那种就是多了后面KL散度的部分，第一种写法我们知道期望值与logp(x)有差，这一种方法我们可以知道差的就是KL散度部分。当KL散度求值结果为0时，那么logp(x)就和后面的期望值一致了。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/35.png" style="zoom:80%;" /></p>
+
+<p>而在优化的过程中，KL散度是不需要被考虑的，VLB的部分才是需要计算的：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/36.png" style="zoom:67%;" /></p>
+
+<p>优化算法可以用梯度下降的方式，那么首先我们得求梯度：</p>
+
+<p>课程中介绍了两种方式，这里我们还参考了另外一个课程[3]，和一篇博客[4]，首先，当我们要微分的变量存在于分布中时，我们用likelihood ratio gradient estimator：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/37.png" style="zoom:67%;" /></p>
+
+<p>当我们要微分的变量存在于待求的期望的函数中时，我们用pathwise derivative：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/38.png" style="zoom:67%;" /></p>
+
+<p>关于likelihood ratio gradient estimator可以看参考[4]，这里就贴一下推导公式：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/39.png" style="zoom: 50%;" /></p>
+
+<p>上面公式是我们要求梯度的函数，而现实实验中，我们通常没有办法直接得到分布函数，能得到的是一堆样本，因此：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/40.png" style="zoom: 50%;" /></p>
+
+<p>梯度公式的求导过程如下：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/41.png" style="zoom:50%;" /></p>
+
+<p>likelihood ratio gradient estimator在绝大多数场景中都可以使用，而pathwise derivative在一些场景中效果会比likelihood ratio gradient estimator好很多，即使只有极小量数据也能取得好的结果。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/42.png" style="zoom: 33%;" /></p>
+
+<p>    我们要用的其实是θ，但要得到好的θ，得同时交叉优化Φ。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/43.png" style="zoom: 33%;" /></p>
+
+<p>极大似然估计（likelihood ratio）：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/44.png" style="zoom: 50%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/45.png" style="zoom: 33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/46.png" style="zoom: 33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/47.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/48.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/49.png" style="zoom: 50%;" /></p>
+
+<p>pathwise derivative （这个方法是有前提的，q得遵循高斯分布，p也是，但两个是不一样的参数）：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/50.png" style="zoom: 67%;" /></p>
+
+<p>来看VAE的生成数字的效果图：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/51.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/52.png" style="zoom:67%;" /></p>
+
+<p>VAE是将概率图模型的思想和AE（Auto Encoder）的结合体。[6]</p>
+
+<p><strong>接下来看几个典型的VAE模型的变种：</strong></p>
+
+<ol>
+  <li> VQ-VAE</li>
+</ol>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/53.png" style="zoom:67%;" /></p>
+
+<p><em>**</em>发表于2017年，几乎没有被关注，大家的注意力都在GAN那里。直到两年后第二篇文章发表，效果非常好，两篇文章才引起了关注。</p>
+
+<p>这个算法就不细讲了，感兴趣的可以看看参考[5]和论文原文，上图中带箭头的线条，蓝色是推理，红色是反向传播。损失函数中有一个比较重要的概念是Straight-Through Estimator，前向传播时，sg符号无用，忽略掉即可，反向传播时，sg标记的部分不进行调整，保持不变。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/54.png" style="zoom:80%;" /></p>
+
+<p>VQ-VAE重建图片的能力如上图所示，左边是原图，右边是重构的图片。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/55.png" style="zoom:80%;" /></p>
+
+<p>VQ-VAE图像生成的效果，如上图所示。</p>
+
+<p><strong>2. VQ-VAE 2.0</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/56.png" style="zoom:80%;" /></p>
+
+<p>这里就直接摘参考[5]的文字描述了：</p>
+
+<p>    “这是VQ-VAE的升级版, 可以生成非常清晰的高分辨率图片。主要变化就是把VQ-VAE的encoder和decoder进行了分层, bottom层对local feature进行建模, top层对global feature进行建模; 为了让top层能更有效地提取global信息, 在网络中加入了self attention。除此之外, 在prior上进行采样的时候, 考虑到autoregressive的sample会累积误差, 即如果x1出现了一点误差, 那么x2|x1的误差会更大, 因此加入了rejection sampling, 即生成某类的图片后, 通过一个classifier判断一下生成的图片像不像这个类的sample, 如果不像就弃掉. 文章效果很惊艳, 但是理论上没有特别大的改进。”</p>
+
+<p>那接下来看看惊艳的效果：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/57.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/58.png" style="zoom:80%;" /></p>
+
+<p>​	可以和BigGAN比了，右边的图是BigGAN生成的，左边的是VQ-VAE生成的。可以发现，左边的图其实更多样化一点。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/59.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/60.png" style="zoom:80%;" /></p>
+
+<hr />
+
+<p><strong>3. z和decoder</strong></p>
+
+<p>​	到目前为止，所用的decoder都特别简单（p(x|z)遵循的分布都是简单的），因此没有办法携带大量信息，基本上有用的信息都会压缩到潜变量z里。</p>
+
+<p>    前面推导过：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/61.png" style="zoom:80%;" /></p>
+
+<p>因此：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/62.png" style="zoom:67%;" /></p>
+
+<p>VLB最大可以是logp(x)，如果KL部分是0。</p>
+
+<p>如果p(x|z) = pdata(x)，则有：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/63.png" alt="" /></p>
+
+<p>这个时候，训练模型q(z|x)会去接近p(z)，那么z中就没有什么有用信息了。p(x|z) = pdata(x)要怎么做到呢？即decoder包含了所有信息。因此，如果z中信息越少，decoder越强大，信息越多，那么VLB越接近理想值。因此许多工作都往这个方向去努力了，但是这样的话，就没有办法很好地进行生成了。这个问题在许多工作中有被描述：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/64.png" style="zoom:67%;" /></p>
+
+<p>为了解决这个问题，需要弱化decoder：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/65.png" style="zoom:67%;" /></p>
+
+<p>其中，第二个是VLAE，这个方法是想让z去掌握全局信息，而decoder去掌握细节信息，decoder用的是浅层PixelCNN，适合挖掘局部细节信息。但也有很多方法想让z不仅掌握粗粒度的全局信息，还想让他表达细节，这里是一些动态训练的方法：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/66.png" style="zoom:67%;" /></p>
+
+<p><strong>4. Disentanglement: Beta VAE</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/67.png" style="zoom: 50%;" /></p>
+
+<p>​	与VAE不同的地方就是损失函数KL散度那部分，前面加了一个beta，当beta是1的时候，就是标准的VAE，当beta大于1的时候，z的信息丰富度会降低，但是解纠缠的能力会提高。解纠缠的能力可以理解为representation的能力，即z中的值可以表达特定的意义的能力，比如生成人脸，我们会希望z中的值有特定意义，比如脸的宽度，眼睛的大小等，这样可以通过调整z中某个值来变化人脸的局部特征。当beta变大时，会让训练出来的结果更趋近于高斯分布，而每个高斯分布的参数又相互独立，因此可以更好的解纠缠。下图就展现了，用这种方法训练出的可以通过调整z中的值来生成不同肤色，年龄，性别的人像的模型。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/68.png" style="zoom:67%;" /></p>
+
+<p><strong>其他</strong></p>
+
+<p><strong>1. Variational Dequantization (Flow++)</strong></p>
+
+<p>    在训练这类模型的时候，有一个问题，就是图像数据（像素值，0-255）是离散数据，而我们要输出的概率密度函数，是连续的。如果不对数据进行处理，那么出来的结果可能是整数点上的概率密度值都很高（比如3，78，255），但是他们周边就很低（比如3.1，77.9，244.7），因此需要对输入的数据做一些处理，这个处理叫解量化（Dequantization）。也有其他一些方法，比如Uniform Dequantization：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/69.png" style="zoom:67%;" /></p>
+
+<p>但由于VAE会用Jensen’s inequality做一个近似转换，这样一来，噪音项又被消掉了。所以不管用。</p>
+
+<p>还有一种方法是，flow++中的Variational Dequantization：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/70.png" style="zoom:80%;" /></p>
+
+<p>添加一个可训练的噪音项，效果如下图：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/71.png" style="zoom:80%;" /></p>
+
+<p><strong style="outline: 0px;">
+</strong></p>
+
+<p><strong>2. Mutual Information Estimation </strong></p>
+
+<p>    互信息（Mutual Information）：<strong style="outline: 0px;">
+</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/72.png" style="zoom:67%;" /></p>
+
+<p>​	首先来回顾一下什么是信息熵，可以参考<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect">Cross Entropy Loss，</a>H(X)是X的信息熵（信息量的期望值，即表达这个事件需要的编码的位数的期望值）：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/73.png" style="zoom:67%;" /></p>
+
+<p>可以发现，互信息可以用来表达两个变量的依赖程度。</p>
+
+<p>互信息的应用场景：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/74.png" style="zoom:50%;" /></p>
+
+<p>这些可能之后会提到。VAE中会用到的是，计算z和x的互信息值：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/75.png" style="zoom:67%;" /></p>
+
+<table>
+  <tbody>
+    <tr>
+      <td>第三行(logp(z</td>
+      <td>x)-logq(z</td>
+      <td>x))构成KL散度。为了提高z和x的相关度，我们需要做的是最大化公式最后一行的内容。</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong style="outline: 0px;">
+</strong></p>
+
+<p><strong style="outline: 0px;">
+</strong></p>
+
+<p><strong>声明：文中所有图片和原理均来自课程和参考。同时所有参考都是推荐扩展阅读的内容。</strong></p>
+
+<p>参考：</p>
+
+<p>[1] Jeremy Zhang, Importance Sampling Introduction, 2019</p>
+
+<p>[2] Bo’s Blog，Importance Weighted Autoencoders and Jackknife Methods，2019</p>
+
+<p>[3] Katerina Fragkiadaki, ‘Pathwise derivatives, DDPG,
+Multigoal RL’, in Deep Reinforcement Learning and Control, Carnegie Mellon</p>
+
+<p>[4] Timvieira, The likelihood-ratio gradient，Graduate Descent，2019，https://timvieira.github.io/blog/post/2019/04/20/the-likelihood-ratio-gradient/</p>
+
+<p>[5] Elijha，VQ-VAE解读，知乎，2019</p>
+
+<p>[6] 大象, VAE系解纠缠：从VAE到βVAE，再到β-TCVAE, 知乎，2019</p>
+
+<p> </p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Generative-Model">Generative Model</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Unsupervised-Learning">Unsupervised Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#UC-Berkeley-CS294-158">UC Berkeley CS294-158</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--自回归模型/1.png" alt="UC Berkeley非监督学习--自回归模型"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">UC Berkeley非监督学习--自回归模型</a>
+                
+            </h2>
+            <h4 class="card-text">    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第二讲Autoregressive Models，自回归模型。
+
+
+
+    这个课程总共十二讲，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">09 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

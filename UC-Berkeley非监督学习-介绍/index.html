@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>UC Berkeley非监督学习--介绍 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>UC Berkeley非监督学习–介绍 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="UC Berkeley非监督学习–介绍" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     之前为了搞明白自监督学习的概念，整理过Lecture 7：自监督学习（Self Supervised Learning），这次没有意外的话至少会整理Lecture 1-6。     这篇整理这个课程的Lecture 1：Introduction。课程的介绍。     那什么是非监督学习(Unsupervised Learning):     非监督学习，用没有标签的数据训练深度神经网络，学习特征，主要分两类，一类是生成网络，像GAN，VAE这些，一类是自监督学习，label是机器自己产生的，不是人工标注的。     那么为什么要用非监督学习呢？     说到底，还是因为监督学习，效率太低。上图是Hinton的思考，Hinton也有一门神经网络课程，他喜欢通过对人脑运行机制的思考来探索人工智能的解决方案，会通过理解人脑的运行机制和特质来思考智能的来源，人大概活10^9秒，但是我们有大约10^14个神经触突。那么特别明显，如果我们是通过与世界的互动来获得标签，训练大脑，那么我们应该来不及聪明就死去了。所以人类获得智能的主要方式可能不是监督学习，而是非监督学习。     这里插一些题外话，关于Hinton，Hinton最初关于神经网络的灵感来源于高中时候获知的一些生物学上对大脑的研究结果，感兴趣的可以找Hinton的课程或者演讲看一看，比起枯燥的算法，这些算法的灵感来源，科学家们的思维方式，如何觉察，如何获得的灵感和毕生的执着和方向。这些可能是更值得学习的“算法”。    另外一位科学家也有相同的想法：     如果把深度学习领域比喻成一块蛋糕，那么LeCun认为，强化学习只是蛋糕上的樱桃，监督学习是蛋糕里的冰，而非监督学习才是蛋糕本身。     也有人从不同的角度来思考这个问题，比如思考理想化的智能是什么，就是压缩，即输入信息后，要能够提取所有特征，提取特征即产生一个简短的表达或描述，那么这个过程本质上就是对信息的压缩。根据奥卡姆剃刀原理，使用越少假设的理论越有可能是对的，延伸到深度学习，Solomonoff 的归纳推理理论是一个数学证明，即如果一个宇宙是由算法生成的，对该宇宙的观察，编码为一个数据集，最好由该数据集的最小可执行档案来预测，通俗来说就是程序越短，越有可能是适用的。AIXI是一个通用人工智能的数学理论形式，结合了Solomonoff Induction和顺序决策理论，是一个强化学习代理，最大化从环境中获得的期望总回报。AIXI同时考虑了所有可计算的假设（或环境），每一步，会用每个程序计算下一步动作和评估奖励，承诺奖励会根据该程序构成真实环境的主观信念进行加权。这种信念是根据程序的长度计算得出的，根据Solomonoff Induction，越长的程序越不可能是构成真实环境的程序。AIXI会在所有这些程序的加权和中选择具有最高期望总奖励的动作来执行。     这几个概念感兴趣的可以自己再梳理下，课程里只是一语带过了，没有仔细讲。     撇开理论上的，我们来看一看非监督学习的一些应用： 首先非监督学习可以产生新的数据，也可以根据一些输入来合成数据，比如输入一句话，产生一幅图，非监督学习可以用于信息压缩，训练得越好的模型压缩效果越好，压缩得到的特征向量可以用于下游任务的模型开发和训练，下游任务如果是监督学习，通常可以大大减少需要的人工标注量。另外，非监督学习中成功的模型架构也可以用于监督学习或者强化学习，或者给开发者以启发。      这里列一些非监督学习目前的成果（这些可以去看视频课程，因为没有什么难懂的点，另外有些示例是视频，这里没有上传）：     1. 图像生成： 最早，可能是Hinton他们尝试用神经网络生成手写的数字。这个是2006年的事情了。 接下来VAE在2013年被提出来了，可以发现VAE产生的图片是模糊的，但是VAE比之后出来的GAN有自己的优点，这个之后说。    紧接着，2014年，GAN被发表，开始尝试生成人脸和风景，一开始效果并不好，但结果已经足够让人震撼。 GAN开始产生各式各样的变种，尝试去完成各种各样的任务，比如生成室内图。 更好的人脸生成，但很多生成的不是很好。 由低解析度的图片产生高解析度的图片，把模糊图片变清晰。 改造，把马变成斑马。 改变特征向量，产生不同的图。 清晰，高真人脸。     2. 语音生成     模型产生的语音和真实的人的语音是很难被区别开的。     3. 视频生成     4. 文本生成 Char-rnn是个非常优秀的文本生成模型，他不挑内容，公式也能生成，代码也能生成，英语可以，其他语言也可以，网络结构是基于LSTM，也非常简单。但这个模型现在被用得比较少了。现在大家的注意力都在Transformer上。基于Transformer，OpenAI开发了GPT-2，机器人可以产生有意义的文字，甚至可以说故事。 https://app.inferkit.com/demo 有空可以去上面的网址逗逗机器人。     5. 压缩 以上是无损压缩，压缩按是否有信息损失可以分为无损压缩和有损压缩，无损压缩时，没有信息会在压缩过程中损失，所以比较的是各个方法可以把文件压缩到多小，有损压缩在信息压缩的过程中会造成信息损失，但通常可以把文件压很小，但也因此信息质量会变差，因此会比较压缩到同样大小文件时，不同压缩方法压缩出来的文件品质如何，比较的是压缩后的信息质量。 这是有损压缩。有损压缩更受欢迎。     6. 下游任务 – 情感计算 比如上面这段话，不同的句子有不同的感情色彩，前几句，情感是正面的，后面几句情感则是负面的。下游任务是说，这个功能是用训练好的语义模型进行再训练或者从训练好的模型中挖掘有用信息等方式来完成的。     7. 下游任务 – 语义理解 注意一下，9是Human Level，但这不是说现在机器的语义理解就已经强过人类了，只是在特定的数据集上或任务上如此表现。 ​ 8. 下游任务 – 图像识别 继语义之后，非监督学习在图像领域也获得了巨大成功。这个可以看自监督学习（Self Supervised Learning）。 最后老师总结了一下： [1] Alex_Altair, An Intuitive Explanation of Solomonoff Induction, LessWrong, 2012" />
+<meta property="og:description" content="    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     之前为了搞明白自监督学习的概念，整理过Lecture 7：自监督学习（Self Supervised Learning），这次没有意外的话至少会整理Lecture 1-6。     这篇整理这个课程的Lecture 1：Introduction。课程的介绍。     那什么是非监督学习(Unsupervised Learning):     非监督学习，用没有标签的数据训练深度神经网络，学习特征，主要分两类，一类是生成网络，像GAN，VAE这些，一类是自监督学习，label是机器自己产生的，不是人工标注的。     那么为什么要用非监督学习呢？     说到底，还是因为监督学习，效率太低。上图是Hinton的思考，Hinton也有一门神经网络课程，他喜欢通过对人脑运行机制的思考来探索人工智能的解决方案，会通过理解人脑的运行机制和特质来思考智能的来源，人大概活10^9秒，但是我们有大约10^14个神经触突。那么特别明显，如果我们是通过与世界的互动来获得标签，训练大脑，那么我们应该来不及聪明就死去了。所以人类获得智能的主要方式可能不是监督学习，而是非监督学习。     这里插一些题外话，关于Hinton，Hinton最初关于神经网络的灵感来源于高中时候获知的一些生物学上对大脑的研究结果，感兴趣的可以找Hinton的课程或者演讲看一看，比起枯燥的算法，这些算法的灵感来源，科学家们的思维方式，如何觉察，如何获得的灵感和毕生的执着和方向。这些可能是更值得学习的“算法”。    另外一位科学家也有相同的想法：     如果把深度学习领域比喻成一块蛋糕，那么LeCun认为，强化学习只是蛋糕上的樱桃，监督学习是蛋糕里的冰，而非监督学习才是蛋糕本身。     也有人从不同的角度来思考这个问题，比如思考理想化的智能是什么，就是压缩，即输入信息后，要能够提取所有特征，提取特征即产生一个简短的表达或描述，那么这个过程本质上就是对信息的压缩。根据奥卡姆剃刀原理，使用越少假设的理论越有可能是对的，延伸到深度学习，Solomonoff 的归纳推理理论是一个数学证明，即如果一个宇宙是由算法生成的，对该宇宙的观察，编码为一个数据集，最好由该数据集的最小可执行档案来预测，通俗来说就是程序越短，越有可能是适用的。AIXI是一个通用人工智能的数学理论形式，结合了Solomonoff Induction和顺序决策理论，是一个强化学习代理，最大化从环境中获得的期望总回报。AIXI同时考虑了所有可计算的假设（或环境），每一步，会用每个程序计算下一步动作和评估奖励，承诺奖励会根据该程序构成真实环境的主观信念进行加权。这种信念是根据程序的长度计算得出的，根据Solomonoff Induction，越长的程序越不可能是构成真实环境的程序。AIXI会在所有这些程序的加权和中选择具有最高期望总奖励的动作来执行。     这几个概念感兴趣的可以自己再梳理下，课程里只是一语带过了，没有仔细讲。     撇开理论上的，我们来看一看非监督学习的一些应用： 首先非监督学习可以产生新的数据，也可以根据一些输入来合成数据，比如输入一句话，产生一幅图，非监督学习可以用于信息压缩，训练得越好的模型压缩效果越好，压缩得到的特征向量可以用于下游任务的模型开发和训练，下游任务如果是监督学习，通常可以大大减少需要的人工标注量。另外，非监督学习中成功的模型架构也可以用于监督学习或者强化学习，或者给开发者以启发。      这里列一些非监督学习目前的成果（这些可以去看视频课程，因为没有什么难懂的点，另外有些示例是视频，这里没有上传）：     1. 图像生成： 最早，可能是Hinton他们尝试用神经网络生成手写的数字。这个是2006年的事情了。 接下来VAE在2013年被提出来了，可以发现VAE产生的图片是模糊的，但是VAE比之后出来的GAN有自己的优点，这个之后说。    紧接着，2014年，GAN被发表，开始尝试生成人脸和风景，一开始效果并不好，但结果已经足够让人震撼。 GAN开始产生各式各样的变种，尝试去完成各种各样的任务，比如生成室内图。 更好的人脸生成，但很多生成的不是很好。 由低解析度的图片产生高解析度的图片，把模糊图片变清晰。 改造，把马变成斑马。 改变特征向量，产生不同的图。 清晰，高真人脸。     2. 语音生成     模型产生的语音和真实的人的语音是很难被区别开的。     3. 视频生成     4. 文本生成 Char-rnn是个非常优秀的文本生成模型，他不挑内容，公式也能生成，代码也能生成，英语可以，其他语言也可以，网络结构是基于LSTM，也非常简单。但这个模型现在被用得比较少了。现在大家的注意力都在Transformer上。基于Transformer，OpenAI开发了GPT-2，机器人可以产生有意义的文字，甚至可以说故事。 https://app.inferkit.com/demo 有空可以去上面的网址逗逗机器人。     5. 压缩 以上是无损压缩，压缩按是否有信息损失可以分为无损压缩和有损压缩，无损压缩时，没有信息会在压缩过程中损失，所以比较的是各个方法可以把文件压缩到多小，有损压缩在信息压缩的过程中会造成信息损失，但通常可以把文件压很小，但也因此信息质量会变差，因此会比较压缩到同样大小文件时，不同压缩方法压缩出来的文件品质如何，比较的是压缩后的信息质量。 这是有损压缩。有损压缩更受欢迎。     6. 下游任务 – 情感计算 比如上面这段话，不同的句子有不同的感情色彩，前几句，情感是正面的，后面几句情感则是负面的。下游任务是说，这个功能是用训练好的语义模型进行再训练或者从训练好的模型中挖掘有用信息等方式来完成的。     7. 下游任务 – 语义理解 注意一下，9是Human Level，但这不是说现在机器的语义理解就已经强过人类了，只是在特定的数据集上或任务上如此表现。 ​ 8. 下游任务 – 图像识别 继语义之后，非监督学习在图像领域也获得了巨大成功。这个可以看自监督学习（Self Supervised Learning）。 最后老师总结了一下： [1] Alex_Altair, An Intuitive Explanation of Solomonoff Induction, LessWrong, 2012" />
+<link rel="canonical" href="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/" />
+<meta property="og:url" content="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E4%BB%8B%E7%BB%8D/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-03-01T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     之前为了搞明白自监督学习的概念，整理过Lecture 7：自监督学习（Self Supervised Learning），这次没有意外的话至少会整理Lecture 1-6。     这篇整理这个课程的Lecture 1：Introduction。课程的介绍。     那什么是非监督学习(Unsupervised Learning):     非监督学习，用没有标签的数据训练深度神经网络，学习特征，主要分两类，一类是生成网络，像GAN，VAE这些，一类是自监督学习，label是机器自己产生的，不是人工标注的。     那么为什么要用非监督学习呢？     说到底，还是因为监督学习，效率太低。上图是Hinton的思考，Hinton也有一门神经网络课程，他喜欢通过对人脑运行机制的思考来探索人工智能的解决方案，会通过理解人脑的运行机制和特质来思考智能的来源，人大概活10^9秒，但是我们有大约10^14个神经触突。那么特别明显，如果我们是通过与世界的互动来获得标签，训练大脑，那么我们应该来不及聪明就死去了。所以人类获得智能的主要方式可能不是监督学习，而是非监督学习。     这里插一些题外话，关于Hinton，Hinton最初关于神经网络的灵感来源于高中时候获知的一些生物学上对大脑的研究结果，感兴趣的可以找Hinton的课程或者演讲看一看，比起枯燥的算法，这些算法的灵感来源，科学家们的思维方式，如何觉察，如何获得的灵感和毕生的执着和方向。这些可能是更值得学习的“算法”。    另外一位科学家也有相同的想法：     如果把深度学习领域比喻成一块蛋糕，那么LeCun认为，强化学习只是蛋糕上的樱桃，监督学习是蛋糕里的冰，而非监督学习才是蛋糕本身。     也有人从不同的角度来思考这个问题，比如思考理想化的智能是什么，就是压缩，即输入信息后，要能够提取所有特征，提取特征即产生一个简短的表达或描述，那么这个过程本质上就是对信息的压缩。根据奥卡姆剃刀原理，使用越少假设的理论越有可能是对的，延伸到深度学习，Solomonoff 的归纳推理理论是一个数学证明，即如果一个宇宙是由算法生成的，对该宇宙的观察，编码为一个数据集，最好由该数据集的最小可执行档案来预测，通俗来说就是程序越短，越有可能是适用的。AIXI是一个通用人工智能的数学理论形式，结合了Solomonoff Induction和顺序决策理论，是一个强化学习代理，最大化从环境中获得的期望总回报。AIXI同时考虑了所有可计算的假设（或环境），每一步，会用每个程序计算下一步动作和评估奖励，承诺奖励会根据该程序构成真实环境的主观信念进行加权。这种信念是根据程序的长度计算得出的，根据Solomonoff Induction，越长的程序越不可能是构成真实环境的程序。AIXI会在所有这些程序的加权和中选择具有最高期望总奖励的动作来执行。     这几个概念感兴趣的可以自己再梳理下，课程里只是一语带过了，没有仔细讲。     撇开理论上的，我们来看一看非监督学习的一些应用： 首先非监督学习可以产生新的数据，也可以根据一些输入来合成数据，比如输入一句话，产生一幅图，非监督学习可以用于信息压缩，训练得越好的模型压缩效果越好，压缩得到的特征向量可以用于下游任务的模型开发和训练，下游任务如果是监督学习，通常可以大大减少需要的人工标注量。另外，非监督学习中成功的模型架构也可以用于监督学习或者强化学习，或者给开发者以启发。      这里列一些非监督学习目前的成果（这些可以去看视频课程，因为没有什么难懂的点，另外有些示例是视频，这里没有上传）：     1. 图像生成： 最早，可能是Hinton他们尝试用神经网络生成手写的数字。这个是2006年的事情了。 接下来VAE在2013年被提出来了，可以发现VAE产生的图片是模糊的，但是VAE比之后出来的GAN有自己的优点，这个之后说。    紧接着，2014年，GAN被发表，开始尝试生成人脸和风景，一开始效果并不好，但结果已经足够让人震撼。 GAN开始产生各式各样的变种，尝试去完成各种各样的任务，比如生成室内图。 更好的人脸生成，但很多生成的不是很好。 由低解析度的图片产生高解析度的图片，把模糊图片变清晰。 改造，把马变成斑马。 改变特征向量，产生不同的图。 清晰，高真人脸。     2. 语音生成     模型产生的语音和真实的人的语音是很难被区别开的。     3. 视频生成     4. 文本生成 Char-rnn是个非常优秀的文本生成模型，他不挑内容，公式也能生成，代码也能生成，英语可以，其他语言也可以，网络结构是基于LSTM，也非常简单。但这个模型现在被用得比较少了。现在大家的注意力都在Transformer上。基于Transformer，OpenAI开发了GPT-2，机器人可以产生有意义的文字，甚至可以说故事。 https://app.inferkit.com/demo 有空可以去上面的网址逗逗机器人。     5. 压缩 以上是无损压缩，压缩按是否有信息损失可以分为无损压缩和有损压缩，无损压缩时，没有信息会在压缩过程中损失，所以比较的是各个方法可以把文件压缩到多小，有损压缩在信息压缩的过程中会造成信息损失，但通常可以把文件压很小，但也因此信息质量会变差，因此会比较压缩到同样大小文件时，不同压缩方法压缩出来的文件品质如何，比较的是压缩后的信息质量。 这是有损压缩。有损压缩更受欢迎。     6. 下游任务 – 情感计算 比如上面这段话，不同的句子有不同的感情色彩，前几句，情感是正面的，后面几句情感则是负面的。下游任务是说，这个功能是用训练好的语义模型进行再训练或者从训练好的模型中挖掘有用信息等方式来完成的。     7. 下游任务 – 语义理解 注意一下，9是Human Level，但这不是说现在机器的语义理解就已经强过人类了，只是在特定的数据集上或任务上如此表现。 ​ 8. 下游任务 – 图像识别 继语义之后，非监督学习在图像领域也获得了巨大成功。这个可以看自监督学习（Self Supervised Learning）。 最后老师总结了一下： [1] Alex_Altair, An Intuitive Explanation of Solomonoff Induction, LessWrong, 2012","url":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/","image":"http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E4%BB%8B%E7%BB%8D/1.png","@type":"BlogPosting","headline":"UC Berkeley非监督学习–介绍","dateModified":"2022-03-01T00:00:00+08:00","datePublished":"2022-03-01T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">UC Berkeley非监督学习--介绍</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-03-01">01 Mar 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/UC Berkeley非监督学习--介绍/1.png" alt="UC Berkeley非监督学习--介绍">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/1.png" alt="" /></p>
+
+<p>    这个课程总共十二讲，官方链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://sites.google.com/view/berkeley-cs294-158-sp20/home
+</code></pre></div></div>
+
+<p>    之前为了搞明白自监督学习的概念，整理过Lecture 7：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a>，这次没有意外的话至少会整理Lecture 1-6。</p>
+
+<p>    这篇整理这个课程的Lecture 1：Introduction。课程的介绍。</p>
+
+<p>    那什么是<strong>非监督学习</strong>(<strong>Unsupervised Learning</strong>):</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/2.png" style="zoom: 67%;" /></p>
+
+<p>    非监督学习，用没有标签的数据训练深度神经网络，学习特征，主要分两类，一类是生成网络，像GAN，VAE这些，一类是自监督学习，label是机器自己产生的，不是人工标注的。</p>
+
+<p>    那么为什么要用非监督学习呢？</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/3.png" style="zoom:67%;" /></p>
+
+<p>    说到底，还是因为监督学习，效率太低。上图是Hinton的思考，Hinton也有一门神经网络课程，他喜欢通过对人脑运行机制的思考来探索人工智能的解决方案，会通过理解人脑的运行机制和特质来思考智能的来源，人大概活10^9秒，但是我们有大约10^14个神经触突。那么特别明显，如果我们是通过与世界的互动来获得标签，训练大脑，那么我们应该来不及聪明就死去了。所以人类获得智能的主要方式可能不是监督学习，而是非监督学习。</p>
+
+<p>    这里插一些题外话，关于Hinton，Hinton最初关于神经网络的灵感来源于高中时候获知的一些生物学上对大脑的研究结果，感兴趣的可以找Hinton的课程或者演讲看一看，比起枯燥的算法，这些算法的灵感来源，科学家们的思维方式，如何觉察，如何获得的灵感和毕生的执着和方向。这些可能是更值得学习的“算法”。   </p>
+
+<p>另外一位科学家也有相同的想法：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/4.png" style="zoom:80%;" /></p>
+
+<p>    如果把深度学习领域比喻成一块蛋糕，那么LeCun认为，强化学习只是蛋糕上的樱桃，监督学习是蛋糕里的冰，而非监督学习才是蛋糕本身。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/5.png" style="zoom:80%;" /></p>
+
+<p>    也有人从不同的角度来思考这个问题，比如思考理想化的智能是什么，就是压缩，即输入信息后，要能够提取所有特征，提取特征即产生一个简短的表达或描述，那么这个过程本质上就是对信息的压缩。根据奥卡姆剃刀原理，使用越少假设的理论越有可能是对的，延伸到深度学习，Solomonoff 的归纳推理理论是一个数学证明，即如果一个宇宙是由算法生成的，对该宇宙的观察，编码为一个数据集，最好由该数据集的最小可执行档案来预测，通俗来说就是程序越短，越有可能是适用的。AIXI是一个通用人工智能的数学理论形式，结合了Solomonoff Induction和顺序决策理论，是一个强化学习代理，最大化从环境中获得的期望总回报。AIXI同时考虑了所有可计算的假设（或环境），每一步，会用每个程序计算下一步动作和评估奖励，承诺奖励会根据该程序构成真实环境的主观信念进行加权。这种信念是根据程序的长度计算得出的，根据Solomonoff Induction，越长的程序越不可能是构成真实环境的程序。AIXI会在所有这些程序的加权和中选择具有最高期望总奖励的动作来执行。</p>
+
+<p>    这几个概念感兴趣的可以自己再梳理下，课程里只是一语带过了，没有仔细讲。</p>
+
+<p>    撇开理论上的，我们来看一看非监督学习的一些应用：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/6.png" style="zoom:80%;" /></p>
+
+<p>首先非监督学习可以产生新的数据，也可以根据一些输入来合成数据，比如输入一句话，产生一幅图，非监督学习可以用于信息压缩，训练得越好的模型压缩效果越好，压缩得到的特征向量可以用于下游任务的模型开发和训练，下游任务如果是监督学习，通常可以大大减少需要的人工标注量。另外，非监督学习中成功的模型架构也可以用于监督学习或者强化学习，或者给开发者以启发。 </p>
+
+<p>    这里列一些非监督学习目前的成果（这些可以去看视频课程，因为没有什么难懂的点，另外有些示例是视频，这里没有上传）：</p>
+
+<p>    <strong>1. 图像生成：</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/7.png" style="zoom:67%;" /></p>
+
+<p>最早，可能是Hinton他们尝试用神经网络生成手写的数字。这个是2006年的事情了。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/8.png" style="zoom:67%;" /></p>
+
+<p>接下来VAE在2013年被提出来了，可以发现VAE产生的图片是模糊的，但是VAE比之后出来的GAN有自己的优点，这个之后说。   </p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/9.png" style="zoom:67%;" /></p>
+
+<p>紧接着，2014年，GAN被发表，开始尝试生成人脸和风景，一开始效果并不好，但结果已经足够让人震撼。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/10.png" style="zoom:67%;" /></p>
+
+<p>GAN开始产生各式各样的变种，尝试去完成各种各样的任务，比如生成室内图。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/11.png" style="zoom:67%;" /></p>
+
+<p>更好的人脸生成，但很多生成的不是很好。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/12.png" style="zoom:67%;" /></p>
+
+<p>由低解析度的图片产生高解析度的图片，把模糊图片变清晰。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/13.png" style="zoom:67%;" /></p>
+
+<p>改造，把马变成斑马。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/14.png" style="zoom:67%;" /></p>
+
+<p>改变特征向量，产生不同的图。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/15.png" style="zoom:67%;" /></p>
+
+<p>清晰，高真人脸。</p>
+
+<p>    <strong>2. 语音生成</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/16.png" style="zoom: 50%;" /></p>
+
+<p>    模型产生的语音和真实的人的语音是很难被区别开的。</p>
+
+<p>    <strong>3. 视频生成</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/17.png" style="zoom:80%;" /></p>
+
+<p>    <strong>4. 文本生成</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/18.png" style="zoom: 50%;" /></p>
+
+<p>Char-rnn是个非常优秀的文本生成模型，他不挑内容，公式也能生成，代码也能生成，英语可以，其他语言也可以，网络结构是基于LSTM，也非常简单。但这个模型现在被用得比较少了。现在大家的注意力都在Transformer上。基于Transformer，OpenAI开发了GPT-2，机器人可以产生有意义的文字，甚至可以说故事。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/19.png" alt="" /></p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://app.inferkit.com/demo
+</code></pre></div></div>
+
+<p>有空可以去上面的网址逗逗机器人。</p>
+
+<p>    <strong>5. 压缩</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/20.png" style="zoom:80%;" /></p>
+
+<p>以上是无损压缩，压缩按是否有信息损失可以分为无损压缩和有损压缩，无损压缩时，没有信息会在压缩过程中损失，所以比较的是各个方法可以把文件压缩到多小，有损压缩在信息压缩的过程中会造成信息损失，但通常可以把文件压很小，但也因此信息质量会变差，因此会比较压缩到同样大小文件时，不同压缩方法压缩出来的文件品质如何，比较的是压缩后的信息质量。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/21.png" style="zoom:80%;" /></p>
+
+<p>这是有损压缩。有损压缩更受欢迎。</p>
+
+<p>    <strong>6. 下游任务 – 情感计算</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/22.png" style="zoom:80%;" /></p>
+
+<p>比如上面这段话，不同的句子有不同的感情色彩，前几句，情感是正面的，后面几句情感则是负面的。下游任务是说，这个功能是用训练好的语义模型进行再训练或者从训练好的模型中挖掘有用信息等方式来完成的。</p>
+
+<p>    <strong>7. 下游任务 – 语义理解</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/23.png" alt="" /></p>
+
+<p>注意一下，9是Human Level，但这不是说现在机器的语义理解就已经强过人类了，只是在特定的数据集上或任务上如此表现。</p>
+
+<p>​	<strong>8. 下游任务 – 图像识别</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/24.png" style="zoom:80%;" /></p>
+
+<p>继语义之后，非监督学习在图像领域也获得了巨大成功。这个可以看<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a>。</p>
+
+<p>最后老师总结了一下：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--介绍/25.png" style="zoom:80%;" /></p>
+
+<p>[1] Alex_Altair, An Intuitive Explanation of Solomonoff Induction, LessWrong, 2012</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=UC Berkeley非监督学习--介绍&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E4%BB%8B%E7%BB%8D/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Unsupervised-Learning">Unsupervised Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#UC-Berkeley-CS294-158">UC Berkeley CS294-158</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

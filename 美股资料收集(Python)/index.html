@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>美股资料收集(Python) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>美股资料收集(Python) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="美股资料收集(Python)" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="声明： 这篇笔记和参考均不构成任何投资建议哦。    本来这应该是一篇读书笔记，要翻译整理课程‘Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021’，但后来写成了美股数据收集。这篇会比较适合有编程基础的读者，有什么不准确的地方，欢迎路过的都是大佬的大佬们指正。     首先算法交易（Algorithmic Trading）的意思就是用计算机，产生投资决策。     来看几家精于此道的公司[1]： Renaissance Technologies: $165B in AUM (assets under managerment) AQR Capital Management: $61B in AUM Citadel Securities: $32B in AUM     算法交易的步骤： 数据收集 生成策略 策略测试 投入使用  这篇只涉及数据收集     参考[1]课程作者分享了一个列举了众多API的链接： https://github.com/public-apis/public-apis     我们需要注意的是这个链接里Finance目录下的IEX Cloud，视频课程中的实验数据是从这个接口调取的。简单说一下IEX Cloud这个工具，首先，它是个付费工具，个人级一个月9刀，描述说是各种金融相关的数据都能从它那儿调取到。另外课程里没有用付费通道，用的是测试通道。而这篇译文里会从雅虎金融拉取数据，是真实免费数据。     视频课程[1]完成了三个项目： Equal-Weight S&amp;P 500 Screener (选大公司)  Quantitative Momentum Screener （选最近涨得多的） Quantitative Value Screener (选性价比高的)      三个项目的代码链接： https://github.com/nickmccullum/algorithmic-trading-python     这里就不详细说这三个项目了，视频是非常适合无编程基础的人看的，有编程基础的直接看github上的代码就能懂。 数据收集       首先我们看几个抓取股票清单的方式和方法。     比如我们要抓取S&amp;P 500的股票清单。     测试有效的有以下两种，第一种[2]： import requests import pandas as pd url = &#39;https://www.slickcharts.com/sp500&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] stk_list = data.Symbol sp500 = set(list(stk_list.values))     第二种，维基百科[3]： import os import bs4 as bs import pickle import requests resp = requests.get(&#39;http://en.wikipedia.org/wiki/List_of_S%26P_500_companies&#39;) soup = bs.BeautifulSoup(resp.text, &#39;lxml&#39;) table = soup.find(&#39;table&#39;, {&#39;class&#39;: &#39;wikitable sortable&#39;}) tickers = [] for row in table.findAll(&#39;tr&#39;)[1:]: ticker = row.findAll(&#39;td&#39;)[0].text.split(&quot;\n&quot;)[0]     tickers.append(ticker)  sp500 = set(tickers)     测试了一下，这两种方式取得的结果是一致的。     另外推荐一个雅虎金融上的screener功能，使用方法可以看[2]，这里贴一段用python抓取近一日交易量最多的100只美股的代码： import pandas as pd import requests url = &#39;https://finance.yahoo.com/screener/predefined/most_actives?count=100&amp;offset=0&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] # 欄位『Symbol』就是股票代碼 ma100 = list(data.Symbol.values)     接下来看一下怎么获取股票最近的交易信息，包括(Date, High, Low, Open, Close, Volume, Adj Close) [3]： import datetime as dt import pandas_datareader.data as web start = dt.datetime(2021, 7, 20) end = dt.datetime.now() # 获得单只股票最近信息填股票代码就行 APPL_df = web.DataReader(&#39;AAPL&#39;, &#39;yahoo&#39;, start, end) # 想同时获取多只股票交易信息可以直接填list # 雅虎金融中股票代号中的&#39;.&#39;用&#39;-&#39;号取代 sp500 = { item.replace(&#39;.&#39;, &#39;-&#39;) for item in sp500} sp500_df = web.DataReader(list(sp500), &#39;yahoo&#39;, start, end)     这里另外介绍一些好用的API[2]: pip install yfinance #Yahoo Finance python API 主要数据来源 pip install fredapi #FRED python API，总体经济数据 pip install pytrends #Google Trends python API 股票关键字搜索流行度     从雅虎金融上获取股票的一些基本资料[2]： import yfinance as yf stock = yf.Ticker(&#39;aapl&#39;) # 获取公司资料 stock.info # 获取损益表（测试发现可以获取近四年的） stock.financials # 获取资产负债表 stock.balance_sheet # 现金流表 stock.cashflow # 取得价量资料+股利发放资料+股票分割资料 # 测试APPL，最早可以获取到1980年12月12日的资料 stock.history(period = &#39;max&#39;)          从FRED (Federal Reserve Economic Data) 取得总体经济状况的资料[2]： from fredapi import Fred import requests import numpy as np import pandas as pd import datetime as dt # 注册账号：https://research.stlouisfed.org/docs/api/api_key.html # 然后找到 Request API key 获取API key api_key = &#39;填入你的API&#39; # 获得FRED资讯的大分类，比如：National Accounts - GDP (Eurostat) r = requests.get(&#39;https://api.stlouisfed.org/fred/releases?api_key=&#39;+api_key+&#39;&amp;file_type=json&#39;, verify = True) full_releases = r.json()[&#39;releases&#39;] full_releases = pd.DataFrame.from_dict(full_releases)   # 寻找自己感兴趣的大分类 # 比如我们要找的大分类是 National Accounts - GDP (Eurostat) # 通过下面代码，我们会知道National Accounts - GDP (Eurostat)的ID是267 search_keywords = &#39;gdp&#39; search_result = full_releases.name[full_releases.name.apply(lambda x: search_keywords in x.lower())] # 接下来看大分类下面有哪些小分类 # 第一个参数是大分类的ID，limit限制的是小分类的数量，排序按popularity，降序排序 series_df = fred.search_by_release(267, limit = 10, order_by = &#39;popularity&#39;, sort_order = &#39;desc&#39;) # 假如我们感兴趣的是英国国内生产总值:Real Gross Domestic Product for United Kingdom # 对应编号为：&#39;CLVMNACSCAB1GQUK&#39;，确定起止时间，即可获得数据。 fred.get_series(&#39;CLVMNACSCAB1GQUK&#39;, observation_start = &#39;2000-01-01&#39;, observation_end = dt.datetime.today())          从Google Trends获取关键字搜索量资料： from pytrends.request import TrendReq import pandas as pd import numpy as np import datetime as dt # 首先指定时区，国内访问需要额，大家懂的 # 不用代理 pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360) # 用代理 (没跑通，跑通的大佬教下我) pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360, timeout=(10,25), proxies=[&#39;https://34.203.233.13:80&#39;,], retries=100, backoff_factor=0.1, requests_args={&#39;verify&#39;:False})     以上没跑通，跑通的大佬教下我。     用其他方法调通了一个，代码如下，有点粗糙，具体原理和稍微细致一点的代码及解说请参考[4]： # 时区参数设置，测试了AAPL在en-US, 360和zh-CN, -480两种配置下的结果，是一致的 hl= &#39;zh-CN&#39; # en-US tz = &#39;-480&#39; # 360 # 设置想拉取数据的时间区间 period = &#39;2020-12-31 2021-05-22&#39; # 设置想确定搜索热度的关键字 keyword = &quot;AAPL&quot; headers = {&#39;user-agent&#39;: &#39;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36&#39;, &#39;x-client-data&#39;: &#39;CIu2yQEIo7bJAQjEtskBCKmdygEIy67KAQjQr8oBCLywygEIl7XKAQjttcoBCI66ygEYx7fKAQ==&#39;, &#39;referer&#39;: &#39;https://trends.google.com/trends/explore?date=today%201-m&amp;q=bitcoin,blockchain,eth&#39;, &#39;cookie&#39;: &#39;__utmc=10102256; __utma=10102256.31392724.1583402727.1586332529.1586398363.11; __utmz=10102256.1586398363.11.11.utmcsr=shimo.im|utmccn=(referral)|utmcmd=referral|utmcct=/docs/qxW86VTXr8DK6HJX; __utmt=1; __utmb=10102256.9.9.1586398779015; ANID=AHWqTUlRutPWkqC3UpC_-5XoYk6zqoDW3RQX5ePFhLykky73kQ0BpL32ATvqV3O0; CONSENT=WP.284bc1; NID=202=xLozp9-VAAGa2d3d9-cqyqmRjW9nu1zmK0j50IM4pdzJ6wpWTO_Z49JN8W0s1OJ8bySeirh7pSMew1WdqRF890iJLX4HQwwvVkRZ7zwsBDxzeHIx8MOWf27jF0mVCxktZX6OmMmSA0txa0zyJ_AJ3i9gmtEdLeopK5BO3X0LWRA; 1P_JAR=2020-4-9-2&#39;} # 获取token的链接 url1 = &#39;https://trends.google.com/trends/api/explore?hl={}&amp;tz={}&amp;req={{&quot;comparisonItem&quot;:[{{&quot;keyword&quot;:&quot;{}&quot;,&quot;geo&quot;:&quot;&quot;,&quot;time&quot;:&quot;{}&quot;}}],&quot;category&quot;:0,&quot;property&quot;:&quot;&quot;}}&amp;tz={}&quot;&#39;.format(hl,tz,keyword,period,tz) r = requests.get(url1, headers=headers,timeout=15) data = json.loads(r.text[5:]) req = data[&#39;widgets&#39;][0][&#39;request&#39;] token = data[&#39;widgets&#39;][0][&#39;token&#39;] # 获取数据的链接 url2 = &#39;https://trends.google.com/trends/api/widgetdata/multiline?hl={}&amp;tz={}&amp;req={}&amp;token={}&amp;tz={}&#39;.format(hl, tz, req, token, tz) r = requests.get(url2) # 最后的结果会以一张表显示 if r.status_code == 200: data = pd.DataFrame.from_dict(json.loads(r.text.encode().decode(&#39;unicode_escape&#39;)[6:])[&#39;default&#39;][&#39;timelineData&#39;])          觉得有用就点个在看哦，点得多的话同类型文章会接着写哦。     另，文章中有任何表述不恰当的地方，欢迎指正。 参考： [1]. Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021 [2]. AI StockBoy, 用 Python 打造自己的股市資料庫 — 美股篇, Medium, 2019 [3]. 万能的小草，Python在Finance上的应用6 ：获取是S&amp;P 500的成分股股票数据，腾讯云，2020 [4]. 编程学习笔记，批量爬取Google Trends的日频数据，实现EXCEL实时存储，CSDN，2020" />
+<meta property="og:description" content="声明： 这篇笔记和参考均不构成任何投资建议哦。    本来这应该是一篇读书笔记，要翻译整理课程‘Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021’，但后来写成了美股数据收集。这篇会比较适合有编程基础的读者，有什么不准确的地方，欢迎路过的都是大佬的大佬们指正。     首先算法交易（Algorithmic Trading）的意思就是用计算机，产生投资决策。     来看几家精于此道的公司[1]： Renaissance Technologies: $165B in AUM (assets under managerment) AQR Capital Management: $61B in AUM Citadel Securities: $32B in AUM     算法交易的步骤： 数据收集 生成策略 策略测试 投入使用  这篇只涉及数据收集     参考[1]课程作者分享了一个列举了众多API的链接： https://github.com/public-apis/public-apis     我们需要注意的是这个链接里Finance目录下的IEX Cloud，视频课程中的实验数据是从这个接口调取的。简单说一下IEX Cloud这个工具，首先，它是个付费工具，个人级一个月9刀，描述说是各种金融相关的数据都能从它那儿调取到。另外课程里没有用付费通道，用的是测试通道。而这篇译文里会从雅虎金融拉取数据，是真实免费数据。     视频课程[1]完成了三个项目： Equal-Weight S&amp;P 500 Screener (选大公司)  Quantitative Momentum Screener （选最近涨得多的） Quantitative Value Screener (选性价比高的)      三个项目的代码链接： https://github.com/nickmccullum/algorithmic-trading-python     这里就不详细说这三个项目了，视频是非常适合无编程基础的人看的，有编程基础的直接看github上的代码就能懂。 数据收集       首先我们看几个抓取股票清单的方式和方法。     比如我们要抓取S&amp;P 500的股票清单。     测试有效的有以下两种，第一种[2]： import requests import pandas as pd url = &#39;https://www.slickcharts.com/sp500&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] stk_list = data.Symbol sp500 = set(list(stk_list.values))     第二种，维基百科[3]： import os import bs4 as bs import pickle import requests resp = requests.get(&#39;http://en.wikipedia.org/wiki/List_of_S%26P_500_companies&#39;) soup = bs.BeautifulSoup(resp.text, &#39;lxml&#39;) table = soup.find(&#39;table&#39;, {&#39;class&#39;: &#39;wikitable sortable&#39;}) tickers = [] for row in table.findAll(&#39;tr&#39;)[1:]: ticker = row.findAll(&#39;td&#39;)[0].text.split(&quot;\n&quot;)[0]     tickers.append(ticker)  sp500 = set(tickers)     测试了一下，这两种方式取得的结果是一致的。     另外推荐一个雅虎金融上的screener功能，使用方法可以看[2]，这里贴一段用python抓取近一日交易量最多的100只美股的代码： import pandas as pd import requests url = &#39;https://finance.yahoo.com/screener/predefined/most_actives?count=100&amp;offset=0&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] # 欄位『Symbol』就是股票代碼 ma100 = list(data.Symbol.values)     接下来看一下怎么获取股票最近的交易信息，包括(Date, High, Low, Open, Close, Volume, Adj Close) [3]： import datetime as dt import pandas_datareader.data as web start = dt.datetime(2021, 7, 20) end = dt.datetime.now() # 获得单只股票最近信息填股票代码就行 APPL_df = web.DataReader(&#39;AAPL&#39;, &#39;yahoo&#39;, start, end) # 想同时获取多只股票交易信息可以直接填list # 雅虎金融中股票代号中的&#39;.&#39;用&#39;-&#39;号取代 sp500 = { item.replace(&#39;.&#39;, &#39;-&#39;) for item in sp500} sp500_df = web.DataReader(list(sp500), &#39;yahoo&#39;, start, end)     这里另外介绍一些好用的API[2]: pip install yfinance #Yahoo Finance python API 主要数据来源 pip install fredapi #FRED python API，总体经济数据 pip install pytrends #Google Trends python API 股票关键字搜索流行度     从雅虎金融上获取股票的一些基本资料[2]： import yfinance as yf stock = yf.Ticker(&#39;aapl&#39;) # 获取公司资料 stock.info # 获取损益表（测试发现可以获取近四年的） stock.financials # 获取资产负债表 stock.balance_sheet # 现金流表 stock.cashflow # 取得价量资料+股利发放资料+股票分割资料 # 测试APPL，最早可以获取到1980年12月12日的资料 stock.history(period = &#39;max&#39;)          从FRED (Federal Reserve Economic Data) 取得总体经济状况的资料[2]： from fredapi import Fred import requests import numpy as np import pandas as pd import datetime as dt # 注册账号：https://research.stlouisfed.org/docs/api/api_key.html # 然后找到 Request API key 获取API key api_key = &#39;填入你的API&#39; # 获得FRED资讯的大分类，比如：National Accounts - GDP (Eurostat) r = requests.get(&#39;https://api.stlouisfed.org/fred/releases?api_key=&#39;+api_key+&#39;&amp;file_type=json&#39;, verify = True) full_releases = r.json()[&#39;releases&#39;] full_releases = pd.DataFrame.from_dict(full_releases)   # 寻找自己感兴趣的大分类 # 比如我们要找的大分类是 National Accounts - GDP (Eurostat) # 通过下面代码，我们会知道National Accounts - GDP (Eurostat)的ID是267 search_keywords = &#39;gdp&#39; search_result = full_releases.name[full_releases.name.apply(lambda x: search_keywords in x.lower())] # 接下来看大分类下面有哪些小分类 # 第一个参数是大分类的ID，limit限制的是小分类的数量，排序按popularity，降序排序 series_df = fred.search_by_release(267, limit = 10, order_by = &#39;popularity&#39;, sort_order = &#39;desc&#39;) # 假如我们感兴趣的是英国国内生产总值:Real Gross Domestic Product for United Kingdom # 对应编号为：&#39;CLVMNACSCAB1GQUK&#39;，确定起止时间，即可获得数据。 fred.get_series(&#39;CLVMNACSCAB1GQUK&#39;, observation_start = &#39;2000-01-01&#39;, observation_end = dt.datetime.today())          从Google Trends获取关键字搜索量资料： from pytrends.request import TrendReq import pandas as pd import numpy as np import datetime as dt # 首先指定时区，国内访问需要额，大家懂的 # 不用代理 pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360) # 用代理 (没跑通，跑通的大佬教下我) pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360, timeout=(10,25), proxies=[&#39;https://34.203.233.13:80&#39;,], retries=100, backoff_factor=0.1, requests_args={&#39;verify&#39;:False})     以上没跑通，跑通的大佬教下我。     用其他方法调通了一个，代码如下，有点粗糙，具体原理和稍微细致一点的代码及解说请参考[4]： # 时区参数设置，测试了AAPL在en-US, 360和zh-CN, -480两种配置下的结果，是一致的 hl= &#39;zh-CN&#39; # en-US tz = &#39;-480&#39; # 360 # 设置想拉取数据的时间区间 period = &#39;2020-12-31 2021-05-22&#39; # 设置想确定搜索热度的关键字 keyword = &quot;AAPL&quot; headers = {&#39;user-agent&#39;: &#39;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36&#39;, &#39;x-client-data&#39;: &#39;CIu2yQEIo7bJAQjEtskBCKmdygEIy67KAQjQr8oBCLywygEIl7XKAQjttcoBCI66ygEYx7fKAQ==&#39;, &#39;referer&#39;: &#39;https://trends.google.com/trends/explore?date=today%201-m&amp;q=bitcoin,blockchain,eth&#39;, &#39;cookie&#39;: &#39;__utmc=10102256; __utma=10102256.31392724.1583402727.1586332529.1586398363.11; __utmz=10102256.1586398363.11.11.utmcsr=shimo.im|utmccn=(referral)|utmcmd=referral|utmcct=/docs/qxW86VTXr8DK6HJX; __utmt=1; __utmb=10102256.9.9.1586398779015; ANID=AHWqTUlRutPWkqC3UpC_-5XoYk6zqoDW3RQX5ePFhLykky73kQ0BpL32ATvqV3O0; CONSENT=WP.284bc1; NID=202=xLozp9-VAAGa2d3d9-cqyqmRjW9nu1zmK0j50IM4pdzJ6wpWTO_Z49JN8W0s1OJ8bySeirh7pSMew1WdqRF890iJLX4HQwwvVkRZ7zwsBDxzeHIx8MOWf27jF0mVCxktZX6OmMmSA0txa0zyJ_AJ3i9gmtEdLeopK5BO3X0LWRA; 1P_JAR=2020-4-9-2&#39;} # 获取token的链接 url1 = &#39;https://trends.google.com/trends/api/explore?hl={}&amp;tz={}&amp;req={{&quot;comparisonItem&quot;:[{{&quot;keyword&quot;:&quot;{}&quot;,&quot;geo&quot;:&quot;&quot;,&quot;time&quot;:&quot;{}&quot;}}],&quot;category&quot;:0,&quot;property&quot;:&quot;&quot;}}&amp;tz={}&quot;&#39;.format(hl,tz,keyword,period,tz) r = requests.get(url1, headers=headers,timeout=15) data = json.loads(r.text[5:]) req = data[&#39;widgets&#39;][0][&#39;request&#39;] token = data[&#39;widgets&#39;][0][&#39;token&#39;] # 获取数据的链接 url2 = &#39;https://trends.google.com/trends/api/widgetdata/multiline?hl={}&amp;tz={}&amp;req={}&amp;token={}&amp;tz={}&#39;.format(hl, tz, req, token, tz) r = requests.get(url2) # 最后的结果会以一张表显示 if r.status_code == 200: data = pd.DataFrame.from_dict(json.loads(r.text.encode().decode(&#39;unicode_escape&#39;)[6:])[&#39;default&#39;][&#39;timelineData&#39;])          觉得有用就点个在看哦，点得多的话同类型文章会接着写哦。     另，文章中有任何表述不恰当的地方，欢迎指正。 参考： [1]. Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021 [2]. AI StockBoy, 用 Python 打造自己的股市資料庫 — 美股篇, Medium, 2019 [3]. 万能的小草，Python在Finance上的应用6 ：获取是S&amp;P 500的成分股股票数据，腾讯云，2020 [4]. 编程学习笔记，批量爬取Google Trends的日频数据，实现EXCEL实时存储，CSDN，2020" />
+<link rel="canonical" href="http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/" />
+<meta property="og:url" content="http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/1.jpeg" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-08-02T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"声明： 这篇笔记和参考均不构成任何投资建议哦。    本来这应该是一篇读书笔记，要翻译整理课程‘Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021’，但后来写成了美股数据收集。这篇会比较适合有编程基础的读者，有什么不准确的地方，欢迎路过的都是大佬的大佬们指正。     首先算法交易（Algorithmic Trading）的意思就是用计算机，产生投资决策。     来看几家精于此道的公司[1]： Renaissance Technologies: $165B in AUM (assets under managerment) AQR Capital Management: $61B in AUM Citadel Securities: $32B in AUM     算法交易的步骤： 数据收集 生成策略 策略测试 投入使用  这篇只涉及数据收集     参考[1]课程作者分享了一个列举了众多API的链接： https://github.com/public-apis/public-apis     我们需要注意的是这个链接里Finance目录下的IEX Cloud，视频课程中的实验数据是从这个接口调取的。简单说一下IEX Cloud这个工具，首先，它是个付费工具，个人级一个月9刀，描述说是各种金融相关的数据都能从它那儿调取到。另外课程里没有用付费通道，用的是测试通道。而这篇译文里会从雅虎金融拉取数据，是真实免费数据。     视频课程[1]完成了三个项目： Equal-Weight S&amp;P 500 Screener (选大公司)  Quantitative Momentum Screener （选最近涨得多的） Quantitative Value Screener (选性价比高的)      三个项目的代码链接： https://github.com/nickmccullum/algorithmic-trading-python     这里就不详细说这三个项目了，视频是非常适合无编程基础的人看的，有编程基础的直接看github上的代码就能懂。 数据收集       首先我们看几个抓取股票清单的方式和方法。     比如我们要抓取S&amp;P 500的股票清单。     测试有效的有以下两种，第一种[2]： import requests import pandas as pd url = &#39;https://www.slickcharts.com/sp500&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] stk_list = data.Symbol sp500 = set(list(stk_list.values))     第二种，维基百科[3]： import os import bs4 as bs import pickle import requests resp = requests.get(&#39;http://en.wikipedia.org/wiki/List_of_S%26P_500_companies&#39;) soup = bs.BeautifulSoup(resp.text, &#39;lxml&#39;) table = soup.find(&#39;table&#39;, {&#39;class&#39;: &#39;wikitable sortable&#39;}) tickers = [] for row in table.findAll(&#39;tr&#39;)[1:]: ticker = row.findAll(&#39;td&#39;)[0].text.split(&quot;\\n&quot;)[0]     tickers.append(ticker)  sp500 = set(tickers)     测试了一下，这两种方式取得的结果是一致的。     另外推荐一个雅虎金融上的screener功能，使用方法可以看[2]，这里贴一段用python抓取近一日交易量最多的100只美股的代码： import pandas as pd import requests url = &#39;https://finance.yahoo.com/screener/predefined/most_actives?count=100&amp;offset=0&#39; headers = {&quot;User-Agent&quot; : &#39;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36&#39;} request = requests.get(url, headers = headers) data = pd.read_html(request.text)[0] # 欄位『Symbol』就是股票代碼 ma100 = list(data.Symbol.values)     接下来看一下怎么获取股票最近的交易信息，包括(Date, High, Low, Open, Close, Volume, Adj Close) [3]： import datetime as dt import pandas_datareader.data as web start = dt.datetime(2021, 7, 20) end = dt.datetime.now() # 获得单只股票最近信息填股票代码就行 APPL_df = web.DataReader(&#39;AAPL&#39;, &#39;yahoo&#39;, start, end) # 想同时获取多只股票交易信息可以直接填list # 雅虎金融中股票代号中的&#39;.&#39;用&#39;-&#39;号取代 sp500 = { item.replace(&#39;.&#39;, &#39;-&#39;) for item in sp500} sp500_df = web.DataReader(list(sp500), &#39;yahoo&#39;, start, end)     这里另外介绍一些好用的API[2]: pip install yfinance #Yahoo Finance python API 主要数据来源 pip install fredapi #FRED python API，总体经济数据 pip install pytrends #Google Trends python API 股票关键字搜索流行度     从雅虎金融上获取股票的一些基本资料[2]： import yfinance as yf stock = yf.Ticker(&#39;aapl&#39;) # 获取公司资料 stock.info # 获取损益表（测试发现可以获取近四年的） stock.financials # 获取资产负债表 stock.balance_sheet # 现金流表 stock.cashflow # 取得价量资料+股利发放资料+股票分割资料 # 测试APPL，最早可以获取到1980年12月12日的资料 stock.history(period = &#39;max&#39;)          从FRED (Federal Reserve Economic Data) 取得总体经济状况的资料[2]： from fredapi import Fred import requests import numpy as np import pandas as pd import datetime as dt # 注册账号：https://research.stlouisfed.org/docs/api/api_key.html # 然后找到 Request API key 获取API key api_key = &#39;填入你的API&#39; # 获得FRED资讯的大分类，比如：National Accounts - GDP (Eurostat) r = requests.get(&#39;https://api.stlouisfed.org/fred/releases?api_key=&#39;+api_key+&#39;&amp;file_type=json&#39;, verify = True) full_releases = r.json()[&#39;releases&#39;] full_releases = pd.DataFrame.from_dict(full_releases)   # 寻找自己感兴趣的大分类 # 比如我们要找的大分类是 National Accounts - GDP (Eurostat) # 通过下面代码，我们会知道National Accounts - GDP (Eurostat)的ID是267 search_keywords = &#39;gdp&#39; search_result = full_releases.name[full_releases.name.apply(lambda x: search_keywords in x.lower())] # 接下来看大分类下面有哪些小分类 # 第一个参数是大分类的ID，limit限制的是小分类的数量，排序按popularity，降序排序 series_df = fred.search_by_release(267, limit = 10, order_by = &#39;popularity&#39;, sort_order = &#39;desc&#39;) # 假如我们感兴趣的是英国国内生产总值:Real Gross Domestic Product for United Kingdom # 对应编号为：&#39;CLVMNACSCAB1GQUK&#39;，确定起止时间，即可获得数据。 fred.get_series(&#39;CLVMNACSCAB1GQUK&#39;, observation_start = &#39;2000-01-01&#39;, observation_end = dt.datetime.today())          从Google Trends获取关键字搜索量资料： from pytrends.request import TrendReq import pandas as pd import numpy as np import datetime as dt # 首先指定时区，国内访问需要额，大家懂的 # 不用代理 pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360) # 用代理 (没跑通，跑通的大佬教下我) pytrends = TrendReq(hl=&#39;en-US&#39;, tz=360, timeout=(10,25), proxies=[&#39;https://34.203.233.13:80&#39;,], retries=100, backoff_factor=0.1, requests_args={&#39;verify&#39;:False})     以上没跑通，跑通的大佬教下我。     用其他方法调通了一个，代码如下，有点粗糙，具体原理和稍微细致一点的代码及解说请参考[4]： # 时区参数设置，测试了AAPL在en-US, 360和zh-CN, -480两种配置下的结果，是一致的 hl= &#39;zh-CN&#39; # en-US tz = &#39;-480&#39; # 360 # 设置想拉取数据的时间区间 period = &#39;2020-12-31 2021-05-22&#39; # 设置想确定搜索热度的关键字 keyword = &quot;AAPL&quot; headers = {&#39;user-agent&#39;: &#39;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36&#39;, &#39;x-client-data&#39;: &#39;CIu2yQEIo7bJAQjEtskBCKmdygEIy67KAQjQr8oBCLywygEIl7XKAQjttcoBCI66ygEYx7fKAQ==&#39;, &#39;referer&#39;: &#39;https://trends.google.com/trends/explore?date=today%201-m&amp;q=bitcoin,blockchain,eth&#39;, &#39;cookie&#39;: &#39;__utmc=10102256; __utma=10102256.31392724.1583402727.1586332529.1586398363.11; __utmz=10102256.1586398363.11.11.utmcsr=shimo.im|utmccn=(referral)|utmcmd=referral|utmcct=/docs/qxW86VTXr8DK6HJX; __utmt=1; __utmb=10102256.9.9.1586398779015; ANID=AHWqTUlRutPWkqC3UpC_-5XoYk6zqoDW3RQX5ePFhLykky73kQ0BpL32ATvqV3O0; CONSENT=WP.284bc1; NID=202=xLozp9-VAAGa2d3d9-cqyqmRjW9nu1zmK0j50IM4pdzJ6wpWTO_Z49JN8W0s1OJ8bySeirh7pSMew1WdqRF890iJLX4HQwwvVkRZ7zwsBDxzeHIx8MOWf27jF0mVCxktZX6OmMmSA0txa0zyJ_AJ3i9gmtEdLeopK5BO3X0LWRA; 1P_JAR=2020-4-9-2&#39;} # 获取token的链接 url1 = &#39;https://trends.google.com/trends/api/explore?hl={}&amp;tz={}&amp;req={{&quot;comparisonItem&quot;:[{{&quot;keyword&quot;:&quot;{}&quot;,&quot;geo&quot;:&quot;&quot;,&quot;time&quot;:&quot;{}&quot;}}],&quot;category&quot;:0,&quot;property&quot;:&quot;&quot;}}&amp;tz={}&quot;&#39;.format(hl,tz,keyword,period,tz) r = requests.get(url1, headers=headers,timeout=15) data = json.loads(r.text[5:]) req = data[&#39;widgets&#39;][0][&#39;request&#39;] token = data[&#39;widgets&#39;][0][&#39;token&#39;] # 获取数据的链接 url2 = &#39;https://trends.google.com/trends/api/widgetdata/multiline?hl={}&amp;tz={}&amp;req={}&amp;token={}&amp;tz={}&#39;.format(hl, tz, req, token, tz) r = requests.get(url2) # 最后的结果会以一张表显示 if r.status_code == 200: data = pd.DataFrame.from_dict(json.loads(r.text.encode().decode(&#39;unicode_escape&#39;)[6:])[&#39;default&#39;][&#39;timelineData&#39;])          觉得有用就点个在看哦，点得多的话同类型文章会接着写哦。     另，文章中有任何表述不恰当的地方，欢迎指正。 参考： [1]. Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021 [2]. AI StockBoy, 用 Python 打造自己的股市資料庫 — 美股篇, Medium, 2019 [3]. 万能的小草，Python在Finance上的应用6 ：获取是S&amp;P 500的成分股股票数据，腾讯云，2020 [4]. 编程学习笔记，批量爬取Google Trends的日频数据，实现EXCEL实时存储，CSDN，2020","url":"http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/","image":"http://localhost:4000/assets/images/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/1.jpeg","@type":"BlogPosting","headline":"美股资料收集(Python)","dateModified":"2021-08-02T00:00:00+08:00","datePublished":"2021-08-02T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">美股资料收集(Python)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-08-02">02 Aug 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/美股资料收集(Python)/1.jpeg" alt="美股资料收集(Python)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><img src="../assets/images/美股资料收集(Python)/1.jpeg" alt="" /></p>
+
+<p><strong>声明：</strong></p>
+<ul>
+  <li><strong>这篇笔记和参考均不构成任何投资建议哦。<img src="../assets/images/美股资料收集(Python)/2.png" style="zoom:50%;" /></strong></li>
+</ul>
+
+<p>   本来这应该是一篇读书笔记，要翻译整理课程‘Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021’，但后来写成了美股数据收集<img src="../assets/images/美股资料收集(Python)/3.png" style="zoom:50%;" />。这篇会比较适合有编程基础的读者，有什么不准确的地方，欢迎路过的都是大佬的大佬们指正。</p>
+
+<p>    首先算法交易（Algorithmic Trading）的意思就是用计算机，产生投资决策。</p>
+
+<p>    来看几家精于此道的公司[1]：</p>
+<ul>
+  <li>Renaissance Technologies: $165B in AUM (assets under managerment)</li>
+  <li>AQR Capital Management: $61B in AUM</li>
+  <li>Citadel Securities: $32B in AUM</li>
+</ul>
+
+<p>    算法交易的步骤：</p>
+<ul>
+  <li>
+    <p><strong>数据收集</strong></p>
+  </li>
+  <li>
+    <p>生成策略</p>
+  </li>
+  <li>
+    <p>策略测试</p>
+  </li>
+  <li>
+    <p>投入使用 </p>
+
+    <p>这篇只涉及数据收集</p>
+  </li>
+</ul>
+
+<p>    参考[1]课程作者分享了一个列举了众多API的链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/public-apis/public-apis
+</code></pre></div></div>
+
+<p>    我们需要注意的是这个链接里Finance目录下的<strong>IEX Cloud</strong>，视频课程中的实验数据是从这个接口调取的。简单说一下IEX Cloud这个工具，首先，它是个付费工具，个人级一个月9刀，描述说是各种金融相关的数据都能从它那儿调取到。另外课程里没有用付费通道，用的是测试通道。而这篇译文里会从雅虎金融拉取数据，是真实免费数据。</p>
+
+<p>    视频课程[1]完成了三个项目：</p>
+
+<ul>
+  <li>Equal-Weight S&amp;P 500 Screener (选大公司) </li>
+  <li>Quantitative Momentum Screener （选最近涨得多的）</li>
+  <li>Quantitative Value Screener (选性价比高的) </li>
+</ul>
+
+<p>    三个项目的代码链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/nickmccullum/algorithmic-trading-python
+</code></pre></div></div>
+
+<p>    这里就不详细说这三个项目了，视频是非常适合无编程基础的人看的，有编程基础的直接看github上的代码就能懂。</p>
+
+<p><strong>数据收集</strong>  </p>
+
+<p>    首先我们看几个抓取股票清单的方式和方法。</p>
+
+<p>    比如我们要抓取S&amp;P 500的股票清单。</p>
+
+<p>    测试有效的有以下两种，第一种[2]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">requests</span>
+<span class="k">import</span><span class="err"> </span><span class="n">pandas</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">pd</span>
+<span class="n">url</span> <span class="o">=</span> <span class="s">'https://www.slickcharts.com/sp500'</span>
+<span class="n">headers</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">{</span><span class="s">"User-Agent"</span><span class="err"> </span><span class="p">:</span><span class="err"> </span><span class="s">'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36'</span><span class="p">}</span>
+<span class="n">request</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="err"> </span><span class="n">headers</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">headers</span><span class="p">)</span>
+<span class="n">data</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">pd</span><span class="p">.</span><span class="n">read_html</span><span class="p">(</span><span class="n">request</span><span class="p">.</span><span class="n">text</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">stk_list</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">data</span><span class="p">.</span><span class="n">Symbol</span>
+<span class="n">sp500</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">stk_list</span><span class="p">.</span><span class="n">values</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>    第二种，维基百科[3]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">bs4</span> <span class="k">as</span> <span class="n">bs</span>
+<span class="kn">import</span> <span class="nn">pickle</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="n">resp</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'http://en.wikipedia.org/wiki/List_of_S%26P_500_companies'</span><span class="p">)</span>
+<span class="n">soup</span> <span class="o">=</span> <span class="n">bs</span><span class="p">.</span><span class="n">BeautifulSoup</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">text</span><span class="p">,</span> <span class="s">'lxml'</span><span class="p">)</span>
+<span class="n">table</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="s">'table'</span><span class="p">,</span> <span class="p">{</span><span class="s">'class'</span><span class="p">:</span> <span class="s">'wikitable sortable'</span><span class="p">})</span>
+<span class="n">tickers</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">table</span><span class="p">.</span><span class="n">findAll</span><span class="p">(</span><span class="s">'tr'</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]:</span>
+    <span class="n">ticker</span> <span class="o">=</span> <span class="n">row</span><span class="p">.</span><span class="n">findAll</span><span class="p">(</span><span class="s">'td'</span><span class="p">)[</span><span class="mi">0</span><span class="p">].</span><span class="n">text</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="err">    </span><span class="n">tickers</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">ticker</span><span class="p">)</span><span class="err"> </span>
+<span class="n">sp500</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">tickers</span><span class="p">)</span>
+
+</code></pre></div></div>
+
+<p>    测试了一下，这两种方式取得的结果是一致的。</p>
+
+<p>    另外推荐一个雅虎金融上的screener功能，使用方法可以看[2]，这里贴一段用python抓取近一日交易量最多的100只美股的代码：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span><span class="err"> </span><span class="n">pandas</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">pd</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="n">url</span> <span class="o">=</span> <span class="s">'https://finance.yahoo.com/screener/predefined/most_actives?count=100&amp;offset=0'</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s">"User-Agent"</span> <span class="p">:</span> <span class="s">'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36'</span><span class="p">}</span>
+<span class="n">request</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span> <span class="n">headers</span> <span class="o">=</span> <span class="n">headers</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">read_html</span><span class="p">(</span><span class="n">request</span><span class="p">.</span><span class="n">text</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="c1"># 欄位『Symbol』就是股票代碼
+</span><span class="n">ma100</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">data</span><span class="p">.</span><span class="n">Symbol</span><span class="p">.</span><span class="n">values</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    接下来看一下怎么获取股票最近的交易信息，包括(Date, High, Low, Open, Close, Volume, Adj Close) [3]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">datetime</span> <span class="k">as</span> <span class="n">dt</span>
+<span class="kn">import</span> <span class="nn">pandas_datareader.data</span> <span class="k">as</span> <span class="n">web</span>
+<span class="n">start</span> <span class="o">=</span> <span class="n">dt</span><span class="p">.</span><span class="n">datetime</span><span class="p">(</span><span class="mi">2021</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">20</span><span class="p">)</span>
+<span class="n">end</span> <span class="o">=</span> <span class="n">dt</span><span class="p">.</span><span class="n">datetime</span><span class="p">.</span><span class="n">now</span><span class="p">()</span>
+<span class="c1"># 获得单只股票最近信息填股票代码就行
+</span><span class="n">APPL_df</span> <span class="o">=</span> <span class="n">web</span><span class="p">.</span><span class="n">DataReader</span><span class="p">(</span><span class="s">'AAPL'</span><span class="p">,</span> <span class="s">'yahoo'</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+<span class="c1"># 想同时获取多只股票交易信息可以直接填list
+# 雅虎金融中股票代号中的'.'用'-'号取代
+</span><span class="n">sp500</span> <span class="o">=</span> <span class="p">{</span> <span class="n">item</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'.'</span><span class="p">,</span> <span class="s">'-'</span><span class="p">)</span> <span class="k">for</span> <span class="n">item</span> <span class="ow">in</span> <span class="n">sp500</span><span class="p">}</span>
+<span class="n">sp500_df</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">web</span><span class="p">.</span><span class="n">DataReader</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">sp500</span><span class="p">),</span><span class="err"> </span><span class="s">'yahoo'</span><span class="p">,</span><span class="err"> </span><span class="n">start</span><span class="p">,</span><span class="err"> </span><span class="n">end</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    这里另外介绍一些好用的API[2]:</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">pip</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="n">yfinance</span><span class="err"> </span><span class="c1">#Yahoo Finance python API 主要数据来源
+</span><span class="n">pip</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="n">fredapi</span><span class="err"> </span><span class="c1">#FRED python API，总体经济数据
+</span><span class="n">pip</span><span class="err"> </span><span class="n">install</span><span class="err"> </span><span class="n">pytrends</span><span class="err"> </span><span class="c1">#Google Trends python API 股票关键字搜索流行度
+</span></code></pre></div></div>
+
+<p>    从雅虎金融上获取股票的一些基本资料[2]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span><span class="err"> </span><span class="n">yfinance</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">yf</span>
+<span class="n">stock</span> <span class="o">=</span> <span class="n">yf</span><span class="p">.</span><span class="n">Ticker</span><span class="p">(</span><span class="s">'aapl'</span><span class="p">)</span>
+<span class="c1"># 获取公司资料
+</span><span class="n">stock</span><span class="p">.</span><span class="n">info</span>
+<span class="c1"># 获取损益表（测试发现可以获取近四年的）
+</span><span class="n">stock</span><span class="p">.</span><span class="n">financials</span>
+<span class="c1"># 获取资产负债表
+</span><span class="n">stock</span><span class="p">.</span><span class="n">balance_sheet</span>
+<span class="c1"># 现金流表
+</span><span class="n">stock</span><span class="p">.</span><span class="n">cashflow</span>
+<span class="c1"># 取得价量资料+股利发放资料+股票分割资料
+# 测试APPL，最早可以获取到1980年12月12日的资料
+</span><span class="n">stock</span><span class="p">.</span><span class="n">history</span><span class="p">(</span><span class="n">period</span> <span class="o">=</span> <span class="s">'max'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    </p>
+
+<p>    从FRED (Federal Reserve Economic Data) 取得总体经济状况的资料[2]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">fredapi</span> <span class="kn">import</span> <span class="n">Fred</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="k">import</span><span class="err"> </span><span class="n">pandas</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">pd</span>
+<span class="kn">import</span> <span class="nn">datetime</span> <span class="k">as</span> <span class="n">dt</span>
+<span class="c1"># 注册账号：https://research.stlouisfed.org/docs/api/api_key.html
+# 然后找到 Request API key 获取API key
+</span><span class="n">api_key</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'填入你的API'</span>
+<span class="c1"># 获得FRED资讯的大分类，比如：National Accounts - GDP (Eurostat)
+</span><span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'https://api.stlouisfed.org/fred/releases?api_key='</span><span class="o">+</span><span class="n">api_key</span><span class="o">+</span><span class="s">'&amp;file_type=json'</span><span class="p">,</span> <span class="n">verify</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span>
+<span class="n">full_releases</span> <span class="o">=</span> <span class="n">r</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'releases'</span><span class="p">]</span>
+<span class="n">full_releases</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">full_releases</span><span class="p">)</span><span class="err">  </span>
+<span class="c1"># 寻找自己感兴趣的大分类
+# 比如我们要找的大分类是 National Accounts - GDP (Eurostat)
+# 通过下面代码，我们会知道National Accounts - GDP (Eurostat)的ID是267
+</span><span class="n">search_keywords</span> <span class="o">=</span> <span class="s">'gdp'</span>
+<span class="n">search_result</span> <span class="o">=</span> <span class="n">full_releases</span><span class="p">.</span><span class="n">name</span><span class="p">[</span><span class="n">full_releases</span><span class="p">.</span><span class="n">name</span><span class="p">.</span><span class="nb">apply</span><span class="p">(</span><span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">search_keywords</span> <span class="ow">in</span> <span class="n">x</span><span class="p">.</span><span class="n">lower</span><span class="p">())]</span>
+<span class="c1"># 接下来看大分类下面有哪些小分类
+# 第一个参数是大分类的ID，limit限制的是小分类的数量，排序按popularity，降序排序
+</span><span class="n">series_df</span> <span class="o">=</span> <span class="n">fred</span><span class="p">.</span><span class="n">search_by_release</span><span class="p">(</span><span class="mi">267</span><span class="p">,</span> <span class="n">limit</span> <span class="o">=</span> <span class="mi">10</span><span class="p">,</span> <span class="n">order_by</span> <span class="o">=</span> <span class="s">'popularity'</span><span class="p">,</span> <span class="n">sort_order</span> <span class="o">=</span> <span class="s">'desc'</span><span class="p">)</span>
+<span class="c1"># 假如我们感兴趣的是英国国内生产总值:Real Gross Domestic Product for United Kingdom
+# 对应编号为：'CLVMNACSCAB1GQUK'，确定起止时间，即可获得数据。
+</span><span class="n">fred</span><span class="p">.</span><span class="n">get_series</span><span class="p">(</span><span class="s">'CLVMNACSCAB1GQUK'</span><span class="p">,</span><span class="err"> </span><span class="n">observation_start</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'2000-01-01'</span><span class="p">,</span><span class="err"> </span><span class="n">observation_end</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">dt</span><span class="p">.</span><span class="n">datetime</span><span class="p">.</span><span class="n">today</span><span class="p">())</span>
+</code></pre></div></div>
+
+<p>    </p>
+
+<p>    从Google Trends获取关键字搜索量资料：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">pytrends.request</span> <span class="kn">import</span> <span class="n">TrendReq</span>
+<span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="k">import</span><span class="err"> </span><span class="n">datetime</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">dt</span>
+<span class="c1"># 首先指定时区，国内访问需要额，大家懂的
+# 不用代理 
+</span><span class="n">pytrends</span> <span class="o">=</span> <span class="n">TrendReq</span><span class="p">(</span><span class="n">hl</span><span class="o">=</span><span class="s">'en-US'</span><span class="p">,</span> <span class="n">tz</span><span class="o">=</span><span class="mi">360</span><span class="p">)</span>
+<span class="c1"># 用代理 (没跑通，跑通的大佬教下我)
+</span><span class="n">pytrends</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">TrendReq</span><span class="p">(</span><span class="n">hl</span><span class="o">=</span><span class="s">'en-US'</span><span class="p">,</span><span class="err"> </span><span class="n">tz</span><span class="o">=</span><span class="mi">360</span><span class="p">,</span><span class="err"> </span><span class="n">timeout</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span><span class="mi">25</span><span class="p">),</span><span class="err"> </span><span class="n">proxies</span><span class="o">=</span><span class="p">[</span><span class="s">'https://34.203.233.13:80'</span><span class="p">,],</span><span class="err"> </span><span class="n">retries</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span><span class="err"> </span><span class="n">backoff_factor</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span><span class="err"> </span><span class="n">requests_args</span><span class="o">=</span><span class="p">{</span><span class="s">'verify'</span><span class="p">:</span><span class="bp">False</span><span class="p">})</span>
+</code></pre></div></div>
+
+<p>    以上没跑通，跑通的大佬教下我<img src="../assets/images/美股资料收集(Python)/4.png" style="zoom:50%;" />。</p>
+
+<p>    用其他方法调通了一个，代码如下，有点粗糙，具体原理和稍微细致一点的代码及解说请参考[4]：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 时区参数设置，测试了AAPL在en-US, 360和zh-CN, -480两种配置下的结果，是一致的
+</span><span class="n">hl</span><span class="o">=</span><span class="err"> </span><span class="s">'zh-CN'</span><span class="err"> </span><span class="c1"># en-US
+</span><span class="n">tz</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'-480'</span><span class="err"> </span><span class="c1"># 360
+# 设置想拉取数据的时间区间
+</span><span class="n">period</span> <span class="o">=</span> <span class="s">'2020-12-31 2021-05-22'</span>
+<span class="c1"># 设置想确定搜索热度的关键字
+</span><span class="n">keyword</span> <span class="o">=</span> <span class="s">"AAPL"</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="p">{</span><span class="s">'user-agent'</span><span class="p">:</span> <span class="s">'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.163 Safari/537.36'</span><span class="p">,</span> 
+	<span class="s">'x-client-data'</span><span class="p">:</span> <span class="s">'CIu2yQEIo7bJAQjEtskBCKmdygEIy67KAQjQr8oBCLywygEIl7XKAQjttcoBCI66ygEYx7fKAQ=='</span><span class="p">,</span>
+	<span class="s">'referer'</span><span class="p">:</span> <span class="s">'https://trends.google.com/trends/explore?date=today%201-m&amp;q=bitcoin,blockchain,eth'</span><span class="p">,</span>
+	<span class="s">'cookie'</span><span class="p">:</span> <span class="s">'__utmc=10102256; __utma=10102256.31392724.1583402727.1586332529.1586398363.11; __utmz=10102256.1586398363.11.11.utmcsr=shimo.im|utmccn=(referral)|utmcmd=referral|utmcct=/docs/qxW86VTXr8DK6HJX; __utmt=1; __utmb=10102256.9.9.1586398779015; ANID=AHWqTUlRutPWkqC3UpC_-5XoYk6zqoDW3RQX5ePFhLykky73kQ0BpL32ATvqV3O0; CONSENT=WP.284bc1; NID=202=xLozp9-VAAGa2d3d9-cqyqmRjW9nu1zmK0j50IM4pdzJ6wpWTO_Z49JN8W0s1OJ8bySeirh7pSMew1WdqRF890iJLX4HQwwvVkRZ7zwsBDxzeHIx8MOWf27jF0mVCxktZX6OmMmSA0txa0zyJ_AJ3i9gmtEdLeopK5BO3X0LWRA; 1P_JAR=2020-4-9-2'</span><span class="p">}</span>
+<span class="c1"># 获取token的链接
+</span><span class="n">url1</span> <span class="o">=</span> <span class="s">'https://trends.google.com/trends/api/explore?hl={}&amp;tz={}&amp;req={{"comparisonItem":[{{"keyword":"{}","geo":"","time":"{}"}}],"category":0,"property":""}}&amp;tz={}"'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">hl</span><span class="p">,</span><span class="n">tz</span><span class="p">,</span><span class="n">keyword</span><span class="p">,</span><span class="n">period</span><span class="p">,</span><span class="n">tz</span><span class="p">)</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url1</span><span class="p">,</span> <span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="n">timeout</span><span class="o">=</span><span class="mi">15</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">json</span><span class="p">.</span><span class="n">loads</span><span class="p">(</span><span class="n">r</span><span class="p">.</span><span class="n">text</span><span class="p">[</span><span class="mi">5</span><span class="p">:])</span>
+<span class="n">req</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">'widgets'</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s">'request'</span><span class="p">]</span>
+<span class="n">token</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="s">'widgets'</span><span class="p">][</span><span class="mi">0</span><span class="p">][</span><span class="s">'token'</span><span class="p">]</span>
+<span class="c1"># 获取数据的链接
+</span><span class="n">url2</span> <span class="o">=</span> <span class="s">'https://trends.google.com/trends/api/widgetdata/multiline?hl={}&amp;tz={}&amp;req={}&amp;token={}&amp;tz={}'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">hl</span><span class="p">,</span> <span class="n">tz</span><span class="p">,</span> <span class="n">req</span><span class="p">,</span> <span class="n">token</span><span class="p">,</span> <span class="n">tz</span><span class="p">)</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url2</span><span class="p">)</span>
+<span class="c1"># 最后的结果会以一张表显示
+</span><span class="k">if</span> <span class="n">r</span><span class="p">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">DataFrame</span><span class="p">.</span><span class="n">from_dict</span><span class="p">(</span><span class="n">json</span><span class="p">.</span><span class="n">loads</span><span class="p">(</span><span class="n">r</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">encode</span><span class="p">().</span><span class="n">decode</span><span class="p">(</span><span class="s">'unicode_escape'</span><span class="p">)[</span><span class="mi">6</span><span class="p">:])[</span><span class="s">'default'</span><span class="p">][</span><span class="s">'timelineData'</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>    </p>
+
+<p>    觉得有用就点个在看哦，点得多的话同类型文章会接着写哦。<img src="../assets/images/美股资料收集(Python)/5.png" style="zoom:50%;" /></p>
+
+<p>    另，文章中有任何表述不恰当的地方，欢迎指正。</p>
+
+<p>参考：</p>
+
+<p>[1]. Nick McCullum, Algorithmic Trading Using Python, Nick McCullum，freeCodeCamp.org, 2021</p>
+
+<p>[2]. AI StockBoy, 用 Python 打造自己的股市資料庫 — 美股篇, Medium, 2019</p>
+
+<p>[3]. 万能的小草，Python在Finance上的应用6 ：获取是S&amp;P 500的成分股股票数据，腾讯云，2020</p>
+
+<p>[4]. 编程学习笔记，批量爬取Google Trends的日频数据，实现EXCEL实时存储，CSDN，2020</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=美股资料收集(Python)&url=http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Prediction">Prediction</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Stock">Stock</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/2.png" alt="Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/">Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements</a>
+                
+            </h2>
+            <h4 class="card-text">    不想学习的时候，不如想想怎么发财
+
+    这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。
+
+    发起的公司叫Two Sigma，看公司图标：
+
+
+
+    这个名字，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Oct 2020</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

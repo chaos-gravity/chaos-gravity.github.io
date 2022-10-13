@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    之前讲过一篇自监督学习：自监督学习（Self Supervised Learning），里面有提到几种把图像转成通用的embedding的方式，有CPC, SimCLR, 还有Moco。今天来详细说一下Moco v3，主要讲下面这篇文章：An Empirical Study of Training Self-Supervised Visual Transformers。     这篇文章主要讲的是自监督ViT的训练技巧。之后一定会讲这篇文章的源代码哦，心动就关注吧。     CV和NLP在预训练时有两点不同： NLP选择的通常是masked auto-encoder，而CV最近比较倾向孪生网络（Siamese networks） NLP用的主干结构是self-attentional Transformers，而CV的主干通常是deep residual networks（ResNets）     这篇文章，主干结构用的是self-attentional Transformers，网络框架是基于Siamese networks（Moco和一些其他框架）。网络属于Vision Transformers (ViT)这个范畴。ViT属于一种新的网络结构，因此关于这种网络的训练技巧比较少，这篇文章主要就从一些很基础的方面，比如batch size，learning rate，optimizer这些方面来讨论，这种网络要怎么训练。实验反馈的结果是，Transformers搭配Contrastive Learning会比搭配auto-encoding效果好。下图中iGPT是Transformers搭配auto-encoding的模型，可以发现Moco v3优势是很大的。另外也可以发现，ViT越大，准确率越高，这表示ViT还持续有潜力。另外，ViT-Large在某些案例里可以直接打败监督学习。 ViT也可以打败ResNets和Contrastive Learning的搭配，下面这张是MoCo各个版本搭配ResNets训练的结果：     作者发现，训练过程中的不稳定情况会略微降低这个网络最后的精确度，大概1%-3%。而通过一些鸡贼的操作，可以减轻这个问题带来的影响，从而提高精确度。我们就来看看，究竟是个什么问题，他们又是怎么解决的。     我们看一下Moco v3架构的伪代码： # f_q: encoder: backbone + proj mlp + pred mlp # f_k: momentum encoder: backbone + proj mlp # m: momentum coefficient # tau: temperature for x in loader: # load a minibatch x with N samples   x1, x2 = aug(x), aug(x) # 将同一个样本随机进行不同的数据增强处理   q1, q2 = f_q(x1), f_q(x2) # 用encoder分别编码   k1, k2 = f_k(x1), f_k(x2) # 再 momentum encoder分别编码   loss = ctr(q1, k2) + ctr(q2, k1) # 交叉计算loss再求 loss.backward()   update(f_q) # 更新encoder的参数   f_k = m*f_k + (1-m)*f_q # 根据更新的encoder和之前的momentum encoder得到新的momentum encoder # contrastive loss def ctr(q, k):   logits = mm(q, k.t()) # [N, N] 对角线上的出自同一幅图 labels = range(N) # positives are in diagonal   loss = CrossEntropyLoss(logits/tau, labels) return 2 * tau * loss     损失函数在伪代码里是ctr，也可以看上图的公式，q和k+是同一幅图得到的embedding，q和k-则是不同图得到的embedding，q是encoder得到的，k是由momentum encoder得到的，容易理解的是，这样的损失函数，就是要让qk+的值尽量大，qk-的值尽量小，而momentum的设计目的我们之后再说。关于Cross Entropy Loss可以看Cross Entropy Loss。     这里说一下encoder（f_q）和momentum encoder（f_k）的网络结构，encoder包含的是一个主干网络结构，即ViT，或者ResNet，另外还包含一个projection head和一个prediction head，而momentum encoder则只有projection head和主干网络，momentum encoder在获取encoder参数来调整自己参数的时候，不会用到prediction head。 接下来我们来看一下各种训练参数怎么配置比较合适： 1. Batch size     通常来说，ViT是很大的模型，配置比较大的batch size往往会取得更好效果，下面是配置了不同batch size的一些实验结果： 为了展示ViT训练存在的不稳定性问题，他们给了上面的实验结果，这里涉及到一个概念，kNN accuracy，这个具体怎么计算，我们解析代码的时候再说，这里我们就把它当成评量自监督模型的方式就好，越高，表示模型越好。实验者将batch size逐渐放大，从1024到6144，发现当batch size变大的时候，kNN accuracy出现了很大的震荡，这种震荡是局部突然下降（作者推测是训练突然重启了，即跳出了原本的局部最优点，重新梯度下降，训练虽然没有偏离，但准确性决定于新的局部点），batch size越大，这种现象越严重（为了更好的捕捉这种震荡，训练的时候他们每十个batch就测一次kNN accuracy）。 2. Learning rate     首先设定了一个base learning rate: lr，然后再根据batch size调整，调整方式是：lr*BatchSize/256。     和之前调整batch size一样，learning rate也出现了局部突然下降又快速回升的现象，learning rate越大，这种现象越明显。另外也可以看出来，不是越稳定就能获得越好的结果。 3. Optimizer     文章里提到了三种Optimizer，一种AdamW（常用来做ViT训练），一种LARS（在自监督学习经常用来匹配batch size很大的训练），最后一种LAMB（AdamW-counterpart of LARS）。实验在不同lr情况下对LAMB进行了测试，发现当lr=5e-4的时候，取得的效果会好于用AdamW的，但是看图我们会发现LAMB对lr的取值非常敏感。虽然曲线平滑，没有用AdamW时候突然下降的情况，但是训练中途会下降很长一段时间，作者们猜测是用LAMB会有梯度不可靠的情况。因此，这篇文章最终选择的Optimizer还是AdamW。 4. 如何提高训练过程中的稳定性     接下来，我们看看怎么解决精确度突然下降的问题，首先当然要找到产生这个现象的原因： 他们去观察了网络每一层在训练过程中的梯度，发现是梯度的突增导致了精确度的陡降，还发现，总是第一层最先开始突增，大概几十个batch之后，最后一层的梯度也出现了同样的现象。这样不难推测，不稳定性极有可能是最前面的patch projection layer引发的，然后实验者就尝试在训练过程中冻结patch projection layer的参数，即这一层在最开始参数随机配置后就不再做梯度下降，调皮点说，就是既然你不好好学习，那我们就暂时不让你学习啦。开心不？     答案是开心的。     不难发现，冻住projection layer效果是明显的，准确率陡降的现象消失了，而且最终获得的准确率也提高了，甚至当lr增大的时候，这种提高还尤为明显。     另外，他们发现这种不稳定性不止出现在MoCo里，SimCLR和BYOL里也有类似的问题。 同样的，将patch projection layer冻住，不让它学习，可以大大提高SimCLR和BYOL的稳定度，且可以最终提高模型的准确率。此外，还有SwAV，可以用这个方法使得SwAV可以使用更大的lr来训练模型，进而获得更高的精度。所以这个方法几乎可以用于所有的这一类自监督学习模型的训练。     另外，他们还尝试用BatchNorm（BN），WeightNorm（WN），甚至对patch projection进行梯度裁剪（gradient clip），即设定一个阈值，当梯度超过这个阈值的时候，就让梯度等于这个阈值。实验发现，BN和WN是无用的，梯度裁剪是有用的，但是要设定好阈值，总的来说，还是干脆不让学习最有效。     这个方法虽然有效地缓和了训练过程中的不稳定性的问题，但是本质上，冻结patch projection来克制不稳定性是一种回避问题的方法，当lr太大时，依然还是会出现不稳定的情况。第一层应当不是造成不稳定的本质原因，只是它不是Transformer的部分，好控制，并不算找到了解决不稳定性的根本办法。对于这个问题，应该要有更好的解决办法才对（小本本记下来，潜在课题）。     到这里，文章的前四小节本啤应该是讲清楚了，之后的细节会穿插在代码里面说。     觉得有用，右下角帮啤酒点个在看吧" />
+<meta property="og:description" content="    之前讲过一篇自监督学习：自监督学习（Self Supervised Learning），里面有提到几种把图像转成通用的embedding的方式，有CPC, SimCLR, 还有Moco。今天来详细说一下Moco v3，主要讲下面这篇文章：An Empirical Study of Training Self-Supervised Visual Transformers。     这篇文章主要讲的是自监督ViT的训练技巧。之后一定会讲这篇文章的源代码哦，心动就关注吧。     CV和NLP在预训练时有两点不同： NLP选择的通常是masked auto-encoder，而CV最近比较倾向孪生网络（Siamese networks） NLP用的主干结构是self-attentional Transformers，而CV的主干通常是deep residual networks（ResNets）     这篇文章，主干结构用的是self-attentional Transformers，网络框架是基于Siamese networks（Moco和一些其他框架）。网络属于Vision Transformers (ViT)这个范畴。ViT属于一种新的网络结构，因此关于这种网络的训练技巧比较少，这篇文章主要就从一些很基础的方面，比如batch size，learning rate，optimizer这些方面来讨论，这种网络要怎么训练。实验反馈的结果是，Transformers搭配Contrastive Learning会比搭配auto-encoding效果好。下图中iGPT是Transformers搭配auto-encoding的模型，可以发现Moco v3优势是很大的。另外也可以发现，ViT越大，准确率越高，这表示ViT还持续有潜力。另外，ViT-Large在某些案例里可以直接打败监督学习。 ViT也可以打败ResNets和Contrastive Learning的搭配，下面这张是MoCo各个版本搭配ResNets训练的结果：     作者发现，训练过程中的不稳定情况会略微降低这个网络最后的精确度，大概1%-3%。而通过一些鸡贼的操作，可以减轻这个问题带来的影响，从而提高精确度。我们就来看看，究竟是个什么问题，他们又是怎么解决的。     我们看一下Moco v3架构的伪代码： # f_q: encoder: backbone + proj mlp + pred mlp # f_k: momentum encoder: backbone + proj mlp # m: momentum coefficient # tau: temperature for x in loader: # load a minibatch x with N samples   x1, x2 = aug(x), aug(x) # 将同一个样本随机进行不同的数据增强处理   q1, q2 = f_q(x1), f_q(x2) # 用encoder分别编码   k1, k2 = f_k(x1), f_k(x2) # 再 momentum encoder分别编码   loss = ctr(q1, k2) + ctr(q2, k1) # 交叉计算loss再求 loss.backward()   update(f_q) # 更新encoder的参数   f_k = m*f_k + (1-m)*f_q # 根据更新的encoder和之前的momentum encoder得到新的momentum encoder # contrastive loss def ctr(q, k):   logits = mm(q, k.t()) # [N, N] 对角线上的出自同一幅图 labels = range(N) # positives are in diagonal   loss = CrossEntropyLoss(logits/tau, labels) return 2 * tau * loss     损失函数在伪代码里是ctr，也可以看上图的公式，q和k+是同一幅图得到的embedding，q和k-则是不同图得到的embedding，q是encoder得到的，k是由momentum encoder得到的，容易理解的是，这样的损失函数，就是要让qk+的值尽量大，qk-的值尽量小，而momentum的设计目的我们之后再说。关于Cross Entropy Loss可以看Cross Entropy Loss。     这里说一下encoder（f_q）和momentum encoder（f_k）的网络结构，encoder包含的是一个主干网络结构，即ViT，或者ResNet，另外还包含一个projection head和一个prediction head，而momentum encoder则只有projection head和主干网络，momentum encoder在获取encoder参数来调整自己参数的时候，不会用到prediction head。 接下来我们来看一下各种训练参数怎么配置比较合适： 1. Batch size     通常来说，ViT是很大的模型，配置比较大的batch size往往会取得更好效果，下面是配置了不同batch size的一些实验结果： 为了展示ViT训练存在的不稳定性问题，他们给了上面的实验结果，这里涉及到一个概念，kNN accuracy，这个具体怎么计算，我们解析代码的时候再说，这里我们就把它当成评量自监督模型的方式就好，越高，表示模型越好。实验者将batch size逐渐放大，从1024到6144，发现当batch size变大的时候，kNN accuracy出现了很大的震荡，这种震荡是局部突然下降（作者推测是训练突然重启了，即跳出了原本的局部最优点，重新梯度下降，训练虽然没有偏离，但准确性决定于新的局部点），batch size越大，这种现象越严重（为了更好的捕捉这种震荡，训练的时候他们每十个batch就测一次kNN accuracy）。 2. Learning rate     首先设定了一个base learning rate: lr，然后再根据batch size调整，调整方式是：lr*BatchSize/256。     和之前调整batch size一样，learning rate也出现了局部突然下降又快速回升的现象，learning rate越大，这种现象越明显。另外也可以看出来，不是越稳定就能获得越好的结果。 3. Optimizer     文章里提到了三种Optimizer，一种AdamW（常用来做ViT训练），一种LARS（在自监督学习经常用来匹配batch size很大的训练），最后一种LAMB（AdamW-counterpart of LARS）。实验在不同lr情况下对LAMB进行了测试，发现当lr=5e-4的时候，取得的效果会好于用AdamW的，但是看图我们会发现LAMB对lr的取值非常敏感。虽然曲线平滑，没有用AdamW时候突然下降的情况，但是训练中途会下降很长一段时间，作者们猜测是用LAMB会有梯度不可靠的情况。因此，这篇文章最终选择的Optimizer还是AdamW。 4. 如何提高训练过程中的稳定性     接下来，我们看看怎么解决精确度突然下降的问题，首先当然要找到产生这个现象的原因： 他们去观察了网络每一层在训练过程中的梯度，发现是梯度的突增导致了精确度的陡降，还发现，总是第一层最先开始突增，大概几十个batch之后，最后一层的梯度也出现了同样的现象。这样不难推测，不稳定性极有可能是最前面的patch projection layer引发的，然后实验者就尝试在训练过程中冻结patch projection layer的参数，即这一层在最开始参数随机配置后就不再做梯度下降，调皮点说，就是既然你不好好学习，那我们就暂时不让你学习啦。开心不？     答案是开心的。     不难发现，冻住projection layer效果是明显的，准确率陡降的现象消失了，而且最终获得的准确率也提高了，甚至当lr增大的时候，这种提高还尤为明显。     另外，他们发现这种不稳定性不止出现在MoCo里，SimCLR和BYOL里也有类似的问题。 同样的，将patch projection layer冻住，不让它学习，可以大大提高SimCLR和BYOL的稳定度，且可以最终提高模型的准确率。此外，还有SwAV，可以用这个方法使得SwAV可以使用更大的lr来训练模型，进而获得更高的精度。所以这个方法几乎可以用于所有的这一类自监督学习模型的训练。     另外，他们还尝试用BatchNorm（BN），WeightNorm（WN），甚至对patch projection进行梯度裁剪（gradient clip），即设定一个阈值，当梯度超过这个阈值的时候，就让梯度等于这个阈值。实验发现，BN和WN是无用的，梯度裁剪是有用的，但是要设定好阈值，总的来说，还是干脆不让学习最有效。     这个方法虽然有效地缓和了训练过程中的不稳定性的问题，但是本质上，冻结patch projection来克制不稳定性是一种回避问题的方法，当lr太大时，依然还是会出现不稳定的情况。第一层应当不是造成不稳定的本质原因，只是它不是Transformer的部分，好控制，并不算找到了解决不稳定性的根本办法。对于这个问题，应该要有更好的解决办法才对（小本本记下来，潜在课题）。     到这里，文章的前四小节本啤应该是讲清楚了，之后的细节会穿插在代码里面说。     觉得有用，右下角帮啤酒点个在看吧" />
+<link rel="canonical" href="http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/" />
+<meta property="og:url" content="http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/6.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-09-01T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    之前讲过一篇自监督学习：自监督学习（Self Supervised Learning），里面有提到几种把图像转成通用的embedding的方式，有CPC, SimCLR, 还有Moco。今天来详细说一下Moco v3，主要讲下面这篇文章：An Empirical Study of Training Self-Supervised Visual Transformers。     这篇文章主要讲的是自监督ViT的训练技巧。之后一定会讲这篇文章的源代码哦，心动就关注吧。     CV和NLP在预训练时有两点不同： NLP选择的通常是masked auto-encoder，而CV最近比较倾向孪生网络（Siamese networks） NLP用的主干结构是self-attentional Transformers，而CV的主干通常是deep residual networks（ResNets）     这篇文章，主干结构用的是self-attentional Transformers，网络框架是基于Siamese networks（Moco和一些其他框架）。网络属于Vision Transformers (ViT)这个范畴。ViT属于一种新的网络结构，因此关于这种网络的训练技巧比较少，这篇文章主要就从一些很基础的方面，比如batch size，learning rate，optimizer这些方面来讨论，这种网络要怎么训练。实验反馈的结果是，Transformers搭配Contrastive Learning会比搭配auto-encoding效果好。下图中iGPT是Transformers搭配auto-encoding的模型，可以发现Moco v3优势是很大的。另外也可以发现，ViT越大，准确率越高，这表示ViT还持续有潜力。另外，ViT-Large在某些案例里可以直接打败监督学习。 ViT也可以打败ResNets和Contrastive Learning的搭配，下面这张是MoCo各个版本搭配ResNets训练的结果：     作者发现，训练过程中的不稳定情况会略微降低这个网络最后的精确度，大概1%-3%。而通过一些鸡贼的操作，可以减轻这个问题带来的影响，从而提高精确度。我们就来看看，究竟是个什么问题，他们又是怎么解决的。     我们看一下Moco v3架构的伪代码： # f_q: encoder: backbone + proj mlp + pred mlp # f_k: momentum encoder: backbone + proj mlp # m: momentum coefficient # tau: temperature for x in loader: # load a minibatch x with N samples   x1, x2 = aug(x), aug(x) # 将同一个样本随机进行不同的数据增强处理   q1, q2 = f_q(x1), f_q(x2) # 用encoder分别编码   k1, k2 = f_k(x1), f_k(x2) # 再 momentum encoder分别编码   loss = ctr(q1, k2) + ctr(q2, k1) # 交叉计算loss再求 loss.backward()   update(f_q) # 更新encoder的参数   f_k = m*f_k + (1-m)*f_q # 根据更新的encoder和之前的momentum encoder得到新的momentum encoder # contrastive loss def ctr(q, k):   logits = mm(q, k.t()) # [N, N] 对角线上的出自同一幅图 labels = range(N) # positives are in diagonal   loss = CrossEntropyLoss(logits/tau, labels) return 2 * tau * loss     损失函数在伪代码里是ctr，也可以看上图的公式，q和k+是同一幅图得到的embedding，q和k-则是不同图得到的embedding，q是encoder得到的，k是由momentum encoder得到的，容易理解的是，这样的损失函数，就是要让qk+的值尽量大，qk-的值尽量小，而momentum的设计目的我们之后再说。关于Cross Entropy Loss可以看Cross Entropy Loss。     这里说一下encoder（f_q）和momentum encoder（f_k）的网络结构，encoder包含的是一个主干网络结构，即ViT，或者ResNet，另外还包含一个projection head和一个prediction head，而momentum encoder则只有projection head和主干网络，momentum encoder在获取encoder参数来调整自己参数的时候，不会用到prediction head。 接下来我们来看一下各种训练参数怎么配置比较合适： 1. Batch size     通常来说，ViT是很大的模型，配置比较大的batch size往往会取得更好效果，下面是配置了不同batch size的一些实验结果： 为了展示ViT训练存在的不稳定性问题，他们给了上面的实验结果，这里涉及到一个概念，kNN accuracy，这个具体怎么计算，我们解析代码的时候再说，这里我们就把它当成评量自监督模型的方式就好，越高，表示模型越好。实验者将batch size逐渐放大，从1024到6144，发现当batch size变大的时候，kNN accuracy出现了很大的震荡，这种震荡是局部突然下降（作者推测是训练突然重启了，即跳出了原本的局部最优点，重新梯度下降，训练虽然没有偏离，但准确性决定于新的局部点），batch size越大，这种现象越严重（为了更好的捕捉这种震荡，训练的时候他们每十个batch就测一次kNN accuracy）。 2. Learning rate     首先设定了一个base learning rate: lr，然后再根据batch size调整，调整方式是：lr*BatchSize/256。     和之前调整batch size一样，learning rate也出现了局部突然下降又快速回升的现象，learning rate越大，这种现象越明显。另外也可以看出来，不是越稳定就能获得越好的结果。 3. Optimizer     文章里提到了三种Optimizer，一种AdamW（常用来做ViT训练），一种LARS（在自监督学习经常用来匹配batch size很大的训练），最后一种LAMB（AdamW-counterpart of LARS）。实验在不同lr情况下对LAMB进行了测试，发现当lr=5e-4的时候，取得的效果会好于用AdamW的，但是看图我们会发现LAMB对lr的取值非常敏感。虽然曲线平滑，没有用AdamW时候突然下降的情况，但是训练中途会下降很长一段时间，作者们猜测是用LAMB会有梯度不可靠的情况。因此，这篇文章最终选择的Optimizer还是AdamW。 4. 如何提高训练过程中的稳定性     接下来，我们看看怎么解决精确度突然下降的问题，首先当然要找到产生这个现象的原因： 他们去观察了网络每一层在训练过程中的梯度，发现是梯度的突增导致了精确度的陡降，还发现，总是第一层最先开始突增，大概几十个batch之后，最后一层的梯度也出现了同样的现象。这样不难推测，不稳定性极有可能是最前面的patch projection layer引发的，然后实验者就尝试在训练过程中冻结patch projection layer的参数，即这一层在最开始参数随机配置后就不再做梯度下降，调皮点说，就是既然你不好好学习，那我们就暂时不让你学习啦。开心不？     答案是开心的。     不难发现，冻住projection layer效果是明显的，准确率陡降的现象消失了，而且最终获得的准确率也提高了，甚至当lr增大的时候，这种提高还尤为明显。     另外，他们发现这种不稳定性不止出现在MoCo里，SimCLR和BYOL里也有类似的问题。 同样的，将patch projection layer冻住，不让它学习，可以大大提高SimCLR和BYOL的稳定度，且可以最终提高模型的准确率。此外，还有SwAV，可以用这个方法使得SwAV可以使用更大的lr来训练模型，进而获得更高的精度。所以这个方法几乎可以用于所有的这一类自监督学习模型的训练。     另外，他们还尝试用BatchNorm（BN），WeightNorm（WN），甚至对patch projection进行梯度裁剪（gradient clip），即设定一个阈值，当梯度超过这个阈值的时候，就让梯度等于这个阈值。实验发现，BN和WN是无用的，梯度裁剪是有用的，但是要设定好阈值，总的来说，还是干脆不让学习最有效。     这个方法虽然有效地缓和了训练过程中的不稳定性的问题，但是本质上，冻结patch projection来克制不稳定性是一种回避问题的方法，当lr太大时，依然还是会出现不稳定的情况。第一层应当不是造成不稳定的本质原因，只是它不是Transformer的部分，好控制，并不算找到了解决不稳定性的根本办法。对于这个问题，应该要有更好的解决办法才对（小本本记下来，潜在课题）。     到这里，文章的前四小节本啤应该是讲清楚了，之后的细节会穿插在代码里面说。     觉得有用，右下角帮啤酒点个在看吧","url":"http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/","image":"http://localhost:4000/assets/images/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/6.png","@type":"BlogPosting","headline":"自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析","dateModified":"2021-09-01T00:00:00+08:00","datePublished":"2021-09-01T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-09-01">01 Sep 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/6.png" alt="自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    之前讲过一篇自监督学习：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a>，里面有提到几种把图像转成通用的embedding的方式，有CPC, SimCLR, 还有Moco。今天来详细说一下Moco v3，主要讲下面这篇文章：An Empirical Study of Training Self-Supervised Visual Transformers。</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/1.png" alt="" /></p>
+
+<p>    这篇文章主要讲的是自监督ViT的训练技巧。之后一定会讲这篇文章的源代码哦，心动就关注吧<img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/2.png" style="zoom:50%;" />。</p>
+
+<p>    CV和NLP在预训练时有两点不同：</p>
+
+<ul>
+  <li>NLP选择的通常是masked auto-encoder，而CV最近比较倾向孪生网络（Siamese networks）</li>
+  <li>NLP用的主干结构是self-attentional Transformers，而CV的主干通常是deep residual networks（ResNets）</li>
+</ul>
+
+<p>    这篇文章，主干结构用的是self-attentional Transformers，网络框架是基于Siamese networks（Moco和一些其他框架）。网络属于Vision Transformers (ViT)这个范畴。ViT属于一种新的网络结构，因此关于这种网络的训练技巧比较少，这篇文章主要就从一些很基础的方面，比如batch size，learning rate，optimizer这些方面来讨论，这种网络要怎么训练。实验反馈的结果是，Transformers搭配Contrastive Learning会比搭配auto-encoding效果好。下图中iGPT是Transformers搭配auto-encoding的模型，可以发现Moco v3优势是很大的。另外也可以发现，ViT越大，准确率越高，这表示ViT还持续有潜力。另外，ViT-Large在某些案例里可以直接打败监督学习。</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/3.png" style="zoom: 50%;" /></p>
+
+<p>ViT也可以打败ResNets和Contrastive Learning的搭配，下面这张是MoCo各个版本搭配ResNets训练的结果：</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/4.png" style="zoom: 50%;" /></p>
+
+<p>    作者发现，训练过程中的不稳定情况会略微降低这个网络最后的精确度，大概1%-3%。而通过一些鸡贼的操作，可以减轻这个问题带来的影响，从而提高精确度。我们就来看看，究竟是个什么问题，他们又是怎么解决的。</p>
+
+<p>    我们看一下Moco v3架构的伪代码：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># f_q: encoder: backbone + proj mlp + pred mlp
+# f_k: momentum encoder: backbone + proj mlp
+# m: momentum coefficient
+# tau: temperature
+</span><span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">loader</span><span class="p">:</span> <span class="c1"># load a minibatch x with N samples
+</span><span class="err">  </span><span class="n">x1</span><span class="p">,</span><span class="err"> </span><span class="n">x2</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">aug</span><span class="p">(</span><span class="n">x</span><span class="p">),</span><span class="err"> </span><span class="n">aug</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="err"> </span><span class="c1"># 将同一个样本随机进行不同的数据增强处理
+</span><span class="err">  </span><span class="n">q1</span><span class="p">,</span><span class="err"> </span><span class="n">q2</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">f_q</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span><span class="err"> </span><span class="n">f_q</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span><span class="err"> </span><span class="c1"># 用encoder分别编码
+</span><span class="err">  </span><span class="n">k1</span><span class="p">,</span><span class="err"> </span><span class="n">k2</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">f_k</span><span class="p">(</span><span class="n">x1</span><span class="p">),</span><span class="err"> </span><span class="n">f_k</span><span class="p">(</span><span class="n">x2</span><span class="p">)</span><span class="err"> </span><span class="c1"># 再 momentum encoder分别编码
+</span><span class="err">  </span><span class="n">loss</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">ctr</span><span class="p">(</span><span class="n">q1</span><span class="p">,</span><span class="err"> </span><span class="n">k2</span><span class="p">)</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">ctr</span><span class="p">(</span><span class="n">q2</span><span class="p">,</span><span class="err"> </span><span class="n">k1</span><span class="p">)</span><span class="err"> </span><span class="c1"># 交叉计算loss再求
+</span>  <span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="err">  </span><span class="n">update</span><span class="p">(</span><span class="n">f_q</span><span class="p">)</span><span class="err"> </span><span class="c1"># 更新encoder的参数
+</span><span class="err">  </span><span class="n">f_k</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">m</span><span class="o">*</span><span class="n">f_k</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">m</span><span class="p">)</span><span class="o">*</span><span class="n">f_q</span><span class="err"> </span><span class="c1"># 根据更新的encoder和之前的momentum encoder得到新的momentum encoder
+# contrastive loss
+</span><span class="k">def</span> <span class="nf">ctr</span><span class="p">(</span><span class="n">q</span><span class="p">,</span> <span class="n">k</span><span class="p">):</span>
+<span class="err">  </span><span class="n">logits</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">mm</span><span class="p">(</span><span class="n">q</span><span class="p">,</span><span class="err"> </span><span class="n">k</span><span class="p">.</span><span class="n">t</span><span class="p">())</span><span class="err"> </span><span class="c1"># [N, N] 对角线上的出自同一幅图
+</span>  <span class="n">labels</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="n">N</span><span class="p">)</span> <span class="c1"># positives are in diagonal
+</span><span class="err">  </span><span class="n">loss</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">CrossEntropyLoss</span><span class="p">(</span><span class="n">logits</span><span class="o">/</span><span class="n">tau</span><span class="p">,</span><span class="err"> </span><span class="n">labels</span><span class="p">)</span>
+  <span class="k">return</span><span class="err"> </span><span class="mi">2</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="n">tau</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="n">loss</span>
+</code></pre></div></div>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/5.png" style="zoom:50%;" /></p>
+
+<p>    损失函数在伪代码里是ctr，也可以看上图的公式，q和k+是同一幅图得到的embedding，q和k-则是不同图得到的embedding，q是encoder得到的，k是由momentum encoder得到的，容易理解的是，这样的损失函数，就是要让q<em>k+的值尽量大，q</em>k-的值尽量小，而momentum的设计目的我们之后再说。关于Cross Entropy Loss可以看<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect">Cross Entropy Loss</a>。</p>
+
+<p>    这里说一下encoder（f_q）和momentum encoder（f_k）的网络结构，encoder包含的是一个主干网络结构，即ViT，或者ResNet，另外还包含一个projection head和一个prediction head，而momentum encoder则只有projection head和主干网络，momentum encoder在获取encoder参数来调整自己参数的时候，不会用到prediction head。</p>
+
+<p>接下来我们来看一下各种训练参数怎么配置比较合适：</p>
+
+<p><strong>1. Batch size</strong></p>
+
+<p>    通常来说，ViT是很大的模型，配置比较大的batch size往往会取得更好效果，下面是配置了不同batch size的一些实验结果：</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/6.png" style="zoom: 67%;" /></p>
+
+<p>为了展示ViT训练存在的不稳定性问题，他们给了上面的实验结果，这里涉及到一个概念，kNN accuracy，这个具体怎么计算，我们解析代码的时候再说，这里我们就把它当成评量自监督模型的方式就好，越高，表示模型越好。实验者将batch size逐渐放大，从1024到6144，发现当batch size变大的时候，kNN accuracy出现了很大的震荡，这种震荡是局部突然下降（作者推测是训练突然重启了，即跳出了原本的局部最优点，重新梯度下降，训练虽然没有偏离，但准确性决定于新的局部点），batch size越大，这种现象越严重（为了更好的捕捉这种震荡，训练的时候他们每十个batch就测一次kNN accuracy）。</p>
+
+<p><strong>2. Learning rate</strong></p>
+
+<p>    首先设定了一个base learning rate: lr，然后再根据batch size调整，调整方式是：lr*BatchSize/256。</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/7.png" style="zoom:67%;" /></p>
+
+<p>    和之前调整batch size一样，learning rate也出现了局部突然下降又快速回升的现象，learning rate越大，这种现象越明显。另外也可以看出来，不是越稳定就能获得越好的结果。</p>
+
+<p><strong>3. Optimizer</strong></p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/8.png" style="zoom: 67%;" /></p>
+
+<p>    文章里提到了三种Optimizer，一种AdamW（常用来做ViT训练），一种LARS（在自监督学习经常用来匹配batch size很大的训练），最后一种LAMB（AdamW-counterpart of LARS）。实验在不同lr情况下对LAMB进行了测试，发现当lr=5e-4的时候，取得的效果会好于用AdamW的，但是看图我们会发现LAMB对lr的取值非常敏感。虽然曲线平滑，没有用AdamW时候突然下降的情况，但是训练中途会下降很长一段时间，作者们猜测是用LAMB会有梯度不可靠的情况。因此，这篇文章最终选择的Optimizer还是AdamW。</p>
+
+<p><strong>4. 如何提高训练过程中的稳定性</strong></p>
+
+<p>    接下来，我们看看怎么解决精确度突然下降的问题，首先当然要找到产生这个现象的原因：</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/9.png" style="zoom:67%;" /></p>
+
+<p>他们去观察了网络每一层在训练过程中的梯度，发现是梯度的突增导致了精确度的陡降，还发现，总是第一层最先开始突增，大概几十个batch之后，最后一层的梯度也出现了同样的现象。这样不难推测，不稳定性极有可能是最前面的patch projection layer引发的，然后实验者就尝试在训练过程中冻结patch projection layer的参数，即这一层在最开始参数随机配置后就不再做梯度下降，调皮点说，就是既然你不好好学习，那我们就暂时不让你学习啦。开心不？</p>
+
+<p>    答案是开心的。</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/10.png" style="zoom:67%;" /></p>
+
+<p>    不难发现，冻住projection layer效果是明显的，准确率陡降的现象消失了，而且最终获得的准确率也提高了，甚至当lr增大的时候，这种提高还尤为明显。</p>
+
+<p>    另外，他们发现这种不稳定性不止出现在MoCo里，SimCLR和BYOL里也有类似的问题。</p>
+
+<p><img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/11.png" style="zoom:67%;" /></p>
+
+<p>同样的，将patch projection layer冻住，不让它学习，可以大大提高SimCLR和BYOL的稳定度，且可以最终提高模型的准确率。此外，还有SwAV，可以用这个方法使得SwAV可以使用更大的lr来训练模型，进而获得更高的精度。所以这个方法几乎可以用于所有的这一类自监督学习模型的训练。</p>
+
+<p>    另外，他们还尝试用BatchNorm（BN），WeightNorm（WN），甚至对patch projection进行梯度裁剪（gradient clip），即设定一个阈值，当梯度超过这个阈值的时候，就让梯度等于这个阈值。实验发现，BN和WN是无用的，梯度裁剪是有用的，但是要设定好阈值，总的来说，还是干脆不让学习最有效。</p>
+
+<p>    这个方法虽然有效地缓和了训练过程中的不稳定性的问题，但是本质上，冻结patch projection来克制不稳定性是一种回避问题的方法，当lr太大时，依然还是会出现不稳定的情况。第一层应当不是造成不稳定的本质原因，只是它不是Transformer的部分，好控制，并不算找到了解决不稳定性的根本办法。对于这个问题，应该要有更好的解决办法才对（小本本记下来，潜在课题）。</p>
+
+<p>    到这里，文章的前四小节本啤应该是讲清楚了，之后的细节会穿插在代码里面说。</p>
+
+<p>    觉得有用，右下角帮啤酒点个在看吧<img src="../assets/images/自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析/12.png" style="zoom:50%;" /></p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- 论文解析&url=http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-%E8%AE%BA%E6%96%87%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Representation-Learning">Representation Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#ViT">ViT</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/piano_trans_paper_2020/0.png" alt="钢琴曲转谱（Solo Piano Transcription）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">钢琴曲转谱（Solo Piano Transcription）</a>
+                
+            </h2>
+            <h4 class="card-text">​    今天来看一篇钢琴琴谱翻译的文章，出自ByteDance字节跳动，Giant-Piano（GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集）采用的转谱模型就是这个：
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jun 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

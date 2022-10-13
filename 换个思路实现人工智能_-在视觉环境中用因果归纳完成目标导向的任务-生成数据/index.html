@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)   ​ ​ 今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中生成数据的方式。     官方源代码地址： https://github.com/StanfordVL/causal_induction     测试这个代码依赖一个软件：mujoco, mujoco-py, 安装可以参考这篇： https://maple52046.github.io/2020/04/25/Mujoco-Installation/#     1. 生成数据(Generate Data) python3 collectdata.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --seen 10 --images 1 --data-dir output/      ​ 先说一下各个参数的意思：        horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal conditioned，即agent在采取行动的时候是只需要考虑现在的状态(state)还是也需要考虑目标(goal)，在这个研究里，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的结构关系，也是这个案例中的因果关系，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数是会参与训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     1.1 初始化环境 l = LightEnv(args.horizon, args.num, st, args.structure, gc, filename=str(gc)+&quot;_traj&quot;, seen = args.seen)     对照着环境的初始定义来看： &#39;&#39;&#39;Light Switch Environment for Visual Causal Induction&#39;&#39;&#39; def __init__(self, horizon=5, num=5, cond=&quot;gt&quot;, structure=&quot;one_to_one&quot;, gc=True, filename=None, seen=10):     horizon，num，structure，seen，延续上面的意义和取值，gc是goal conditioned的意思，gc=1-fixed_goal，filename是在程序过程中记录log的地方，st/cond这个参数在生成数据这块似乎是没有用到的。     初始化因果关系的二值矩阵： self.aj = np.zeros((self.num, self.num))     初始化目标： if self.gc: self.goal = self._sample_goal() def _sample_goal(self):    &quot;&quot;&quot;Samples a new goal and returns it.    &quot;&quot;&quot;      state = np.random.randint(0, 2, size=(self.num))     print(state)     light = np.dot(state.T, self.aj)     print(light)     light = light % 2     self.sim.model.light_active[:] = light     print(dir(self.sim))     self.goalim = self.sim.render(mode=&#39;offscreen&#39;, width=32, height=32, camera_name=&quot;birdview&quot;) / 255.0      return light     随机生成一组开关的状态，与因果关系相乘，得到灯的状态，再将灯的状态传给环境，渲染出目标场景图，返回灯的状态，这即是要达到的目标状态。     初始化开关的状态： self.state = np.zeros((self.num))     排列组合出所有可能的因果关系： if (self.structure == &quot;one_to_many&quot;) or (self.structure == &quot;many_to_one&quot;): if self.num == 9: self.all_perms = self.generate_cs_set1(self.num, True) else: self.all_perms = self.generate_cs_set1(self.num) else: self.all_perms = self.generate_cs_set2(self.num) np.random.shuffle(self.all_perms)     如果是one-to-one的结构，那么all_perms会包含所有可能的5040（7!）种因果关系，每种因果关系用一个N维向量表示，如[3, 4, 7, 0, 1, 2, 5, 6]，表示开关0控制着灯3，…。如果是one-to-many或者many-to-one的结构，all_perms包含所有可能的823543（7^7）种因果关系。如果开关和灯的数量都是9，那么one-to-many或者many-to-one的因果关系会有9^9个，上亿了，因此需要随机过滤掉一些，除了最底层，每一层会随机过滤掉40%，最后大约会取到因果总数的0.6^8。值得注意的是，如果是many_to_one, 那么需要把向量的位置理解成开关，如果是one_to_many，则要把向量的位置理解成灯的编号，而里面的数字是开关的编号。得到all_perms后要将里面的因果关系随机排序。     获得当前的场景向量： obs = self._get_obs()     obs向量中包含了灯的状态，目标向量，还有轨迹向量，目标向量和轨迹向量在生成数据的过程中没有被使用到。     定义动作域和观察域，这两个在生成数据的过程中也没有被用到。 self.action_space = spaces.Discrete(self.num+1) self.observation_space = spaces.Box(0, 1, shape=obs.shape, dtype=&#39;float32&#39;)     1.2 获得训练样本     在这个实验中，会生成num_episodes组样本，样本存在buffer中，样本对应的因果关系，存在gtbuffer中。 buffer = [] gtbuffer = [] num_episodes = 40000     每组样本又如何生成？重设环境，重新选择因果关系，设定新的目标，获得新的初始状态的观察向量。 l.keep_struct = False obs = env.reset() l.keep_struct = True if train: ind = np.random.randint(0, self.seen) else: ind = np.random.randint(self.seen, self.pmsz) perm = self.all_perms[ind] ## Set graph according to causal structure if self.structure == &quot;one_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;one_to_many&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj.T self.gt = self.aj.flatten() elif self.structure == &quot;many_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;masterswitch&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.ms = np.random.randint(self.num) m = np.zeros((self.num)) m[self.ms] = 1 self.gt = self.aj.flatten() self.gt = np.concatenate([self.gt, m])     如果是要获取训练样本，则在seen的范围内选择因果关系，否则在seen的范围外选择因果关系。选择到因果关系后，将一维向量转换成二维二值向量。若是masterswitch结构，还需要随机产生一个master switch。     生成样本的时候，当structure是masterswitch的时候，agent会先把所有的开关都试一遍，找出master  switch，再将master之外的开关试一遍： if args.structure == &quot;masterswitch&quot;: it = None for i in range(args.num): p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) if i == 0: epbuf = mem else: epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) p2 = l._get_obs() if (p != p2).any(): it = i break for i in range(args.num): if i != it: p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) ln = epbuf.shape[0] buf = np.zeros((2 * args.horizon - 1, epbuf.shape[1])) buf[:ln] = epbuf     保存当前的场景图后，执行动作，然后切换到下个场景，如果在找master switch，判断现在这个switch是不是master，如果是的话，结束找master的过程，进入下一阶段。 def step(self, action): &#39;&#39;&#39;Step in env. Args:       action: which switch to toggle     &#39;&#39;&#39; ## If &quot;Do Nothing&quot; Action if action == self.num: pass else: if self.structure == &quot;masterswitch&quot;: ## Only once masterswitch is activated can others be activated if (action == self.ms) or (self.state[self.ms] == 1): change = np.zeros(self.num) change[action] = 1 self.state = np.abs(self.state - change) else: change = np.zeros(self.num) change[action] = 1             self.state = np.abs(self.state - change)     obs = self._get_obs() done = False info = {&#39;is_success&#39;: self._is_success(obs)} self.correct.append((info[&quot;is_success&quot;]))     reward = self.compute_reward(obs, info) return obs, reward, done, info     step会判断是否成功触发了开关，触发开关后是否成功达到了目标，以及计算得失，不过是否成功达到目标和计算得失都不会在这个阶段被用到，不论达没达到目标，所有的开关都会被试一遍（masterswitch结构可能不止一遍）。 记：     这个生成训练样本的程序是有比较多问题的：     1. 费内存，40000组样本都存在buffer里，最后才写入文件，内存小的电脑不要轻易尝试。     2. 训练样本会用到的因果关系很少，实验中只会尝试10，50，100，500，而buffer中存入的数据，其实只和场景，因果关系，因果结构(structure)，开关数量，可见的seen有关，步骤又都是顺序的，所以如果seen是10，则buffer中的40000组训练数据中只有10组不同的数据。在生成数据的程序中，每组数据的生成都重新对环境渲染，整个过程费时间，费内存，费计算，存下来废硬盘，重新读入还是费时费内存，可以优化，换一种写法和存训练数据的方法，会更合理。     3. 在初始化环境的时候，似乎不需要定义st/cond的值。 上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction" />
+<meta property="og:description" content="上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)   ​ ​ 今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中生成数据的方式。     官方源代码地址： https://github.com/StanfordVL/causal_induction     测试这个代码依赖一个软件：mujoco, mujoco-py, 安装可以参考这篇： https://maple52046.github.io/2020/04/25/Mujoco-Installation/#     1. 生成数据(Generate Data) python3 collectdata.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --seen 10 --images 1 --data-dir output/      ​ 先说一下各个参数的意思：        horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal conditioned，即agent在采取行动的时候是只需要考虑现在的状态(state)还是也需要考虑目标(goal)，在这个研究里，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的结构关系，也是这个案例中的因果关系，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数是会参与训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     1.1 初始化环境 l = LightEnv(args.horizon, args.num, st, args.structure, gc, filename=str(gc)+&quot;_traj&quot;, seen = args.seen)     对照着环境的初始定义来看： &#39;&#39;&#39;Light Switch Environment for Visual Causal Induction&#39;&#39;&#39; def __init__(self, horizon=5, num=5, cond=&quot;gt&quot;, structure=&quot;one_to_one&quot;, gc=True, filename=None, seen=10):     horizon，num，structure，seen，延续上面的意义和取值，gc是goal conditioned的意思，gc=1-fixed_goal，filename是在程序过程中记录log的地方，st/cond这个参数在生成数据这块似乎是没有用到的。     初始化因果关系的二值矩阵： self.aj = np.zeros((self.num, self.num))     初始化目标： if self.gc: self.goal = self._sample_goal() def _sample_goal(self):    &quot;&quot;&quot;Samples a new goal and returns it.    &quot;&quot;&quot;      state = np.random.randint(0, 2, size=(self.num))     print(state)     light = np.dot(state.T, self.aj)     print(light)     light = light % 2     self.sim.model.light_active[:] = light     print(dir(self.sim))     self.goalim = self.sim.render(mode=&#39;offscreen&#39;, width=32, height=32, camera_name=&quot;birdview&quot;) / 255.0      return light     随机生成一组开关的状态，与因果关系相乘，得到灯的状态，再将灯的状态传给环境，渲染出目标场景图，返回灯的状态，这即是要达到的目标状态。     初始化开关的状态： self.state = np.zeros((self.num))     排列组合出所有可能的因果关系： if (self.structure == &quot;one_to_many&quot;) or (self.structure == &quot;many_to_one&quot;): if self.num == 9: self.all_perms = self.generate_cs_set1(self.num, True) else: self.all_perms = self.generate_cs_set1(self.num) else: self.all_perms = self.generate_cs_set2(self.num) np.random.shuffle(self.all_perms)     如果是one-to-one的结构，那么all_perms会包含所有可能的5040（7!）种因果关系，每种因果关系用一个N维向量表示，如[3, 4, 7, 0, 1, 2, 5, 6]，表示开关0控制着灯3，…。如果是one-to-many或者many-to-one的结构，all_perms包含所有可能的823543（7^7）种因果关系。如果开关和灯的数量都是9，那么one-to-many或者many-to-one的因果关系会有9^9个，上亿了，因此需要随机过滤掉一些，除了最底层，每一层会随机过滤掉40%，最后大约会取到因果总数的0.6^8。值得注意的是，如果是many_to_one, 那么需要把向量的位置理解成开关，如果是one_to_many，则要把向量的位置理解成灯的编号，而里面的数字是开关的编号。得到all_perms后要将里面的因果关系随机排序。     获得当前的场景向量： obs = self._get_obs()     obs向量中包含了灯的状态，目标向量，还有轨迹向量，目标向量和轨迹向量在生成数据的过程中没有被使用到。     定义动作域和观察域，这两个在生成数据的过程中也没有被用到。 self.action_space = spaces.Discrete(self.num+1) self.observation_space = spaces.Box(0, 1, shape=obs.shape, dtype=&#39;float32&#39;)     1.2 获得训练样本     在这个实验中，会生成num_episodes组样本，样本存在buffer中，样本对应的因果关系，存在gtbuffer中。 buffer = [] gtbuffer = [] num_episodes = 40000     每组样本又如何生成？重设环境，重新选择因果关系，设定新的目标，获得新的初始状态的观察向量。 l.keep_struct = False obs = env.reset() l.keep_struct = True if train: ind = np.random.randint(0, self.seen) else: ind = np.random.randint(self.seen, self.pmsz) perm = self.all_perms[ind] ## Set graph according to causal structure if self.structure == &quot;one_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;one_to_many&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj.T self.gt = self.aj.flatten() elif self.structure == &quot;many_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;masterswitch&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.ms = np.random.randint(self.num) m = np.zeros((self.num)) m[self.ms] = 1 self.gt = self.aj.flatten() self.gt = np.concatenate([self.gt, m])     如果是要获取训练样本，则在seen的范围内选择因果关系，否则在seen的范围外选择因果关系。选择到因果关系后，将一维向量转换成二维二值向量。若是masterswitch结构，还需要随机产生一个master switch。     生成样本的时候，当structure是masterswitch的时候，agent会先把所有的开关都试一遍，找出master  switch，再将master之外的开关试一遍： if args.structure == &quot;masterswitch&quot;: it = None for i in range(args.num): p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) if i == 0: epbuf = mem else: epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) p2 = l._get_obs() if (p != p2).any(): it = i break for i in range(args.num): if i != it: p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) ln = epbuf.shape[0] buf = np.zeros((2 * args.horizon - 1, epbuf.shape[1])) buf[:ln] = epbuf     保存当前的场景图后，执行动作，然后切换到下个场景，如果在找master switch，判断现在这个switch是不是master，如果是的话，结束找master的过程，进入下一阶段。 def step(self, action): &#39;&#39;&#39;Step in env. Args:       action: which switch to toggle     &#39;&#39;&#39; ## If &quot;Do Nothing&quot; Action if action == self.num: pass else: if self.structure == &quot;masterswitch&quot;: ## Only once masterswitch is activated can others be activated if (action == self.ms) or (self.state[self.ms] == 1): change = np.zeros(self.num) change[action] = 1 self.state = np.abs(self.state - change) else: change = np.zeros(self.num) change[action] = 1             self.state = np.abs(self.state - change)     obs = self._get_obs() done = False info = {&#39;is_success&#39;: self._is_success(obs)} self.correct.append((info[&quot;is_success&quot;]))     reward = self.compute_reward(obs, info) return obs, reward, done, info     step会判断是否成功触发了开关，触发开关后是否成功达到了目标，以及计算得失，不过是否成功达到目标和计算得失都不会在这个阶段被用到，不论达没达到目标，所有的开关都会被试一遍（masterswitch结构可能不止一遍）。 记：     这个生成训练样本的程序是有比较多问题的：     1. 费内存，40000组样本都存在buffer里，最后才写入文件，内存小的电脑不要轻易尝试。     2. 训练样本会用到的因果关系很少，实验中只会尝试10，50，100，500，而buffer中存入的数据，其实只和场景，因果关系，因果结构(structure)，开关数量，可见的seen有关，步骤又都是顺序的，所以如果seen是10，则buffer中的40000组训练数据中只有10组不同的数据。在生成数据的程序中，每组数据的生成都重新对环境渲染，整个过程费时间，费内存，费计算，存下来废硬盘，重新读入还是费时费内存，可以优化，换一种写法和存训练数据的方法，会更合理。     3. 在初始化环境的时候，似乎不需要定义st/cond的值。 上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction" />
+<link rel="canonical" href="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/" />
+<meta property="og:url" content="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1%E2%80%94%E2%80%94%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/1.jpeg" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-06-28T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)   ​ ​ 今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中生成数据的方式。     官方源代码地址： https://github.com/StanfordVL/causal_induction     测试这个代码依赖一个软件：mujoco, mujoco-py, 安装可以参考这篇： https://maple52046.github.io/2020/04/25/Mujoco-Installation/#     1. 生成数据(Generate Data) python3 collectdata.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --seen 10 --images 1 --data-dir output/      ​ 先说一下各个参数的意思：        horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal conditioned，即agent在采取行动的时候是只需要考虑现在的状态(state)还是也需要考虑目标(goal)，在这个研究里，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的结构关系，也是这个案例中的因果关系，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数是会参与训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     1.1 初始化环境 l = LightEnv(args.horizon, args.num, st, args.structure, gc, filename=str(gc)+&quot;_traj&quot;, seen = args.seen)     对照着环境的初始定义来看： &#39;&#39;&#39;Light Switch Environment for Visual Causal Induction&#39;&#39;&#39; def __init__(self, horizon=5, num=5, cond=&quot;gt&quot;, structure=&quot;one_to_one&quot;, gc=True, filename=None, seen=10):     horizon，num，structure，seen，延续上面的意义和取值，gc是goal conditioned的意思，gc=1-fixed_goal，filename是在程序过程中记录log的地方，st/cond这个参数在生成数据这块似乎是没有用到的。     初始化因果关系的二值矩阵： self.aj = np.zeros((self.num, self.num))     初始化目标： if self.gc: self.goal = self._sample_goal() def _sample_goal(self):    &quot;&quot;&quot;Samples a new goal and returns it.    &quot;&quot;&quot;      state = np.random.randint(0, 2, size=(self.num))     print(state)     light = np.dot(state.T, self.aj)     print(light)     light = light % 2     self.sim.model.light_active[:] = light     print(dir(self.sim))     self.goalim = self.sim.render(mode=&#39;offscreen&#39;, width=32, height=32, camera_name=&quot;birdview&quot;) / 255.0      return light     随机生成一组开关的状态，与因果关系相乘，得到灯的状态，再将灯的状态传给环境，渲染出目标场景图，返回灯的状态，这即是要达到的目标状态。     初始化开关的状态： self.state = np.zeros((self.num))     排列组合出所有可能的因果关系： if (self.structure == &quot;one_to_many&quot;) or (self.structure == &quot;many_to_one&quot;): if self.num == 9: self.all_perms = self.generate_cs_set1(self.num, True) else: self.all_perms = self.generate_cs_set1(self.num) else: self.all_perms = self.generate_cs_set2(self.num) np.random.shuffle(self.all_perms)     如果是one-to-one的结构，那么all_perms会包含所有可能的5040（7!）种因果关系，每种因果关系用一个N维向量表示，如[3, 4, 7, 0, 1, 2, 5, 6]，表示开关0控制着灯3，…。如果是one-to-many或者many-to-one的结构，all_perms包含所有可能的823543（7^7）种因果关系。如果开关和灯的数量都是9，那么one-to-many或者many-to-one的因果关系会有9^9个，上亿了，因此需要随机过滤掉一些，除了最底层，每一层会随机过滤掉40%，最后大约会取到因果总数的0.6^8。值得注意的是，如果是many_to_one, 那么需要把向量的位置理解成开关，如果是one_to_many，则要把向量的位置理解成灯的编号，而里面的数字是开关的编号。得到all_perms后要将里面的因果关系随机排序。     获得当前的场景向量： obs = self._get_obs()     obs向量中包含了灯的状态，目标向量，还有轨迹向量，目标向量和轨迹向量在生成数据的过程中没有被使用到。     定义动作域和观察域，这两个在生成数据的过程中也没有被用到。 self.action_space = spaces.Discrete(self.num+1) self.observation_space = spaces.Box(0, 1, shape=obs.shape, dtype=&#39;float32&#39;)     1.2 获得训练样本     在这个实验中，会生成num_episodes组样本，样本存在buffer中，样本对应的因果关系，存在gtbuffer中。 buffer = [] gtbuffer = [] num_episodes = 40000     每组样本又如何生成？重设环境，重新选择因果关系，设定新的目标，获得新的初始状态的观察向量。 l.keep_struct = False obs = env.reset() l.keep_struct = True if train: ind = np.random.randint(0, self.seen) else: ind = np.random.randint(self.seen, self.pmsz) perm = self.all_perms[ind] ## Set graph according to causal structure if self.structure == &quot;one_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;one_to_many&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj.T self.gt = self.aj.flatten() elif self.structure == &quot;many_to_one&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.gt = self.aj.flatten() elif self.structure == &quot;masterswitch&quot;: aj = np.zeros((self.num,self.num)) for i in range(self.num): aj[i, perm[i]] = 1 self.aj = aj self.ms = np.random.randint(self.num) m = np.zeros((self.num)) m[self.ms] = 1 self.gt = self.aj.flatten() self.gt = np.concatenate([self.gt, m])     如果是要获取训练样本，则在seen的范围内选择因果关系，否则在seen的范围外选择因果关系。选择到因果关系后，将一维向量转换成二维二值向量。若是masterswitch结构，还需要随机产生一个master switch。     生成样本的时候，当structure是masterswitch的时候，agent会先把所有的开关都试一遍，找出master  switch，再将master之外的开关试一遍： if args.structure == &quot;masterswitch&quot;: it = None for i in range(args.num): p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) if i == 0: epbuf = mem else: epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) p2 = l._get_obs() if (p != p2).any(): it = i break for i in range(args.num): if i != it: p = l._get_obs() if args.images: pi = l._get_obs(images=True) p = p.reshape((1, -1)) a = np.zeros((1, args.num+1)) a[:,i] = 1 if args.images: mem = np.concatenate([np.expand_dims(pi.flatten(), 0), a], 1) else: mem = np.concatenate([p[:,:args.num], a], 1) epbuf = np.concatenate([epbuf, mem], 0) l.step(i, count = False) ln = epbuf.shape[0] buf = np.zeros((2 * args.horizon - 1, epbuf.shape[1])) buf[:ln] = epbuf     保存当前的场景图后，执行动作，然后切换到下个场景，如果在找master switch，判断现在这个switch是不是master，如果是的话，结束找master的过程，进入下一阶段。 def step(self, action): &#39;&#39;&#39;Step in env. Args:       action: which switch to toggle     &#39;&#39;&#39; ## If &quot;Do Nothing&quot; Action if action == self.num: pass else: if self.structure == &quot;masterswitch&quot;: ## Only once masterswitch is activated can others be activated if (action == self.ms) or (self.state[self.ms] == 1): change = np.zeros(self.num) change[action] = 1 self.state = np.abs(self.state - change) else: change = np.zeros(self.num) change[action] = 1             self.state = np.abs(self.state - change)     obs = self._get_obs() done = False info = {&#39;is_success&#39;: self._is_success(obs)} self.correct.append((info[&quot;is_success&quot;]))     reward = self.compute_reward(obs, info) return obs, reward, done, info     step会判断是否成功触发了开关，触发开关后是否成功达到了目标，以及计算得失，不过是否成功达到目标和计算得失都不会在这个阶段被用到，不论达没达到目标，所有的开关都会被试一遍（masterswitch结构可能不止一遍）。 记：     这个生成训练样本的程序是有比较多问题的：     1. 费内存，40000组样本都存在buffer里，最后才写入文件，内存小的电脑不要轻易尝试。     2. 训练样本会用到的因果关系很少，实验中只会尝试10，50，100，500，而buffer中存入的数据，其实只和场景，因果关系，因果结构(structure)，开关数量，可见的seen有关，步骤又都是顺序的，所以如果seen是10，则buffer中的40000组训练数据中只有10组不同的数据。在生成数据的程序中，每组数据的生成都重新对环境渲染，整个过程费时间，费内存，费计算，存下来废硬盘，重新读入还是费时费内存，可以优化，换一种写法和存训练数据的方法，会更合理。     3. 在初始化环境的时候，似乎不需要定义st/cond的值。 上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction","url":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/","image":"http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1%E2%80%94%E2%80%94%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/1.jpeg","@type":"BlogPosting","headline":"换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据","dateModified":"2020-06-28T00:00:00+08:00","datePublished":"2020-06-28T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-06-28">28 Jun 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——生成数据/1.jpeg" alt="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong style="max-width: 100%;box-sizing: border-box !important;overflow-wrap: break-word !important;">
+</strong></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</a>  </strong></p>
+
+<p>​</p>
+
+<p>​	今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中生成数据的方式。</p>
+
+<p>    官方源代码地址：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/StanfordVL/causal_induction
+</code></pre></div></div>
+
+<p>    测试这个代码依赖一个软件：mujoco, mujoco-py, 安装可以参考这篇：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://maple52046.github.io/2020/04/25/Mujoco-Installation/#
+</code></pre></div></div>
+
+<p>    <strong>1. 生成数据(Generate Data)</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">python3</span><span class="err"> </span><span class="n">collectdata</span><span class="p">.</span><span class="n">py</span><span class="err"> </span><span class="o">--</span><span class="n">horizon</span><span class="err"> </span><span class="mi">7</span><span class="err"> </span><span class="o">--</span><span class="n">num</span><span class="err"> </span><span class="mi">7</span><span class="err"> </span><span class="o">--</span><span class="n">fixed</span><span class="o">-</span><span class="n">goal</span><span class="err"> </span><span class="mi">0</span><span class="err"> </span><span class="o">--</span><span class="n">structure</span><span class="err"> </span><span class="n">one_to_one</span><span class="err"> </span><span class="o">--</span><span class="n">seen</span><span class="err"> </span><span class="mi">10</span><span class="err"> </span><span class="o">--</span><span class="n">images</span><span class="err"> </span><span class="mi">1</span><span class="err"> </span><span class="o">--</span><span class="n">data</span><span class="o">-</span><span class="nb">dir</span><span class="err"> </span><span class="n">output</span><span class="o">/</span>
+</code></pre></div></div>
+
+<p>    </p>
+
+<p>​	先说一下各个参数的意思：   </p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——生成数据/1.jpeg" style="zoom:80%;" /></p>
+
+<p>    horizon是上图中<strong>H</strong>的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal conditioned，即agent在采取行动的时候是只需要考虑现在的状态(state)还是也需要考虑目标(goal)，在这个研究里，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的结构关系，也是这个案例中的因果关系，有如下四类：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——生成数据/2.png" style="zoom: 67%;" /></p>
+
+<p>每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数是会参与训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。</p>
+
+<p>    <strong>1.1 初始化环境</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">l</span> <span class="o">=</span> <span class="n">LightEnv</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">st</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="n">gc</span><span class="p">,</span>  <span class="n">filename</span><span class="o">=</span><span class="nb">str</span><span class="p">(</span><span class="n">gc</span><span class="p">)</span><span class="o">+</span><span class="s">"_traj"</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">seen</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    对照着环境的初始定义来看：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="s">'''Light Switch Environment for Visual Causal Induction'''</span>
+<span class="n">def</span><span class="err"> </span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="err"> </span><span class="n">horizon</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="err"> </span><span class="n">num</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="err"> </span><span class="n">cond</span><span class="o">=</span><span class="s">"gt"</span><span class="p">,</span><span class="err"> </span><span class="n">structure</span><span class="o">=</span><span class="s">"one_to_one"</span><span class="p">,</span><span class="err"> </span><span class="n">gc</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span><span class="err"> </span><span class="n">filename</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span><span class="err"> </span><span class="n">seen</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+</code></pre></div></div>
+
+<p>    horizon，num，structure，seen，延续上面的意义和取值，gc是goal conditioned的意思，gc=1-fixed_goal，filename是在程序过程中记录log的地方，st/cond这个参数在生成数据这块似乎是没有用到的。</p>
+
+<p>    初始化因果关系的二值矩阵：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">aj</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>    初始化目标：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">gc</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">goal</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">_sample_goal</span><span class="p">()</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">def</span><span class="err"> </span><span class="n">_sample_goal</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="err">  </span>  <span class="s">"""Samples a new goal and returns it.
+    """</span><span class="err"> </span>
+<span class="err">   </span> <span class="n">state</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="err"> </span><span class="mi">2</span><span class="p">,</span><span class="err"> </span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+<span class="err">    </span><span class="k">print</span><span class="p">(</span><span class="n">state</span><span class="p">)</span>
+<span class="err">    </span><span class="n">light</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">np</span><span class="p">.</span><span class="n">dot</span><span class="p">(</span><span class="n">state</span><span class="p">.</span><span class="n">T</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">aj</span><span class="p">)</span>
+<span class="err">    </span><span class="k">print</span><span class="p">(</span><span class="n">light</span><span class="p">)</span>
+<span class="err">    </span><span class="n">light</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">light</span><span class="err"> </span><span class="o">%</span><span class="err"> </span><span class="mi">2</span>
+<span class="err">    </span><span class="bp">self</span><span class="p">.</span><span class="n">sim</span><span class="p">.</span><span class="n">model</span><span class="p">.</span><span class="n">light_active</span><span class="p">[:]</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">light</span>
+<span class="err">    </span><span class="k">print</span><span class="p">(</span><span class="nb">dir</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">sim</span><span class="p">))</span>
+<span class="err">    </span><span class="bp">self</span><span class="p">.</span><span class="n">goalim</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">sim</span><span class="p">.</span><span class="n">render</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s">'offscreen'</span><span class="p">,</span><span class="err"> </span><span class="n">width</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span><span class="err"> </span><span class="n">height</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span><span class="err"> </span><span class="n">camera_name</span><span class="o">=</span><span class="s">"birdview"</span><span class="p">)</span><span class="err"> </span><span class="o">/</span><span class="err"> </span><span class="mf">255.0</span><span class="err"> </span>
+<span class="err">    </span><span class="k">return</span><span class="err"> </span><span class="n">light</span>
+</code></pre></div></div>
+
+<p>    随机生成一组开关的状态，与因果关系相乘，得到灯的状态，再将灯的状态传给环境，渲染出目标场景图，返回灯的状态，这即是要达到的目标状态。</p>
+
+<p>    初始化开关的状态：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>    排列组合出所有可能的因果关系：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"one_to_many"</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"many_to_one"</span><span class="p">):</span>
+    <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span> <span class="o">==</span> <span class="mi">9</span><span class="p">:</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">all_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">generate_cs_set1</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="bp">True</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="bp">self</span><span class="p">.</span><span class="n">all_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">generate_cs_set1</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">all_perms</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">generate_cs_set2</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">shuffle</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">all_perms</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    如果是one-to-one的结构，那么all_perms会包含所有可能的5040（7!）种因果关系，每种因果关系用一个<strong>N</strong>维向量表示，如[3, 4, 7, 0, 1, 2, 5, 6]，表示开关0控制着灯3，…。如果是one-to-many或者many-to-one的结构，all_perms包含所有可能的823543（7^7）种因果关系。如果开关和灯的数量都是9，那么one-to-many或者many-to-one的因果关系会有9^9个，上亿了，因此需要随机过滤掉一些，除了最底层，每一层会随机过滤掉40%，最后大约会取到因果总数的0.6^8。值得注意的是，如果是many_to_one, 那么需要把向量的位置理解成开关，如果是one_to_many，则要把向量的位置理解成灯的编号，而里面的数字是开关的编号。得到all_perms后要将里面的因果关系随机排序。</p>
+
+<p>    获得当前的场景向量：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">obs</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>    obs向量中包含了灯的状态，目标向量，还有轨迹向量，目标向量和轨迹向量在生成数据的过程中没有被使用到。</p>
+
+<p>    定义动作域和观察域，这两个在生成数据的过程中也没有被用到。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="bp">self</span><span class="p">.</span><span class="n">action_space</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">spaces</span><span class="p">.</span><span class="n">Discrete</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">observation_space</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">spaces</span><span class="p">.</span><span class="n">Box</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="err"> </span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="n">shape</span><span class="o">=</span><span class="n">obs</span><span class="p">.</span><span class="n">shape</span><span class="p">,</span><span class="err"> </span><span class="n">dtype</span><span class="o">=</span><span class="s">'float32'</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    <strong>1.2 获得训练样本</strong></p>
+
+<p>    在这个实验中，会生成num_episodes组样本，样本存在buffer中，样本对应的因果关系，存在gtbuffer中。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">buffer</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">gtbuffer</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">num_episodes</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="mi">40000</span>
+</code></pre></div></div>
+
+<p>    每组样本又如何生成？重设环境，重新选择因果关系，设定新的目标，获得新的初始状态的观察向量。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">False</span>
+<span class="n">obs</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">env</span><span class="p">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">True</span>
+</code></pre></div></div>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="n">train</span><span class="p">:</span>
+    <span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">seen</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">ind</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">seen</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">pmsz</span><span class="p">)</span>
+<span class="n">perm</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">all_perms</span><span class="p">[</span><span class="n">ind</span><span class="p">]</span>
+<span class="c1">## Set graph according to causal structure
+</span><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"one_to_one"</span><span class="p">:</span>
+    <span class="n">aj</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="n">aj</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">perm</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">aj</span> <span class="o">=</span> <span class="n">aj</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gt</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">aj</span><span class="p">.</span><span class="n">flatten</span><span class="p">()</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"one_to_many"</span><span class="p">:</span>
+    <span class="n">aj</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="n">aj</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">perm</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">aj</span> <span class="o">=</span> <span class="n">aj</span><span class="p">.</span><span class="n">T</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gt</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">aj</span><span class="p">.</span><span class="n">flatten</span><span class="p">()</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"many_to_one"</span><span class="p">:</span>
+    <span class="n">aj</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="n">aj</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">perm</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">aj</span> <span class="o">=</span> <span class="n">aj</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gt</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">aj</span><span class="p">.</span><span class="n">flatten</span><span class="p">()</span>
+<span class="k">elif</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="n">aj</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">,</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="n">aj</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">perm</span><span class="p">[</span><span class="n">i</span><span class="p">]]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">aj</span> <span class="o">=</span> <span class="n">aj</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">ms</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+    <span class="n">m</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span>
+    <span class="n">m</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gt</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">aj</span><span class="p">.</span><span class="n">flatten</span><span class="p">()</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">gt</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="bp">self</span><span class="p">.</span><span class="n">gt</span><span class="p">,</span> <span class="n">m</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>    如果是要获取训练样本，则在seen的范围内选择因果关系，否则在seen的范围外选择因果关系。选择到因果关系后，将一维向量转换成二维二值向量。若是masterswitch结构，还需要随机产生一个master switch。</p>
+
+<p>    生成样本的时候，当structure是masterswitch的时候，agent会先把所有的开关都试一遍，找出master  switch，再将master之外的开关试一遍：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+    <span class="n">it</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">:</span>
+            <span class="n">pi</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+        <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="p">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">a</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+
+        <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">:</span>
+            <span class="n">mem</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pi</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="n">a</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">mem</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">p</span><span class="p">[:,:</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">],</span> <span class="n">a</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+
+
+        <span class="k">if</span> <span class="n">i</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">epbuf</span> <span class="o">=</span> <span class="n">mem</span>
+        <span class="k">else</span><span class="p">:</span> 
+            <span class="n">epbuf</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">epbuf</span><span class="p">,</span> <span class="n">mem</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+        <span class="n">l</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">count</span> <span class="o">=</span> <span class="bp">False</span><span class="p">)</span>
+        <span class="n">p2</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">p</span> <span class="o">!=</span> <span class="n">p2</span><span class="p">).</span><span class="nb">any</span><span class="p">():</span>
+            <span class="n">it</span> <span class="o">=</span> <span class="n">i</span>
+            <span class="k">break</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">!=</span> <span class="n">it</span><span class="p">:</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">:</span>
+                <span class="n">pi</span> <span class="o">=</span> <span class="n">l</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">(</span><span class="n">images</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="n">p</span> <span class="o">=</span> <span class="n">p</span><span class="p">.</span><span class="n">reshape</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">a</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">))</span>
+            <span class="n">a</span><span class="p">[:,</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+
+
+            <span class="k">if</span> <span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">:</span>
+                <span class="n">mem</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">np</span><span class="p">.</span><span class="n">expand_dims</span><span class="p">(</span><span class="n">pi</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="mi">0</span><span class="p">),</span> <span class="n">a</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">mem</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">p</span><span class="p">[:,:</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">],</span> <span class="n">a</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+
+
+            <span class="n">epbuf</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">epbuf</span><span class="p">,</span> <span class="n">mem</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">l</span><span class="p">.</span><span class="n">step</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">count</span> <span class="o">=</span> <span class="bp">False</span><span class="p">)</span>
+    <span class="n">ln</span> <span class="o">=</span> <span class="n">epbuf</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">buf</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="mi">2</span> <span class="o">*</span> <span class="n">args</span><span class="p">.</span><span class="n">horizon</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">epbuf</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+    <span class="n">buf</span><span class="p">[:</span><span class="n">ln</span><span class="p">]</span> <span class="o">=</span> <span class="n">epbuf</span>
+</code></pre></div></div>
+
+<p>    保存当前的场景图后，执行动作，然后切换到下个场景，如果在找master switch，判断现在这个switch是不是master，如果是的话，结束找master的过程，进入下一阶段。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">step</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">action</span><span class="p">):</span>
+    <span class="s">'''Step in env. 
+    Args:
+      action: which switch to toggle
+    '''</span>
+    <span class="c1">## If "Do Nothing" Action
+</span>    <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">:</span>
+        <span class="k">pass</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">structure</span> <span class="o">==</span> <span class="s">"masterswitch"</span><span class="p">:</span>
+            <span class="c1">## Only once masterswitch is activated can others be activated
+</span>            <span class="k">if</span> <span class="p">(</span><span class="n">action</span> <span class="o">==</span> <span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="p">[</span><span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">):</span>
+                <span class="n">change</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+                <span class="n">change</span><span class="p">[</span><span class="n">action</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="p">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">state</span> <span class="o">-</span> <span class="n">change</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">change</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">zeros</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+            <span class="n">change</span><span class="p">[</span><span class="n">action</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="err">            </span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">np</span><span class="p">.</span><span class="nb">abs</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">state</span><span class="err"> </span><span class="o">-</span><span class="err"> </span><span class="n">change</span><span class="p">)</span>
+<span class="err">    </span><span class="n">obs</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">_get_obs</span><span class="p">()</span>
+    <span class="n">done</span> <span class="o">=</span> <span class="bp">False</span>
+    <span class="n">info</span> <span class="o">=</span> <span class="p">{</span><span class="s">'is_success'</span><span class="p">:</span> <span class="bp">self</span><span class="p">.</span><span class="n">_is_success</span><span class="p">(</span><span class="n">obs</span><span class="p">)}</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">correct</span><span class="p">.</span><span class="n">append</span><span class="p">((</span><span class="n">info</span><span class="p">[</span><span class="s">"is_success"</span><span class="p">]))</span>
+<span class="err">    </span><span class="n">reward</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">compute_reward</span><span class="p">(</span><span class="n">obs</span><span class="p">,</span><span class="err"> </span><span class="n">info</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">obs</span><span class="p">,</span> <span class="n">reward</span><span class="p">,</span> <span class="n">done</span><span class="p">,</span> <span class="n">info</span>
+</code></pre></div></div>
+
+<p>    step会判断是否成功触发了开关，触发开关后是否成功达到了目标，以及计算得失，不过是否成功达到目标和计算得失都不会在这个阶段被用到，不论达没达到目标，所有的开关都会被试一遍（masterswitch结构可能不止一遍）。</p>
+
+<p>记：</p>
+
+<p>    这个生成训练样本的程序是有比较多问题的：</p>
+
+<p>    1. 费内存，40000组样本都存在buffer里，最后才写入文件，内存小的电脑不要轻易尝试。
+          2. 训练样本会用到的因果关系很少，实验中只会尝试10，50，100，500，而buffer中存入的数据，其实只和场景，因果关系，因果结构(structure)，开关数量，可见的seen有关，步骤又都是顺序的，所以如果seen是10，则buffer中的40000组训练数据中只有10组不同的数据。在生成数据的程序中，每组数据的生成都重新对环境渲染，整个过程费时间，费内存，费计算，存下来废硬盘，重新读入还是费时费内存，可以优化，换一种写法和存训练数据的方法，会更合理。
+          3. 在初始化环境的时候，似乎不需要定义st/cond的值。</p>
+
+<p>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</a></p>
+
+<p>参考论文：</p>
+
+<ol>
+  <li>Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019</li>
+</ol>
+
+<p>参考代码：</p>
+
+<ol>
+  <li>https://github.com/StanfordVL/causal_induction</li>
+</ol>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E7%94%9F%E6%88%90%E6%95%B0%E6%8D%AE/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Goal-Directed-Task">Goal Directed Task</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

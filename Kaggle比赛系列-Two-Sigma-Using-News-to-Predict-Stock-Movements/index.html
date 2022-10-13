@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    不想学习的时候，不如想想怎么发财     这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。     发起的公司叫Two Sigma，看公司图标：     这个名字，这个logo，很数学，强烈怀疑公司创始人是学数学出身的，一查，MIT的，好家伙。公司网址：https://www.twosigma.com/。     该比赛的数据不提供下载，也不允许参赛的人散布，可见数据收集也对实验结果有着决定性的作用(这好像是废话)，也具有非常强的专业性。当年我完全有时间参与这个比赛，但是我在干什么呢？我啥也没干，追悔莫及，遗憾程度不亚于至尊宝错过了紫霞仙子。     该比赛的数据由两个部分组成：     市场数据(Market data)由Intrinio提供。这家公司应该是一间小公司，Real-Time Financial Market Data Provider …，进去主页就能看到我最爱的斯坦福的标志，肯定是一间厉害的小公司，公司网址：https://intrinio.com/。     新闻数据(News data)由Thomson Reuters提供。汤森路透是一家大型跨国传媒集团，总部在加拿大多伦多。平时不看新闻的我，都感觉这个名字很耳熟。     时间线：     训练数据包含2007年到2017年十年的数据，评分分两个阶段，第一阶段评分用的是2017到2018年年中的数据，参赛者可以一边优化模型，一边看自己模型的优劣，之后在2019年年初锁定参赛者代码，也就是不能再改模型了，开始用参赛者代码进行真正的预测。     比赛已经结束了，第一名是一个来自上海的选手，参加了很多比赛，其他比赛成绩都很一般，只有这个比赛第一名。     一战成名啊。     数据结构：     1. 市场数据(market data):     市场数据包含的是美国股票的子集吧，介绍里用的是US-listed instruments。市场数据里包含的股票每天都是变动的，变动的规则取决于它们的交易量和其他可用的信息。这表示在这十几年的数据里，有些股票可能进来了又离开了，离开后又回来了。因此有些股票会存在空白期，然而并不表示空白期内这些股票没有产生市场数据，只是不在表内。     这组市场数据包含在不同时间跨度上计算出的收益。所有收益都具有以下属性： 收益总是按open-to-open（从一个交易日的开盘价到另一个交易日的开盘价）或close-to-open（从一个交易日的收盘价到另一个交易日的开盘价）计算。 收益要么是原始的，即数据没有按任何其他数据进行调整，比如大盘涨跌。要么是市场剩余的（market-residualized，Mktres），即排去了大盘涨跌造成的影响，计算该股票相对于大盘的涨跌。 可以在任意间隔内计算收益。这里提供的是1天和10天的间隔收益。 收益如果是向后计算出的，会打上‘Prev’的标签，即过去1天，十天的收益，如果是向前计算出的，会打上‘Next’的标签，即未来的收益。 市场数据的列信息如下: time(ns, UTC) - 当前时间（每天记录的时间都是22:00 UTC） assetCode(object) - 资产id assetName(category) - 一组资产对应的名称，这个可能是空白的，如果这组股票没有相关的新闻数据。 universe(float64) - 表示今天是否对该股票进行评估。只有训练数据才有这个值。该值反馈的是今天可以交易的股票，不可以交易的股票不需要进行评分。 volume(float64) - 当日交易量 close(float64) - 收盘价（没有根据股息和拆股进行调整） open(float64) - 开盘价 （没有根据股息和拆股进行调整） returnsClosePrevRaw1(float64) - 意思见收益属性描述 returnsOpenPrevRaw1(float64) - 意思见收益属性描述 returnsClosePrevMktres1(float64) - 意思见收益属性描述 returnsOpenPrevMktres1(float64) - 意思见收益属性描述 returnsClosePrevRaw10(float64) - 意思见收益属性描述 returnsOpenPrevRaw10(float64) - 意思见收益属性描述 returnsClosePrevMktres10(float64) - 意思见收益属性描述 returnsOpenPrevMktres10(float64) - 意思见收益属性描述 returnsOpenNextMktres10(float64) - 十天，收益，向后，开盘价计算，不为空，为模型需要预测的值，即target。     2. 新闻数据(News data):     新闻数据包含了关于新闻文章的级别以及资产级别的信息，换句话说，这张表有意地没有规范化。     time(ns, UTC) -  数据在feed上可用的时间，精确到秒。有人可能不太了解feed的意思，可以这样理解，新闻开始被推送给用户的时间。     sourceTimestamp(ns, UTC) - 该新闻被创造出来的时间。     firstCreated(ns, UTC) - 该数据被创建的时间。     sourceId(object) - 该条数据的ID     headline(object) -  该条数据的标题     urgency(int8) - 新闻类型（1: 报警, 3: 文章）     takeSequence(int16) - 新闻序列号，从1开始。报警类新闻和文章类新闻有分开的序列号。     provider(category) - 提供新闻的组织机构（比如，路透社新闻RTRS，美国商业资讯BSW）     subjects(category) - 该新闻的主题代码，公司标志。主题代码描述的是该新闻的主题，可以涵盖资产类别，地域，事件，行业/部门和其他类型。     audiences(category) - 新闻属于哪个产品。通常不同新闻有不同受众。（比如，”M”指Money International News Service，”FB”指French General News Service）     bodySize(int32) - 该新闻当前版本正文大小     companyCount(int8) - 该新闻在主题字段明确列出的公司的数量。     headlineTag(object) - 新闻的汤森路透标题标签     marketCommentary(bool) - 新闻是否有讨论一般市场状况, 比如有类似”After the Bell”的总结。     sentenceCount(int16) - 新闻句子的数量。     wordCount(int32) - 单词和标点符号的总数。     assetCodes(category) - 新闻中提到的资产     assetName(category) - 资产名称     firstMentionSentence(int16) - 从标题开始，提到需要评分的资产的第一句（如：1：标题，2：新闻正文第一句，3：新闻正文第二句，0：没有提到该资产，则该新闻的标题和正文将用来做情感计算）。可以和句子总数结合起来用，用于计算第一次提到该资产的句子在文章中的相对位置。     relevance(float32) - 新闻项与资产的相关性。范围从0到1。如果标题中提到资产，则相关性设置为1。当项目为警报型（紧急度为1）时，相关性应改为使用firstMentionSentence进行度量。     sentimentClass(int8) - 该新闻对于某资产的主要情感类别。     sentimentNegative(float32) - 该新闻对于某资产的情感为负向的概率     sentimentNeutral(float32) - 该新闻对于某资产的情感为中性的概率         sentimentPositive(float32) - 该新闻对于某资产的情感为正向的概率     sentimentWordCount(int32) - 该新闻正文中与某资产相关的单词或标点符号的数量。它可以和wordCount结合起来，计算这篇文章有多大的比例在讨论这个资产。     noveltyCount12H(int16) - 该新闻内容对于某资产的12小时新颖度。它是和一系列包含该资产的新闻比较得来的。     noveltyCount24H(int16) - 24小时新颖度     noveltyCount3D(int16) - 3日新颖度     noveltyCount5D(int16) - 5日新颖度     noveltyCount7D(int16) - 7日新颖度     volumeCounts12H(int16) - 每个资产的12小时新闻量。     volumeCounts24H(int16) - 每个资产的24小时新闻量。     volumeCounts3D(int16) - 每个资产的3日新闻量。     volumeCounts5D(int16) - 每个资产的5日新闻量。     volumeCounts7D(int16) - 每个资产的7日新闻量。     模型评估： ​ 输出:    &lt;div align=center&gt;&lt;/div&gt; 即模型预测的将来十天内某只股票的收益情况，如果模型觉得这只股票在未来十天的收益高于大盘很多，那么应该输出接近1的值，如果模型觉得这只股票在未来十天相对大盘会带来很多损失，那么应该输出接近-1的值，如果模型不确定这只股票在未来十天内的收益情况，则输出接近0的值。           在模型评估阶段，每天会做如下计算：     预测值后面跟的rti是指资产i在t这天算起，未来十天的收益，排除掉市场造成的影响。再后面的uti指资产i在t这天是否要被评估。若忽略uti，如果预测值和真实值，两个值正负不一样，则xt的值就小于0，正负一致就大于0。     预测的准确度计算如下：     xt求平均值后除以xt的标准差。如果标准差是0，那么分数为0。     虽然这个比赛已经结束了，但还是有很多值得学习和思考的地方，比如评估模型的时候，最后输出的结果其实是两个维度上的，一个资产维度，一个时间维度，为什么最后分数在资产维度上只是求和，而时间维度上却取平均后除以一个标准差，以及为什么那么设计市场数据的构成和新闻数据的构成等等。     这个比赛的介绍就到这里，之后可能还会更一期这个比赛的EDA代码及结果（根据Kaggle上网友分享的整理）和官方发布的一些代码。感兴趣就关注吧。" />
+<meta property="og:description" content="    不想学习的时候，不如想想怎么发财     这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。     发起的公司叫Two Sigma，看公司图标：     这个名字，这个logo，很数学，强烈怀疑公司创始人是学数学出身的，一查，MIT的，好家伙。公司网址：https://www.twosigma.com/。     该比赛的数据不提供下载，也不允许参赛的人散布，可见数据收集也对实验结果有着决定性的作用(这好像是废话)，也具有非常强的专业性。当年我完全有时间参与这个比赛，但是我在干什么呢？我啥也没干，追悔莫及，遗憾程度不亚于至尊宝错过了紫霞仙子。     该比赛的数据由两个部分组成：     市场数据(Market data)由Intrinio提供。这家公司应该是一间小公司，Real-Time Financial Market Data Provider …，进去主页就能看到我最爱的斯坦福的标志，肯定是一间厉害的小公司，公司网址：https://intrinio.com/。     新闻数据(News data)由Thomson Reuters提供。汤森路透是一家大型跨国传媒集团，总部在加拿大多伦多。平时不看新闻的我，都感觉这个名字很耳熟。     时间线：     训练数据包含2007年到2017年十年的数据，评分分两个阶段，第一阶段评分用的是2017到2018年年中的数据，参赛者可以一边优化模型，一边看自己模型的优劣，之后在2019年年初锁定参赛者代码，也就是不能再改模型了，开始用参赛者代码进行真正的预测。     比赛已经结束了，第一名是一个来自上海的选手，参加了很多比赛，其他比赛成绩都很一般，只有这个比赛第一名。     一战成名啊。     数据结构：     1. 市场数据(market data):     市场数据包含的是美国股票的子集吧，介绍里用的是US-listed instruments。市场数据里包含的股票每天都是变动的，变动的规则取决于它们的交易量和其他可用的信息。这表示在这十几年的数据里，有些股票可能进来了又离开了，离开后又回来了。因此有些股票会存在空白期，然而并不表示空白期内这些股票没有产生市场数据，只是不在表内。     这组市场数据包含在不同时间跨度上计算出的收益。所有收益都具有以下属性： 收益总是按open-to-open（从一个交易日的开盘价到另一个交易日的开盘价）或close-to-open（从一个交易日的收盘价到另一个交易日的开盘价）计算。 收益要么是原始的，即数据没有按任何其他数据进行调整，比如大盘涨跌。要么是市场剩余的（market-residualized，Mktres），即排去了大盘涨跌造成的影响，计算该股票相对于大盘的涨跌。 可以在任意间隔内计算收益。这里提供的是1天和10天的间隔收益。 收益如果是向后计算出的，会打上‘Prev’的标签，即过去1天，十天的收益，如果是向前计算出的，会打上‘Next’的标签，即未来的收益。 市场数据的列信息如下: time(ns, UTC) - 当前时间（每天记录的时间都是22:00 UTC） assetCode(object) - 资产id assetName(category) - 一组资产对应的名称，这个可能是空白的，如果这组股票没有相关的新闻数据。 universe(float64) - 表示今天是否对该股票进行评估。只有训练数据才有这个值。该值反馈的是今天可以交易的股票，不可以交易的股票不需要进行评分。 volume(float64) - 当日交易量 close(float64) - 收盘价（没有根据股息和拆股进行调整） open(float64) - 开盘价 （没有根据股息和拆股进行调整） returnsClosePrevRaw1(float64) - 意思见收益属性描述 returnsOpenPrevRaw1(float64) - 意思见收益属性描述 returnsClosePrevMktres1(float64) - 意思见收益属性描述 returnsOpenPrevMktres1(float64) - 意思见收益属性描述 returnsClosePrevRaw10(float64) - 意思见收益属性描述 returnsOpenPrevRaw10(float64) - 意思见收益属性描述 returnsClosePrevMktres10(float64) - 意思见收益属性描述 returnsOpenPrevMktres10(float64) - 意思见收益属性描述 returnsOpenNextMktres10(float64) - 十天，收益，向后，开盘价计算，不为空，为模型需要预测的值，即target。     2. 新闻数据(News data):     新闻数据包含了关于新闻文章的级别以及资产级别的信息，换句话说，这张表有意地没有规范化。     time(ns, UTC) -  数据在feed上可用的时间，精确到秒。有人可能不太了解feed的意思，可以这样理解，新闻开始被推送给用户的时间。     sourceTimestamp(ns, UTC) - 该新闻被创造出来的时间。     firstCreated(ns, UTC) - 该数据被创建的时间。     sourceId(object) - 该条数据的ID     headline(object) -  该条数据的标题     urgency(int8) - 新闻类型（1: 报警, 3: 文章）     takeSequence(int16) - 新闻序列号，从1开始。报警类新闻和文章类新闻有分开的序列号。     provider(category) - 提供新闻的组织机构（比如，路透社新闻RTRS，美国商业资讯BSW）     subjects(category) - 该新闻的主题代码，公司标志。主题代码描述的是该新闻的主题，可以涵盖资产类别，地域，事件，行业/部门和其他类型。     audiences(category) - 新闻属于哪个产品。通常不同新闻有不同受众。（比如，”M”指Money International News Service，”FB”指French General News Service）     bodySize(int32) - 该新闻当前版本正文大小     companyCount(int8) - 该新闻在主题字段明确列出的公司的数量。     headlineTag(object) - 新闻的汤森路透标题标签     marketCommentary(bool) - 新闻是否有讨论一般市场状况, 比如有类似”After the Bell”的总结。     sentenceCount(int16) - 新闻句子的数量。     wordCount(int32) - 单词和标点符号的总数。     assetCodes(category) - 新闻中提到的资产     assetName(category) - 资产名称     firstMentionSentence(int16) - 从标题开始，提到需要评分的资产的第一句（如：1：标题，2：新闻正文第一句，3：新闻正文第二句，0：没有提到该资产，则该新闻的标题和正文将用来做情感计算）。可以和句子总数结合起来用，用于计算第一次提到该资产的句子在文章中的相对位置。     relevance(float32) - 新闻项与资产的相关性。范围从0到1。如果标题中提到资产，则相关性设置为1。当项目为警报型（紧急度为1）时，相关性应改为使用firstMentionSentence进行度量。     sentimentClass(int8) - 该新闻对于某资产的主要情感类别。     sentimentNegative(float32) - 该新闻对于某资产的情感为负向的概率     sentimentNeutral(float32) - 该新闻对于某资产的情感为中性的概率         sentimentPositive(float32) - 该新闻对于某资产的情感为正向的概率     sentimentWordCount(int32) - 该新闻正文中与某资产相关的单词或标点符号的数量。它可以和wordCount结合起来，计算这篇文章有多大的比例在讨论这个资产。     noveltyCount12H(int16) - 该新闻内容对于某资产的12小时新颖度。它是和一系列包含该资产的新闻比较得来的。     noveltyCount24H(int16) - 24小时新颖度     noveltyCount3D(int16) - 3日新颖度     noveltyCount5D(int16) - 5日新颖度     noveltyCount7D(int16) - 7日新颖度     volumeCounts12H(int16) - 每个资产的12小时新闻量。     volumeCounts24H(int16) - 每个资产的24小时新闻量。     volumeCounts3D(int16) - 每个资产的3日新闻量。     volumeCounts5D(int16) - 每个资产的5日新闻量。     volumeCounts7D(int16) - 每个资产的7日新闻量。     模型评估： ​ 输出:    &lt;div align=center&gt;&lt;/div&gt; 即模型预测的将来十天内某只股票的收益情况，如果模型觉得这只股票在未来十天的收益高于大盘很多，那么应该输出接近1的值，如果模型觉得这只股票在未来十天相对大盘会带来很多损失，那么应该输出接近-1的值，如果模型不确定这只股票在未来十天内的收益情况，则输出接近0的值。           在模型评估阶段，每天会做如下计算：     预测值后面跟的rti是指资产i在t这天算起，未来十天的收益，排除掉市场造成的影响。再后面的uti指资产i在t这天是否要被评估。若忽略uti，如果预测值和真实值，两个值正负不一样，则xt的值就小于0，正负一致就大于0。     预测的准确度计算如下：     xt求平均值后除以xt的标准差。如果标准差是0，那么分数为0。     虽然这个比赛已经结束了，但还是有很多值得学习和思考的地方，比如评估模型的时候，最后输出的结果其实是两个维度上的，一个资产维度，一个时间维度，为什么最后分数在资产维度上只是求和，而时间维度上却取平均后除以一个标准差，以及为什么那么设计市场数据的构成和新闻数据的构成等等。     这个比赛的介绍就到这里，之后可能还会更一期这个比赛的EDA代码及结果（根据Kaggle上网友分享的整理）和官方发布的一些代码。感兴趣就关注吧。" />
+<link rel="canonical" href="http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/" />
+<meta property="og:url" content="http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97:[Two%20Sigma]%20Using%20News%20to%20Predict%20Stock%20Movements/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-10-20T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    不想学习的时候，不如想想怎么发财     这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。     发起的公司叫Two Sigma，看公司图标：     这个名字，这个logo，很数学，强烈怀疑公司创始人是学数学出身的，一查，MIT的，好家伙。公司网址：https://www.twosigma.com/。     该比赛的数据不提供下载，也不允许参赛的人散布，可见数据收集也对实验结果有着决定性的作用(这好像是废话)，也具有非常强的专业性。当年我完全有时间参与这个比赛，但是我在干什么呢？我啥也没干，追悔莫及，遗憾程度不亚于至尊宝错过了紫霞仙子。     该比赛的数据由两个部分组成：     市场数据(Market data)由Intrinio提供。这家公司应该是一间小公司，Real-Time Financial Market Data Provider …，进去主页就能看到我最爱的斯坦福的标志，肯定是一间厉害的小公司，公司网址：https://intrinio.com/。     新闻数据(News data)由Thomson Reuters提供。汤森路透是一家大型跨国传媒集团，总部在加拿大多伦多。平时不看新闻的我，都感觉这个名字很耳熟。     时间线：     训练数据包含2007年到2017年十年的数据，评分分两个阶段，第一阶段评分用的是2017到2018年年中的数据，参赛者可以一边优化模型，一边看自己模型的优劣，之后在2019年年初锁定参赛者代码，也就是不能再改模型了，开始用参赛者代码进行真正的预测。     比赛已经结束了，第一名是一个来自上海的选手，参加了很多比赛，其他比赛成绩都很一般，只有这个比赛第一名。     一战成名啊。     数据结构：     1. 市场数据(market data):     市场数据包含的是美国股票的子集吧，介绍里用的是US-listed instruments。市场数据里包含的股票每天都是变动的，变动的规则取决于它们的交易量和其他可用的信息。这表示在这十几年的数据里，有些股票可能进来了又离开了，离开后又回来了。因此有些股票会存在空白期，然而并不表示空白期内这些股票没有产生市场数据，只是不在表内。     这组市场数据包含在不同时间跨度上计算出的收益。所有收益都具有以下属性： 收益总是按open-to-open（从一个交易日的开盘价到另一个交易日的开盘价）或close-to-open（从一个交易日的收盘价到另一个交易日的开盘价）计算。 收益要么是原始的，即数据没有按任何其他数据进行调整，比如大盘涨跌。要么是市场剩余的（market-residualized，Mktres），即排去了大盘涨跌造成的影响，计算该股票相对于大盘的涨跌。 可以在任意间隔内计算收益。这里提供的是1天和10天的间隔收益。 收益如果是向后计算出的，会打上‘Prev’的标签，即过去1天，十天的收益，如果是向前计算出的，会打上‘Next’的标签，即未来的收益。 市场数据的列信息如下: time(ns, UTC) - 当前时间（每天记录的时间都是22:00 UTC） assetCode(object) - 资产id assetName(category) - 一组资产对应的名称，这个可能是空白的，如果这组股票没有相关的新闻数据。 universe(float64) - 表示今天是否对该股票进行评估。只有训练数据才有这个值。该值反馈的是今天可以交易的股票，不可以交易的股票不需要进行评分。 volume(float64) - 当日交易量 close(float64) - 收盘价（没有根据股息和拆股进行调整） open(float64) - 开盘价 （没有根据股息和拆股进行调整） returnsClosePrevRaw1(float64) - 意思见收益属性描述 returnsOpenPrevRaw1(float64) - 意思见收益属性描述 returnsClosePrevMktres1(float64) - 意思见收益属性描述 returnsOpenPrevMktres1(float64) - 意思见收益属性描述 returnsClosePrevRaw10(float64) - 意思见收益属性描述 returnsOpenPrevRaw10(float64) - 意思见收益属性描述 returnsClosePrevMktres10(float64) - 意思见收益属性描述 returnsOpenPrevMktres10(float64) - 意思见收益属性描述 returnsOpenNextMktres10(float64) - 十天，收益，向后，开盘价计算，不为空，为模型需要预测的值，即target。     2. 新闻数据(News data):     新闻数据包含了关于新闻文章的级别以及资产级别的信息，换句话说，这张表有意地没有规范化。     time(ns, UTC) -  数据在feed上可用的时间，精确到秒。有人可能不太了解feed的意思，可以这样理解，新闻开始被推送给用户的时间。     sourceTimestamp(ns, UTC) - 该新闻被创造出来的时间。     firstCreated(ns, UTC) - 该数据被创建的时间。     sourceId(object) - 该条数据的ID     headline(object) -  该条数据的标题     urgency(int8) - 新闻类型（1: 报警, 3: 文章）     takeSequence(int16) - 新闻序列号，从1开始。报警类新闻和文章类新闻有分开的序列号。     provider(category) - 提供新闻的组织机构（比如，路透社新闻RTRS，美国商业资讯BSW）     subjects(category) - 该新闻的主题代码，公司标志。主题代码描述的是该新闻的主题，可以涵盖资产类别，地域，事件，行业/部门和其他类型。     audiences(category) - 新闻属于哪个产品。通常不同新闻有不同受众。（比如，”M”指Money International News Service，”FB”指French General News Service）     bodySize(int32) - 该新闻当前版本正文大小     companyCount(int8) - 该新闻在主题字段明确列出的公司的数量。     headlineTag(object) - 新闻的汤森路透标题标签     marketCommentary(bool) - 新闻是否有讨论一般市场状况, 比如有类似”After the Bell”的总结。     sentenceCount(int16) - 新闻句子的数量。     wordCount(int32) - 单词和标点符号的总数。     assetCodes(category) - 新闻中提到的资产     assetName(category) - 资产名称     firstMentionSentence(int16) - 从标题开始，提到需要评分的资产的第一句（如：1：标题，2：新闻正文第一句，3：新闻正文第二句，0：没有提到该资产，则该新闻的标题和正文将用来做情感计算）。可以和句子总数结合起来用，用于计算第一次提到该资产的句子在文章中的相对位置。     relevance(float32) - 新闻项与资产的相关性。范围从0到1。如果标题中提到资产，则相关性设置为1。当项目为警报型（紧急度为1）时，相关性应改为使用firstMentionSentence进行度量。     sentimentClass(int8) - 该新闻对于某资产的主要情感类别。     sentimentNegative(float32) - 该新闻对于某资产的情感为负向的概率     sentimentNeutral(float32) - 该新闻对于某资产的情感为中性的概率         sentimentPositive(float32) - 该新闻对于某资产的情感为正向的概率     sentimentWordCount(int32) - 该新闻正文中与某资产相关的单词或标点符号的数量。它可以和wordCount结合起来，计算这篇文章有多大的比例在讨论这个资产。     noveltyCount12H(int16) - 该新闻内容对于某资产的12小时新颖度。它是和一系列包含该资产的新闻比较得来的。     noveltyCount24H(int16) - 24小时新颖度     noveltyCount3D(int16) - 3日新颖度     noveltyCount5D(int16) - 5日新颖度     noveltyCount7D(int16) - 7日新颖度     volumeCounts12H(int16) - 每个资产的12小时新闻量。     volumeCounts24H(int16) - 每个资产的24小时新闻量。     volumeCounts3D(int16) - 每个资产的3日新闻量。     volumeCounts5D(int16) - 每个资产的5日新闻量。     volumeCounts7D(int16) - 每个资产的7日新闻量。     模型评估： ​ 输出:    &lt;div align=center&gt;&lt;/div&gt; 即模型预测的将来十天内某只股票的收益情况，如果模型觉得这只股票在未来十天的收益高于大盘很多，那么应该输出接近1的值，如果模型觉得这只股票在未来十天相对大盘会带来很多损失，那么应该输出接近-1的值，如果模型不确定这只股票在未来十天内的收益情况，则输出接近0的值。           在模型评估阶段，每天会做如下计算：     预测值后面跟的rti是指资产i在t这天算起，未来十天的收益，排除掉市场造成的影响。再后面的uti指资产i在t这天是否要被评估。若忽略uti，如果预测值和真实值，两个值正负不一样，则xt的值就小于0，正负一致就大于0。     预测的准确度计算如下：     xt求平均值后除以xt的标准差。如果标准差是0，那么分数为0。     虽然这个比赛已经结束了，但还是有很多值得学习和思考的地方，比如评估模型的时候，最后输出的结果其实是两个维度上的，一个资产维度，一个时间维度，为什么最后分数在资产维度上只是求和，而时间维度上却取平均后除以一个标准差，以及为什么那么设计市场数据的构成和新闻数据的构成等等。     这个比赛的介绍就到这里，之后可能还会更一期这个比赛的EDA代码及结果（根据Kaggle上网友分享的整理）和官方发布的一些代码。感兴趣就关注吧。","url":"http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/","image":"http://localhost:4000/assets/images/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97:[Two%20Sigma]%20Using%20News%20to%20Predict%20Stock%20Movements/2.png","@type":"BlogPosting","headline":"Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements","dateModified":"2020-10-20T00:00:00+08:00","datePublished":"2020-10-20T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-10-20">20 Oct 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/2.png" alt="Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    不想学习的时候，不如想想怎么发财<img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/1.png" style="zoom:50%;" /></p>
+
+<p>    这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。</p>
+
+<p>    发起的公司叫Two Sigma，看公司图标：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/2.png" alt="" /></p>
+
+<p>    这个名字，这个logo，很数学，强烈怀疑公司创始人是学数学出身的，一查，MIT的，好家伙。公司网址：https://www.twosigma.com/。</p>
+
+<p>    该比赛的数据不提供下载，也不允许参赛的人散布，可见数据收集也对实验结果有着决定性的作用(这好像是废话)，也具有非常强的专业性。当年我完全有时间参与这个比赛，但是我在干什么呢？我啥也没干，追悔莫及，遗憾程度不亚于至尊宝错过了紫霞仙子。</p>
+
+<p>    <strong>该比赛的数据由两个部分组成：</strong></p>
+
+<p>    <strong>市场数据</strong>(Market data)由Intrinio提供。这家公司应该是一间小公司，Real-Time Financial Market Data Provider …，进去主页就能看到我最爱的斯坦福的标志，肯定是一间厉害的小公司，公司网址：https://intrinio.com/。</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/3.png" alt="" /></p>
+
+<p>    <strong>新闻数据</strong>(News data)由Thomson Reuters提供。汤森路透是一家大型跨国传媒集团，总部在加拿大多伦多。平时不看新闻的我，都感觉这个名字很耳熟。</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/4.png" alt="" /></p>
+
+<p>    <strong>时间线：</strong></p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/5.png" alt="" /></p>
+
+<p>    训练数据包含2007年到2017年十年的数据，评分分两个阶段，第一阶段评分用的是2017到2018年年中的数据，参赛者可以一边优化模型，一边看自己模型的优劣，之后在2019年年初锁定参赛者代码，也就是不能再改模型了，开始用参赛者代码进行真正的预测。</p>
+
+<p>    比赛已经结束了，第一名是一个来自上海的选手，参加了很多比赛，其他比赛成绩都很一般，只有这个比赛第一名。</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/6.png" alt="" /></p>
+
+<p>    一战成名啊。</p>
+
+<p>    <strong>数据结构：</strong></p>
+
+<p>    <strong>1. 市场数据(market data):</strong></p>
+
+<p>    市场数据包含的是美国股票的子集吧，介绍里用的是US-listed instruments。市场数据里包含的股票每天都是变动的，变动的规则取决于它们的交易量和其他可用的信息。这表示在这十几年的数据里，有些股票可能进来了又离开了，离开后又回来了。因此有些股票会存在空白期，然而并不表示空白期内这些股票没有产生市场数据，只是不在表内。</p>
+
+<p>    这组市场数据包含在不同时间跨度上计算出的收益。所有收益都具有以下属性：</p>
+
+<ul>
+  <li>
+    <p>收益总是按open-to-open（从一个交易日的开盘价到另一个交易日的开盘价）或close-to-open（从一个交易日的收盘价到另一个交易日的开盘价）计算。</p>
+  </li>
+  <li>
+    <p>收益要么是原始的，即数据没有按任何其他数据进行调整，比如大盘涨跌。要么是市场剩余的（market-residualized，Mktres），即排去了大盘涨跌造成的影响，计算该股票相对于大盘的涨跌。</p>
+  </li>
+  <li>
+    <p>可以在任意间隔内计算收益。这里提供的是1天和10天的间隔收益。</p>
+  </li>
+  <li>
+    <p>收益如果是向后计算出的，会打上‘Prev’的标签，即过去1天，十天的收益，如果是向前计算出的，会打上‘Next’的标签，即未来的收益。</p>
+
+    <p>市场数据的列信息如下:</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">time</code>(ns, UTC) - 当前时间（每天记录的时间都是22:00 UTC）</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">assetCode</code>(object) - 资产id</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">assetName</code>(category) - 一组资产对应的名称，这个可能是空白的，如果这组股票没有相关的新闻数据。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">universe</code>(float64) - 表示今天是否对该股票进行评估。只有训练数据才有这个值。该值反馈的是今天可以交易的股票，不可以交易的股票不需要进行评分。</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">volume</code>(float64) - 当日交易量</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">close</code>(float64) - 收盘价（没有根据股息和拆股进行调整）</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">open</code>(float64) - 开盘价 （没有根据股息和拆股进行调整）</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsClosePrevRaw1</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsOpenPrevRaw1</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsClosePrevMktres1</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsOpenPrevMktres1</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsClosePrevRaw10</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsOpenPrevRaw10</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsClosePrevMktres10</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><code class="language-plaintext highlighter-rouge">returnsOpenPrevMktres10</code>(float64) - 意思见收益属性描述</p>
+  </li>
+  <li>
+    <p><strong><code class="language-plaintext highlighter-rouge">returnsOpenNextMktres10</code>(float64) - 十天，收益，向后，开盘价计算，不为空，为模型需要预测的值，即target。</strong></p>
+  </li>
+</ul>
+
+<p>    <strong>2. 新闻数据(News data):</strong></p>
+
+<p>    新闻数据包含了关于新闻文章的级别以及资产级别的信息，换句话说，这张表有意地没有规范化。
+    time(ns, UTC) -  数据在feed上可用的时间，精确到秒。有人可能不太了解feed的意思，可以这样理解，新闻开始被推送给用户的时间。</p>
+
+<p>    sourceTimestamp(ns, UTC) - 该新闻被创造出来的时间。
+    firstCreated(ns, UTC) - 该数据被创建的时间。
+    sourceId(object) - 该条数据的ID
+    headline(object) -  该条数据的标题
+    urgency(int8) - 新闻类型（1: 报警, 3: 文章）
+    takeSequence(int16) - 新闻序列号，从1开始。报警类新闻和文章类新闻有分开的序列号。
+    provider(category) - 提供新闻的组织机构（比如，路透社新闻RTRS，美国商业资讯BSW）
+    subjects(category) - 该新闻的主题代码，公司标志。主题代码描述的是该新闻的主题，可以涵盖资产类别，地域，事件，行业/部门和其他类型。</p>
+
+<p>    audiences(category) - 新闻属于哪个产品。通常不同新闻有不同受众。（比如，”M”指Money International News Service，”FB”指French General News Service）</p>
+
+<p>    bodySize(int32) - 该新闻当前版本正文大小
+    companyCount(int8) - 该新闻在主题字段明确列出的公司的数量。
+    headlineTag(object) - 新闻的汤森路透标题标签</p>
+
+<p>    marketCommentary(bool) - 新闻是否有讨论一般市场状况, 比如有类似”After the Bell”的总结。
+    sentenceCount(int16) - 新闻句子的数量。
+    wordCount(int32) - 单词和标点符号的总数。
+    assetCodes(category) - 新闻中提到的资产
+    assetName(category) - 资产名称
+    firstMentionSentence(int16) - 从标题开始，提到需要评分的资产的第一句（如：1：标题，2：新闻正文第一句，3：新闻正文第二句，0：没有提到该资产，则该新闻的标题和正文将用来做情感计算）。可以和句子总数结合起来用，用于计算第一次提到该资产的句子在文章中的相对位置。
+    relevance(float32) - 新闻项与资产的相关性。范围从0到1。如果标题中提到资产，则相关性设置为1。当项目为警报型（紧急度为1）时，相关性应改为使用firstMentionSentence进行度量。
+    sentimentClass(int8) - 该新闻对于某资产的主要情感类别。</p>
+
+<p>    sentimentNegative(float32) - 该新闻对于某资产的情感为负向的概率</p>
+
+<p>    sentimentNeutral(float32) - 该新闻对于某资产的情感为中性的概率    </p>
+
+<p>    sentimentPositive(float32) - 该新闻对于某资产的情感为正向的概率</p>
+
+<p>    sentimentWordCount(int32) - 该新闻正文中与某资产相关的单词或标点符号的数量。它可以和wordCount结合起来，计算这篇文章有多大的比例在讨论这个资产。
+    noveltyCount12H(int16) - 该新闻内容对于某资产的12小时新颖度。它是和一系列包含该资产的新闻比较得来的。</p>
+
+<p>    noveltyCount24H(int16) - 24小时新颖度
+    noveltyCount3D(int16) - 3日新颖度
+    noveltyCount5D(int16) - 5日新颖度
+    noveltyCount7D(int16) - 7日新颖度
+    volumeCounts12H(int16) - 每个资产的12小时新闻量。
+    volumeCounts24H(int16) - 每个资产的24小时新闻量。
+    volumeCounts3D(int16) - 每个资产的3日新闻量。
+    volumeCounts5D(int16) - 每个资产的5日新闻量。
+    volumeCounts7D(int16) - 每个资产的7日新闻量。</p>
+
+<p>    <strong>模型评估：</strong></p>
+
+<p>​	<strong>输出</strong>:</p>
+
+<p>   &lt;div align=center&gt;<img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/7.png" style="zoom: 67%;" />&lt;/div&gt;</p>
+
+<p>即模型预测的将来十天内某只股票的收益情况，如果模型觉得这只股票在未来十天的收益高于大盘很多，那么应该输出接近1的值，如果模型觉得这只股票在未来十天相对大盘会带来很多损失，那么应该输出接近-1的值，如果模型不确定这只股票在未来十天内的收益情况，则输出接近0的值。</p>
+
+<p>    </p>
+
+<p>     在模型评估阶段，每天会做如下计算：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/8.png" style="zoom:67%;" /></p>
+
+<p>    预测值后面跟的rti是指资产i在t这天算起，未来十天的收益，排除掉市场造成的影响。再后面的uti指资产i在t这天是否要被评估。若忽略uti，如果预测值和真实值，两个值正负不一样，则xt的值就小于0，正负一致就大于0。</p>
+
+<p>    预测的准确度计算如下：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/9.png" style="zoom:67%;" /></p>
+
+<p>    xt求平均值后除以xt的标准差。如果标准差是0，那么分数为0。</p>
+
+<p>    虽然这个比赛已经结束了，但还是有很多值得学习和思考的地方，比如评估模型的时候，最后输出的结果其实是两个维度上的，一个资产维度，一个时间维度，为什么最后分数在资产维度上只是求和，而时间维度上却取平均后除以一个标准差，以及为什么那么设计市场数据的构成和新闻数据的构成等等。</p>
+
+<p>    这个比赛的介绍就到这里，之后可能还会更一期这个比赛的EDA代码及结果（根据Kaggle上网友分享的整理）和官方发布的一些代码。感兴趣就关注吧<img src="../assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/10.png" style="zoom:50%;" />。</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements&url=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Kaggle">Kaggle</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Prediction">Prediction</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Stock">Stock</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/美股资料收集(Python)/1.jpeg" alt="美股资料收集(Python)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E7%BE%8E%E8%82%A1%E8%B5%84%E6%96%99%E6%94%B6%E9%9B%86(Python)/">美股资料收集(Python)</a>
+                
+            </h2>
+            <h4 class="card-text">
+
+声明：
+
+  这篇笔记和参考均不构成任何投资建议哦。
+
+
+   本来这应该是一篇读书笔记，要翻译整理课程‘Nick McCullum, Algorithmic Trading Using Pyth</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">02 Aug 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/1.gif" alt="Kaggle比赛系列：Conway's Reverse Game of Life 2020"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/">Kaggle比赛系列：Conway's Reverse Game of Life 2020</a>
+                
+            </h2>
+            <h4 class="card-text">     Conway是一位数学家，John Horton Conway，活跃于有限群论，结论，数论，组合博弈论和编码论。 他还为休闲数学的许多分支做出了贡献，最著名的是1970年，细胞自动机（cel</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 Nov 2020</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

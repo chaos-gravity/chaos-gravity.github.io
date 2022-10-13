@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>马可夫决策过程( Markov Decision Processes):不确定世界的决策方法 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>马可夫决策过程( Markov Decision Processes):不确定世界的决策方法 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="马可夫决策过程( Markov Decision Processes):不确定世界的决策方法" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    今天来学习一下马可夫决策过程，以下简称MDP。     现在考虑一个问题，如上图所示，机器人前面有一堆火，而它需要去取火那边的钻石，它如何才能取到那颗钻石。     下面是一张俯视图： 游戏规则：     行动: 画叉的那一格是墙，不能进入的方格，所以在这张图中，机器人可以移动的方格总共是十一个。如果机器人采取向一个方格移动，80%的概率会成功，10%向左边的方向，10%会向右边的方向的方格移动。     奖惩: 如果机器人进入+1的方格，机器人加1分，游戏结束。若机器人进入-1的方格，机器人减1分，游戏结束。机器人每采取一个行动会获得小的奖惩，比如加0.1分或者减0.1分。     目标：得最多的分。     可以看出，MDP要解决的不是一个确定的世界的问题，是一个不一定的世界的问题。机器人虽然计划采取某个行动，但它不一定能完成计划，它想往北走，却有可能是向西或者向东走了一步。比如一个人想要到达一个目的地，选择开车，结果堵车了，选择坐地铁，地铁故障了，选择走路，结果摔了一跤骨折折到了医院，选择坐公交，结果一见钟情，坐过了站。      确定的世界，根据现在的状态来采取行动，就一定能到达想要达到的状态，     不确定的世界，虽然根据现在的状态采取了行动，但是不一定能到达想要到达的地方，现实世界就是一个不确定的世界。      MDP算法可以应用在指导机器人行动决策，工厂生产决策，农业生产决策等等不确定世界的问题上。          这篇文章主要分为三个部分：     1.  Markov Decision Process 马可夫决策过程     2.  Policy Evaluation  策略评估     3.  Value Iteration 【找最佳策略】 1.  Markov Decision Process 马可夫决策过程       定义一个MDP：     以机器人拿钻石为例，S [States] 是状态集，包含机器人所有可能的状态，以第二张图为例，有十二个格子，除了墙之外的其他十一个格子机器人都可以进去，所以机器人在游戏中总共可以有11种状态，而机器人最初在的那一格为初始状态，用下标start注明，初始状态是一定会有的状态。A(s)[Actions(s)]是机器人在状态为s的时候所有可以做的行动的集合，这个例子中，机器人可以有向东，西，南，北移动这四个动作。T(s, a, s’)表示机器人在状态s的时候做了行为a，最后变为状态s’的概率，如果状态列举得完整，那么应该有： R(s, a, s’) [Reward(s, a, s’)]表示机器人在状态s采取行动a，进入状态s’后会获得的奖励或惩罚。IsEnd(s)判断游戏是否结束。     由T(s, a, s’)和R(s, a, s’)可以看出，MDP的理念是，未来和过去是无关的，未来的可能只取决于现在的状态和即将采取的行动，和过去的状态和行动是无关的。如果要解决的问题不止依赖于现在的状态和行为，也依赖于过去的状态和行为，那可以重新定义更大的状态集(S)来使问题符合MDP的要求。     MDP得到的行动方案称之为策略π，比如机器人在状态s的时候下一步要采取的行动。     最佳的策略为π*，是MDP要求得的结果。     到这里，MDP的定义就结束了。 2. Policy Evaluation  策略评估     假设MDP给出了一个策略(policy)，怎么评估它的好坏?     这里用效能(utility)来表示遵循策略衍生出来的路径产生的奖惩(reward)，比如给机器人下了一个向东的指令，它最后不一定成功向东，也可能向南或北移动了，向东之后如果游戏没有结束，它可能接着往南走，在结束游戏之前它会有很多种走法，每种走法全程产生的分数称之为效能(utility)：     策略的价值(value)则是这个策略的效能的期望值，价值(value)最大的策略即最佳策略π*：     下面看几个不同情况下的最佳策略： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; 图中R(s)表示的是机器人每做一个动作的得分，这样设置一个负分是为了促使机器人尽快完成游戏，R(s)值越小，则机器人越需要尽早结束游戏，免得拉低总分。图中每个箭头表示在当前格子中的最佳策略。当R(s)=-0.01的时候，如果机器人在第二排第三格，最佳策略是向西，所以会出现三种结果，80%原地不动，10%向北移一格，10%向南移一格。而当R(s)=-0.03的时候，同样的状态，最佳策略变成了向北，因为R(s)的减低，游戏对拖延的容忍值降低了，因此最佳策略产生了变化，机器人需要冒更多的风险去尽早结束游戏。当R(s)=-2.0时，则最佳策略是尽早结束游戏，同样的状态直接向东往-1格去。     此外还有一个概念是discount factor γ，即随着时间的推移，你的得分（收获，奖赏）会被打折扣。拖得越久折扣越大。     这里我们引入一个新的游戏，这是一个掷骰子的游戏：     游戏规则:     1. **状态：**游戏有两种状态，in (在游戏中)和 end（退出游戏）     2. **动作**：有两个动作可以选，quit(退出游戏)和stay(留在游戏)     3. **奖惩**：选择quit时，退出游戏，获得$10奖励；选择stay，则会掷一个六面骰子，如果骰子是1，2向上，则奖励$4，并退出游戏，如果骰子是3，4，5，6朝上，则奖励$4，并继续留在游戏里。     通过游戏规则可以绘制如下状态图，蓝色圆框是状态，线路表示策略所产生的方向，线路上会注明策略和报酬，以及产生这条线路的概率。这里引入了一个中间状态，即红色虚线圆框，它表示在执行策略后，一个判断当前状态的动作。值得留意的是这个游戏只有一个动作会引发不确定的结果，即stay，quit的结果是确定的。     以掷骰子的游戏为例，当discount factor γ 为1的时候，表示收到回报的时间不重要，回报不会因为收到时间上的延后而贬值。当 γ 为0的时候，表示只有当下收到的回报才是重要的，未来是不需要考虑的。而通常γ 的值会介于0-1之间，收到回报的时间是重要的，时间也是一个很重的成本，越早取得成功越好，但也不会只考虑当下的收益。当γ大于1呢？     同样，以机器人取钻石的游戏为例，当 γ在0-1之间，越晚拿到钻石，回报也会越低。     下面这个游戏可以解一下，答案已经标在了上面：     在状态s执行策略π的价值如下定义：     在中间状态s执行动作a的价值如下定义：     这两个定义的区别在哪里？即一个是当前状态的价值，另一个则是中间状态的价值，如果当前状态是end，则价值是0，当前状态是in的时候，有中间状态的价值：     以掷骰子游戏为例，策略为stay的价值如下：     根据公式推导，则可以得出在状态in的时候，使用stay策略，价值是12。推导过程见下图：     会不会有一个游戏可以永远玩下去，获得无穷无尽的收益呢？     避免这种情况产生的方法有两个：     1. 设置游戏的最长时间或者步数。或者随步数和时间的增加，可以执行的策略也随着产生变化。把人生比作一场游戏，那么很明显无论你采取如何正确的策略过每分每秒，这个游戏也必然有停止的时候，而随着年纪增大，能做的策略选择也越来越少，有天你会老得跑不动，只能拄着拐杖慢慢踱，有天你老得掉光了牙，很多东西也吃不了了，希望看到这里的人都有这么一天，O(∩_∩)O。     2. 另一个就是前面提到的discount factor γ ，根据下面的定理，只要 γ小于1，则收益必然收敛。最后的收益必然小于等于游戏中单步最大收益/(1-γ)。     3. Absorbing state: 将游戏设计得无论游戏者设计什么样的游戏策略，最终都有可能到达游戏结束那个状态。     如何计算策略价值，虽然收益通过一些方法限制，最后也会收敛，但是游戏都是有可能无限长时间玩下去的，所以可以通过限制最长步长或者游戏时间的方式来计算策略价值。 如上图所示，当最长步长为0的时候所有状态下的策略价值都是0，因为游戏根本就不会开始，当最长步长为1时，则会产生收益，当步长为t时，策略价值则可以基于s’状态下t-1为步长的策略价值来得到，以为已经走了一步，还剩下t-1步。     将最长步长设定为多少是比较合适的呢？那就是，当策略价值随着最长步长的增加几乎不再增加的时候。     这样做的算法复杂度为：     以掷骰子游戏为例，如果最长步数是1，策略价值为4，如果最长步数是100，策略价值则会很接近最大可能的收益： 3. Value Iteration     如何找到最佳策略，首先定义最大策略价值：     中间最大行动价值定义：     使得中间行动价值最大的动作则是最佳策略：      以机器人拿钻石的游戏为例，首先会计算每个状态下每个策略的期望收益：     再由此得到最佳策略：     最佳策略获得的期望收益是：     时间复杂度为： 参考： [1] Lecture 8: Markov Decision Processes (MDPs), CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [2] Lecture 9: Markov Decision Processes II, CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [3] Lecture 7: Markov Decision Processes - Value Iteration | Stanford CS221: AI (Autumn 2019), Percy Liang, Associate Professor &amp; Dorsa Sadigh, Assistant Professor" />
+<meta property="og:description" content="    今天来学习一下马可夫决策过程，以下简称MDP。     现在考虑一个问题，如上图所示，机器人前面有一堆火，而它需要去取火那边的钻石，它如何才能取到那颗钻石。     下面是一张俯视图： 游戏规则：     行动: 画叉的那一格是墙，不能进入的方格，所以在这张图中，机器人可以移动的方格总共是十一个。如果机器人采取向一个方格移动，80%的概率会成功，10%向左边的方向，10%会向右边的方向的方格移动。     奖惩: 如果机器人进入+1的方格，机器人加1分，游戏结束。若机器人进入-1的方格，机器人减1分，游戏结束。机器人每采取一个行动会获得小的奖惩，比如加0.1分或者减0.1分。     目标：得最多的分。     可以看出，MDP要解决的不是一个确定的世界的问题，是一个不一定的世界的问题。机器人虽然计划采取某个行动，但它不一定能完成计划，它想往北走，却有可能是向西或者向东走了一步。比如一个人想要到达一个目的地，选择开车，结果堵车了，选择坐地铁，地铁故障了，选择走路，结果摔了一跤骨折折到了医院，选择坐公交，结果一见钟情，坐过了站。      确定的世界，根据现在的状态来采取行动，就一定能到达想要达到的状态，     不确定的世界，虽然根据现在的状态采取了行动，但是不一定能到达想要到达的地方，现实世界就是一个不确定的世界。      MDP算法可以应用在指导机器人行动决策，工厂生产决策，农业生产决策等等不确定世界的问题上。          这篇文章主要分为三个部分：     1.  Markov Decision Process 马可夫决策过程     2.  Policy Evaluation  策略评估     3.  Value Iteration 【找最佳策略】 1.  Markov Decision Process 马可夫决策过程       定义一个MDP：     以机器人拿钻石为例，S [States] 是状态集，包含机器人所有可能的状态，以第二张图为例，有十二个格子，除了墙之外的其他十一个格子机器人都可以进去，所以机器人在游戏中总共可以有11种状态，而机器人最初在的那一格为初始状态，用下标start注明，初始状态是一定会有的状态。A(s)[Actions(s)]是机器人在状态为s的时候所有可以做的行动的集合，这个例子中，机器人可以有向东，西，南，北移动这四个动作。T(s, a, s’)表示机器人在状态s的时候做了行为a，最后变为状态s’的概率，如果状态列举得完整，那么应该有： R(s, a, s’) [Reward(s, a, s’)]表示机器人在状态s采取行动a，进入状态s’后会获得的奖励或惩罚。IsEnd(s)判断游戏是否结束。     由T(s, a, s’)和R(s, a, s’)可以看出，MDP的理念是，未来和过去是无关的，未来的可能只取决于现在的状态和即将采取的行动，和过去的状态和行动是无关的。如果要解决的问题不止依赖于现在的状态和行为，也依赖于过去的状态和行为，那可以重新定义更大的状态集(S)来使问题符合MDP的要求。     MDP得到的行动方案称之为策略π，比如机器人在状态s的时候下一步要采取的行动。     最佳的策略为π*，是MDP要求得的结果。     到这里，MDP的定义就结束了。 2. Policy Evaluation  策略评估     假设MDP给出了一个策略(policy)，怎么评估它的好坏?     这里用效能(utility)来表示遵循策略衍生出来的路径产生的奖惩(reward)，比如给机器人下了一个向东的指令，它最后不一定成功向东，也可能向南或北移动了，向东之后如果游戏没有结束，它可能接着往南走，在结束游戏之前它会有很多种走法，每种走法全程产生的分数称之为效能(utility)：     策略的价值(value)则是这个策略的效能的期望值，价值(value)最大的策略即最佳策略π*：     下面看几个不同情况下的最佳策略： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; 图中R(s)表示的是机器人每做一个动作的得分，这样设置一个负分是为了促使机器人尽快完成游戏，R(s)值越小，则机器人越需要尽早结束游戏，免得拉低总分。图中每个箭头表示在当前格子中的最佳策略。当R(s)=-0.01的时候，如果机器人在第二排第三格，最佳策略是向西，所以会出现三种结果，80%原地不动，10%向北移一格，10%向南移一格。而当R(s)=-0.03的时候，同样的状态，最佳策略变成了向北，因为R(s)的减低，游戏对拖延的容忍值降低了，因此最佳策略产生了变化，机器人需要冒更多的风险去尽早结束游戏。当R(s)=-2.0时，则最佳策略是尽早结束游戏，同样的状态直接向东往-1格去。     此外还有一个概念是discount factor γ，即随着时间的推移，你的得分（收获，奖赏）会被打折扣。拖得越久折扣越大。     这里我们引入一个新的游戏，这是一个掷骰子的游戏：     游戏规则:     1. **状态：**游戏有两种状态，in (在游戏中)和 end（退出游戏）     2. **动作**：有两个动作可以选，quit(退出游戏)和stay(留在游戏)     3. **奖惩**：选择quit时，退出游戏，获得$10奖励；选择stay，则会掷一个六面骰子，如果骰子是1，2向上，则奖励$4，并退出游戏，如果骰子是3，4，5，6朝上，则奖励$4，并继续留在游戏里。     通过游戏规则可以绘制如下状态图，蓝色圆框是状态，线路表示策略所产生的方向，线路上会注明策略和报酬，以及产生这条线路的概率。这里引入了一个中间状态，即红色虚线圆框，它表示在执行策略后，一个判断当前状态的动作。值得留意的是这个游戏只有一个动作会引发不确定的结果，即stay，quit的结果是确定的。     以掷骰子的游戏为例，当discount factor γ 为1的时候，表示收到回报的时间不重要，回报不会因为收到时间上的延后而贬值。当 γ 为0的时候，表示只有当下收到的回报才是重要的，未来是不需要考虑的。而通常γ 的值会介于0-1之间，收到回报的时间是重要的，时间也是一个很重的成本，越早取得成功越好，但也不会只考虑当下的收益。当γ大于1呢？     同样，以机器人取钻石的游戏为例，当 γ在0-1之间，越晚拿到钻石，回报也会越低。     下面这个游戏可以解一下，答案已经标在了上面：     在状态s执行策略π的价值如下定义：     在中间状态s执行动作a的价值如下定义：     这两个定义的区别在哪里？即一个是当前状态的价值，另一个则是中间状态的价值，如果当前状态是end，则价值是0，当前状态是in的时候，有中间状态的价值：     以掷骰子游戏为例，策略为stay的价值如下：     根据公式推导，则可以得出在状态in的时候，使用stay策略，价值是12。推导过程见下图：     会不会有一个游戏可以永远玩下去，获得无穷无尽的收益呢？     避免这种情况产生的方法有两个：     1. 设置游戏的最长时间或者步数。或者随步数和时间的增加，可以执行的策略也随着产生变化。把人生比作一场游戏，那么很明显无论你采取如何正确的策略过每分每秒，这个游戏也必然有停止的时候，而随着年纪增大，能做的策略选择也越来越少，有天你会老得跑不动，只能拄着拐杖慢慢踱，有天你老得掉光了牙，很多东西也吃不了了，希望看到这里的人都有这么一天，O(∩_∩)O。     2. 另一个就是前面提到的discount factor γ ，根据下面的定理，只要 γ小于1，则收益必然收敛。最后的收益必然小于等于游戏中单步最大收益/(1-γ)。     3. Absorbing state: 将游戏设计得无论游戏者设计什么样的游戏策略，最终都有可能到达游戏结束那个状态。     如何计算策略价值，虽然收益通过一些方法限制，最后也会收敛，但是游戏都是有可能无限长时间玩下去的，所以可以通过限制最长步长或者游戏时间的方式来计算策略价值。 如上图所示，当最长步长为0的时候所有状态下的策略价值都是0，因为游戏根本就不会开始，当最长步长为1时，则会产生收益，当步长为t时，策略价值则可以基于s’状态下t-1为步长的策略价值来得到，以为已经走了一步，还剩下t-1步。     将最长步长设定为多少是比较合适的呢？那就是，当策略价值随着最长步长的增加几乎不再增加的时候。     这样做的算法复杂度为：     以掷骰子游戏为例，如果最长步数是1，策略价值为4，如果最长步数是100，策略价值则会很接近最大可能的收益： 3. Value Iteration     如何找到最佳策略，首先定义最大策略价值：     中间最大行动价值定义：     使得中间行动价值最大的动作则是最佳策略：      以机器人拿钻石的游戏为例，首先会计算每个状态下每个策略的期望收益：     再由此得到最佳策略：     最佳策略获得的期望收益是：     时间复杂度为： 参考： [1] Lecture 8: Markov Decision Processes (MDPs), CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [2] Lecture 9: Markov Decision Processes II, CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [3] Lecture 7: Markov Decision Processes - Value Iteration | Stanford CS221: AI (Autumn 2019), Percy Liang, Associate Professor &amp; Dorsa Sadigh, Assistant Professor" />
+<link rel="canonical" href="http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/" />
+<meta property="og:url" content="http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(%20Markov%20Decision%20Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-03-05T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    今天来学习一下马可夫决策过程，以下简称MDP。     现在考虑一个问题，如上图所示，机器人前面有一堆火，而它需要去取火那边的钻石，它如何才能取到那颗钻石。     下面是一张俯视图： 游戏规则：     行动: 画叉的那一格是墙，不能进入的方格，所以在这张图中，机器人可以移动的方格总共是十一个。如果机器人采取向一个方格移动，80%的概率会成功，10%向左边的方向，10%会向右边的方向的方格移动。     奖惩: 如果机器人进入+1的方格，机器人加1分，游戏结束。若机器人进入-1的方格，机器人减1分，游戏结束。机器人每采取一个行动会获得小的奖惩，比如加0.1分或者减0.1分。     目标：得最多的分。     可以看出，MDP要解决的不是一个确定的世界的问题，是一个不一定的世界的问题。机器人虽然计划采取某个行动，但它不一定能完成计划，它想往北走，却有可能是向西或者向东走了一步。比如一个人想要到达一个目的地，选择开车，结果堵车了，选择坐地铁，地铁故障了，选择走路，结果摔了一跤骨折折到了医院，选择坐公交，结果一见钟情，坐过了站。      确定的世界，根据现在的状态来采取行动，就一定能到达想要达到的状态，     不确定的世界，虽然根据现在的状态采取了行动，但是不一定能到达想要到达的地方，现实世界就是一个不确定的世界。      MDP算法可以应用在指导机器人行动决策，工厂生产决策，农业生产决策等等不确定世界的问题上。          这篇文章主要分为三个部分：     1.  Markov Decision Process 马可夫决策过程     2.  Policy Evaluation  策略评估     3.  Value Iteration 【找最佳策略】 1.  Markov Decision Process 马可夫决策过程       定义一个MDP：     以机器人拿钻石为例，S [States] 是状态集，包含机器人所有可能的状态，以第二张图为例，有十二个格子，除了墙之外的其他十一个格子机器人都可以进去，所以机器人在游戏中总共可以有11种状态，而机器人最初在的那一格为初始状态，用下标start注明，初始状态是一定会有的状态。A(s)[Actions(s)]是机器人在状态为s的时候所有可以做的行动的集合，这个例子中，机器人可以有向东，西，南，北移动这四个动作。T(s, a, s’)表示机器人在状态s的时候做了行为a，最后变为状态s’的概率，如果状态列举得完整，那么应该有： R(s, a, s’) [Reward(s, a, s’)]表示机器人在状态s采取行动a，进入状态s’后会获得的奖励或惩罚。IsEnd(s)判断游戏是否结束。     由T(s, a, s’)和R(s, a, s’)可以看出，MDP的理念是，未来和过去是无关的，未来的可能只取决于现在的状态和即将采取的行动，和过去的状态和行动是无关的。如果要解决的问题不止依赖于现在的状态和行为，也依赖于过去的状态和行为，那可以重新定义更大的状态集(S)来使问题符合MDP的要求。     MDP得到的行动方案称之为策略π，比如机器人在状态s的时候下一步要采取的行动。     最佳的策略为π*，是MDP要求得的结果。     到这里，MDP的定义就结束了。 2. Policy Evaluation  策略评估     假设MDP给出了一个策略(policy)，怎么评估它的好坏?     这里用效能(utility)来表示遵循策略衍生出来的路径产生的奖惩(reward)，比如给机器人下了一个向东的指令，它最后不一定成功向东，也可能向南或北移动了，向东之后如果游戏没有结束，它可能接着往南走，在结束游戏之前它会有很多种走法，每种走法全程产生的分数称之为效能(utility)：     策略的价值(value)则是这个策略的效能的期望值，价值(value)最大的策略即最佳策略π*：     下面看几个不同情况下的最佳策略： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt; 图中R(s)表示的是机器人每做一个动作的得分，这样设置一个负分是为了促使机器人尽快完成游戏，R(s)值越小，则机器人越需要尽早结束游戏，免得拉低总分。图中每个箭头表示在当前格子中的最佳策略。当R(s)=-0.01的时候，如果机器人在第二排第三格，最佳策略是向西，所以会出现三种结果，80%原地不动，10%向北移一格，10%向南移一格。而当R(s)=-0.03的时候，同样的状态，最佳策略变成了向北，因为R(s)的减低，游戏对拖延的容忍值降低了，因此最佳策略产生了变化，机器人需要冒更多的风险去尽早结束游戏。当R(s)=-2.0时，则最佳策略是尽早结束游戏，同样的状态直接向东往-1格去。     此外还有一个概念是discount factor γ，即随着时间的推移，你的得分（收获，奖赏）会被打折扣。拖得越久折扣越大。     这里我们引入一个新的游戏，这是一个掷骰子的游戏：     游戏规则:     1. **状态：**游戏有两种状态，in (在游戏中)和 end（退出游戏）     2. **动作**：有两个动作可以选，quit(退出游戏)和stay(留在游戏)     3. **奖惩**：选择quit时，退出游戏，获得$10奖励；选择stay，则会掷一个六面骰子，如果骰子是1，2向上，则奖励$4，并退出游戏，如果骰子是3，4，5，6朝上，则奖励$4，并继续留在游戏里。     通过游戏规则可以绘制如下状态图，蓝色圆框是状态，线路表示策略所产生的方向，线路上会注明策略和报酬，以及产生这条线路的概率。这里引入了一个中间状态，即红色虚线圆框，它表示在执行策略后，一个判断当前状态的动作。值得留意的是这个游戏只有一个动作会引发不确定的结果，即stay，quit的结果是确定的。     以掷骰子的游戏为例，当discount factor γ 为1的时候，表示收到回报的时间不重要，回报不会因为收到时间上的延后而贬值。当 γ 为0的时候，表示只有当下收到的回报才是重要的，未来是不需要考虑的。而通常γ 的值会介于0-1之间，收到回报的时间是重要的，时间也是一个很重的成本，越早取得成功越好，但也不会只考虑当下的收益。当γ大于1呢？     同样，以机器人取钻石的游戏为例，当 γ在0-1之间，越晚拿到钻石，回报也会越低。     下面这个游戏可以解一下，答案已经标在了上面：     在状态s执行策略π的价值如下定义：     在中间状态s执行动作a的价值如下定义：     这两个定义的区别在哪里？即一个是当前状态的价值，另一个则是中间状态的价值，如果当前状态是end，则价值是0，当前状态是in的时候，有中间状态的价值：     以掷骰子游戏为例，策略为stay的价值如下：     根据公式推导，则可以得出在状态in的时候，使用stay策略，价值是12。推导过程见下图：     会不会有一个游戏可以永远玩下去，获得无穷无尽的收益呢？     避免这种情况产生的方法有两个：     1. 设置游戏的最长时间或者步数。或者随步数和时间的增加，可以执行的策略也随着产生变化。把人生比作一场游戏，那么很明显无论你采取如何正确的策略过每分每秒，这个游戏也必然有停止的时候，而随着年纪增大，能做的策略选择也越来越少，有天你会老得跑不动，只能拄着拐杖慢慢踱，有天你老得掉光了牙，很多东西也吃不了了，希望看到这里的人都有这么一天，O(∩_∩)O。     2. 另一个就是前面提到的discount factor γ ，根据下面的定理，只要 γ小于1，则收益必然收敛。最后的收益必然小于等于游戏中单步最大收益/(1-γ)。     3. Absorbing state: 将游戏设计得无论游戏者设计什么样的游戏策略，最终都有可能到达游戏结束那个状态。     如何计算策略价值，虽然收益通过一些方法限制，最后也会收敛，但是游戏都是有可能无限长时间玩下去的，所以可以通过限制最长步长或者游戏时间的方式来计算策略价值。 如上图所示，当最长步长为0的时候所有状态下的策略价值都是0，因为游戏根本就不会开始，当最长步长为1时，则会产生收益，当步长为t时，策略价值则可以基于s’状态下t-1为步长的策略价值来得到，以为已经走了一步，还剩下t-1步。     将最长步长设定为多少是比较合适的呢？那就是，当策略价值随着最长步长的增加几乎不再增加的时候。     这样做的算法复杂度为：     以掷骰子游戏为例，如果最长步数是1，策略价值为4，如果最长步数是100，策略价值则会很接近最大可能的收益： 3. Value Iteration     如何找到最佳策略，首先定义最大策略价值：     中间最大行动价值定义：     使得中间行动价值最大的动作则是最佳策略：      以机器人拿钻石的游戏为例，首先会计算每个状态下每个策略的期望收益：     再由此得到最佳策略：     最佳策略获得的期望收益是：     时间复杂度为： 参考： [1] Lecture 8: Markov Decision Processes (MDPs), CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [2] Lecture 9: Markov Decision Processes II, CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel [3] Lecture 7: Markov Decision Processes - Value Iteration | Stanford CS221: AI (Autumn 2019), Percy Liang, Associate Professor &amp; Dorsa Sadigh, Assistant Professor","url":"http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/","image":"http://localhost:4000/assets/images/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(%20Markov%20Decision%20Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/1.png","@type":"BlogPosting","headline":"马可夫决策过程( Markov Decision Processes):不确定世界的决策方法","dateModified":"2020-03-05T00:00:00+08:00","datePublished":"2020-03-05T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">马可夫决策过程( Markov Decision Processes):不确定世界的决策方法</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-03-05">05 Mar 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/1.png" alt="马可夫决策过程( Markov Decision Processes):不确定世界的决策方法">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    今天来学习一下马可夫决策过程，以下简称MDP。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/1.png" style="zoom:80%;" /></p>
+
+<p>    现在考虑一个问题，如上图所示，机器人前面有一堆火，而它需要去取火那边的钻石，它如何才能取到那颗钻石。</p>
+
+<p>    下面是一张俯视图：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/2.png" style="zoom:80%;" /></p>
+
+<p><strong>游戏规则：</strong></p>
+
+<p>    行动: 画叉的那一格是墙，不能进入的方格，所以在这张图中，机器人可以移动的方格总共是十一个。如果机器人采取向一个方格移动，80%的概率会成功，10%向左边的方向，10%会向右边的方向的方格移动。</p>
+
+<p>    奖惩: 如果机器人进入+1的方格，机器人加1分，游戏结束。若机器人进入-1的方格，机器人减1分，游戏结束。机器人每采取一个行动会获得小的奖惩，比如加0.1分或者减0.1分。</p>
+
+<p>    目标：得最多的分。</p>
+
+<p>    可以看出，<strong>MDP要解决的不是一个确定的世界的问题，是一个不一定的世界的问题。</strong>机器人虽然计划采取某个行动，但它不一定能完成计划，它想往北走，却有可能是向西或者向东走了一步。比如一个人想要到达一个目的地，选择开车，结果堵车了，选择坐地铁，地铁故障了，选择走路，结果摔了一跤骨折折到了医院，选择坐公交，结果一见钟情，坐过了站。</p>
+
+<p>     确定的世界，根据现在的状态来采取行动，就一定能到达想要达到的状态，</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/3.png" style="zoom:50%;" /></p>
+
+<p>    不确定的世界，虽然根据现在的状态采取了行动，但是不一定能到达想要到达的地方，现实世界就是一个不确定的世界。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/4.png" style="zoom:50%;" /></p>
+
+<p>     MDP算法可以应用在指导机器人行动决策，工厂生产决策，农业生产决策等等不确定世界的问题上。</p>
+
+<p>    </p>
+
+<p>    这篇文章主要分为三个部分：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>      1.  Markov Decision Process 马可夫决策过程
+      2.  Policy Evaluation  策略评估
+      3.  Value Iteration 【找最佳策略】
+</code></pre></div></div>
+
+<p><strong>1.  Markov Decision Process 马可夫决策过程</strong></p>
+
+<p>      定义一个MDP：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/5.png" style="zoom:50%;" /></p>
+
+<p>    以机器人拿钻石为例，<strong>S [States] </strong>是状态集，包含机器人所有可能的状态，以第二张图为例，有十二个格子，除了墙之外的其他十一个格子机器人都可以进去，所以机器人在游戏中总共可以有11种状态，而机器人最初在的那一格为初始状态，用下标<strong>start</strong>注明，初始状态是一定会有的状态。<strong>A</strong>(<strong>s</strong>)[<strong>Actions</strong>(<strong>s</strong>)]是机器人在状态为<strong>s</strong>的时候所有可以做的行动的集合，这个例子中，机器人可以有向东，西，南，北移动这四个动作。<strong>T</strong>(<strong>s, a, s’</strong>)表示机器人在状态<strong>s</strong>的时候做了行为<strong>a</strong>，最后变为状态<strong>s’</strong>的概率，如果状态列举得完整，那么应该有：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/6.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/7.png" style="zoom:50%;" /></p>
+
+<p><strong>R</strong>(<strong>s, a, s’</strong>) [<strong>Reward</strong>(<strong>s</strong>, <strong>a</strong>, <strong>s’</strong>)]表示机器人在状态<strong>s</strong>采取行动<strong>a</strong>，进入状态<strong>s’</strong>后会获得的奖励或惩罚。<strong>IsEnd</strong>(<strong>s</strong>)判断游戏是否结束。</p>
+
+<p>    由<strong>T</strong>(<strong>s, a, s’</strong>)和<strong>R</strong>(<strong>s, a, s’</strong>)可以看出，MDP的理念是，<strong>未来和过去是无关的，未来的可能只取决于现在的状态和即将采取的行动，和过去的状态和行动是无关的。</strong>如果要解决的问题不止依赖于现在的状态和行为，也依赖于过去的状态和行为，那可以重新定义更大的状态集(<strong>S</strong>)来使问题符合MDP的要求。</p>
+
+<p><strong>
+</strong></p>
+
+<p>    MDP得到的行动方案称之为策略π，比如机器人在状态<strong>s</strong>的时候下一步要采取的行动。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/8.png" style="zoom:50%;" /></p>
+
+<p>    最佳的策略为π*，是MDP要求得的结果。</p>
+
+<p>    到这里，MDP的定义就结束了。</p>
+
+<p><strong>2. Policy Evaluation  策略评估</strong></p>
+
+<p>    假设MDP给出了一个策略(policy)，怎么评估它的好坏?</p>
+
+<p>    这里用效能(utility)来表示遵循策略衍生出来的路径产生的奖惩(reward)，比如给机器人下了一个向东的指令，它最后不一定成功向东，也可能向南或北移动了，向东之后如果游戏没有结束，它可能接着往南走，在结束游戏之前它会有很多种走法，每种走法全程产生的分数称之为效能(utility)：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/9.png" style="zoom:50%;" /></p>
+
+<p>    策略的价值(value)则是这个策略的效能的期望值，价值(value)最大的策略即最佳策略π*：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/10.png" style="zoom:50%;" /></p>
+
+<p>    下面看几个不同情况下的最佳策略：</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/11.png" style="zoom:50%;" />&lt;/div&gt;</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/12.png" style="zoom:50%;" />&lt;/div&gt;</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/13.png" style="zoom:50%;" />&lt;/div&gt;</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/14.png" style="zoom:50%;" />&lt;/div&gt;</p>
+
+<p>图中<strong>R</strong>(<strong>s</strong>)表示的是机器人每做一个动作的得分，这样设置一个负分是为了促使机器人尽快完成游戏，<strong>R</strong>(<strong>s</strong>)值越小，则机器人越需要尽早结束游戏，免得拉低总分。图中每个箭头表示在当前格子中的最佳策略。当<strong>R</strong>(<strong>s</strong>)=-0.01的时候，如果机器人在第二排第三格，最佳策略是向西，所以会出现三种结果，80%原地不动，10%向北移一格，10%向南移一格。而当<strong>R</strong>(<strong>s</strong>)=-0.03的时候，同样的状态，最佳策略变成了向北，因为<strong>R</strong>(<strong>s</strong>)的减低，游戏对拖延的容忍值降低了，因此最佳策略产生了变化，机器人需要冒更多的风险去尽早结束游戏。当<strong>R</strong>(<strong>s</strong>)=-2.0时，则最佳策略是尽早结束游戏，同样的状态直接向东往-1格去。</p>
+
+<p>    此外还有一个概念是discount factor γ，即随着时间的推移，你的得分（收获，奖赏）会被打折扣。拖得越久折扣越大。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/15.png" style="zoom:67%;" /></p>
+
+<p>    这里我们引入一个新的游戏，这是一个掷骰子的游戏：</p>
+
+<p>    <strong>游戏规则:</strong></p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>      1. **状态：**游戏有两种状态，in (在游戏中)和 end（退出游戏）
+      2. **动作**：有两个动作可以选，quit(退出游戏)和stay(留在游戏)
+      3. **奖惩**：选择quit时，退出游戏，获得$10奖励；选择stay，则会掷一个六面骰子，如果骰子是1，2向上，则奖励$4，并退出游戏，如果骰子是3，4，5，6朝上，则奖励$4，并继续留在游戏里。
+</code></pre></div></div>
+
+<p>    通过游戏规则可以绘制如下状态图，蓝色圆框是状态，线路表示策略所产生的方向，线路上会注明策略和报酬，以及产生这条线路的概率。这里引入了一个中间状态，即红色虚线圆框，它表示在执行策略后，一个判断当前状态的动作。值得留意的是这个游戏只有一个动作会引发不确定的结果，即stay，quit的结果是确定的。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/16.png" style="zoom: 67%;" /></p>
+
+<p>    以掷骰子的游戏为例，当discount factor γ 为1的时候，表示收到回报的时间不重要，回报不会因为收到时间上的延后而贬值。当 γ 为0的时候，表示只有当下收到的回报才是重要的，未来是不需要考虑的。而通常γ 的值会介于0-1之间，收到回报的时间是重要的，<strong>时间也是一个很重的成本</strong>，越早取得成功越好，但也不会只考虑当下的收益。当γ大于1呢？</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/17.png" style="zoom:50%;" /></p>
+
+<p>    同样，以机器人取钻石的游戏为例，当 γ在0-1之间，越晚拿到钻石，回报也会越低。</p>
+
+<p>    下面这个游戏可以解一下，答案已经标在了上面：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/18.png" style="zoom:67%;" /></p>
+
+<p>    在状态<strong>s</strong>执行策略<strong>π</strong>的价值如下定义：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/19.png" style="zoom:50%;" /></p>
+
+<p>    在中间状态<strong>s</strong>执行动作<strong>a</strong>的价值如下定义：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/20.png" style="zoom:50%;" /></p>
+
+<p>    这两个定义的区别在哪里？即一个是当前状态的价值，另一个则是中间状态的价值，如果当前状态是end，则价值是0，当前状态是in的时候，有中间状态的价值：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/21.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/22.png" style="zoom: 67%;" /></p>
+
+<p>    以掷骰子游戏为例，策略为stay的价值如下：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/23.png" style="zoom:50%;" /></p>
+
+<p>    根据公式推导，则可以得出在状态in的时候，使用stay策略，价值是12。推导过程见下图：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/24.png" style="zoom:50%;" /></p>
+
+<p>    <strong>会不会有一个游戏可以永远玩下去，获得无穷无尽的收益呢？</strong></p>
+
+<p>    避免这种情况产生的方法有两个：</p>
+
+<p>    1. 设置游戏的最长时间或者步数。或者随步数和时间的增加，可以执行的策略也随着产生变化。把人生比作一场游戏，那么很明显无论你采取如何正确的策略过每分每秒，这个游戏也必然有停止的时候，而随着年纪增大，能做的策略选择也越来越少，有天你会老得跑不动，只能拄着拐杖慢慢踱，有天你老得掉光了牙，很多东西也吃不了了，希望看到这里的人都有这么一天，O(∩_∩)O。
+                2. 另一个就是前面提到的discount factor γ ，根据下面的定理，只要 γ小于1，则收益必然收敛。最后的收益必然小于等于游戏中单步最大收益/(1-γ)。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/25.png" style="zoom:50%;" /></p>
+
+<p>    3. Absorbing state: 将游戏设计得无论游戏者设计什么样的游戏策略，最终都有可能到达游戏结束那个状态。</p>
+
+<p>    如何计算策略价值，虽然收益通过一些方法限制，最后也会收敛，但是游戏都是有可能无限长时间玩下去的，所以可以通过限制最长步长或者游戏时间的方式来计算策略价值。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/26.png" style="zoom: 67%;" /></p>
+
+<p>如上图所示，当最长步长为0的时候所有状态下的策略价值都是0，因为游戏根本就不会开始，当最长步长为1时，则会产生收益，当步长为<strong>t</strong>时，策略价值则可以基于<strong>s’</strong>状态下<strong>t-1</strong>为步长的策略价值来得到，以为已经走了一步，还剩下<strong>t-1</strong>步。</p>
+
+<p>    将最长步长设定为多少是比较合适的呢？那就是，当策略价值随着最长步长的增加几乎不再增加的时候。</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/27.png" style="zoom:50%;" /></p>
+
+<p>    这样做的算法复杂度为：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/28.png" style="zoom:50%;" /></p>
+
+<p>    以掷骰子游戏为例，如果最长步数是1，策略价值为4，如果最长步数是100，策略价值则会很接近最大可能的收益：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/29.png" style="zoom:50%;" /></p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/30.png" style="zoom: 50%;" /></p>
+
+<p><strong>
+</strong></p>
+
+<p><strong>3. Value Iteration</strong></p>
+
+<p>    如何找到最佳策略，首先定义最大策略价值：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/31.png" style="zoom:50%;" /></p>
+
+<p>    中间最大行动价值定义：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/32.png" style="zoom:67%;" /></p>
+
+<p>    使得中间行动价值最大的动作则是最佳策略：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/33.png" style="zoom: 50%;" /></p>
+
+<p>     以机器人拿钻石的游戏为例，首先会计算每个状态下每个策略的期望收益：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/34.png" style="zoom:67%;" /></p>
+
+<p>    再由此得到最佳策略：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/35.png" style="zoom: 67%;" /></p>
+
+<p>    最佳策略获得的期望收益是：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/36.png" style="zoom:67%;" /></p>
+
+<p>    时间复杂度为：</p>
+
+<p><img src="../assets/images/马可夫决策过程( Markov Decision Processes)_不确定世界的决策方法/37.png" style="zoom: 33%;" /></p>
+
+<p>参考：</p>
+
+<p>[1] Lecture 8: Markov Decision Processes (MDPs), CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel</p>
+
+<p>[2] Lecture 9: Markov Decision Processes II, CS188 Artificial Intelligence UC Berkeley, Spring 2013 Instructor: Prof. Pieter Abbeel</p>
+
+<p>[3] Lecture 7: Markov Decision Processes - Value Iteration | Stanford CS221: AI (Autumn 2019), Percy Liang, Associate Professor &amp; Dorsa Sadigh, Assistant Professor</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=马可夫决策过程( Markov Decision Processes):不确定世界的决策方法&url=http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E9%A9%AC%E5%8F%AF%E5%A4%AB%E5%86%B3%E7%AD%96%E8%BF%87%E7%A8%8B(-Markov-Decision-Processes)_%E4%B8%8D%E7%A1%AE%E5%AE%9A%E4%B8%96%E7%95%8C%E7%9A%84%E5%86%B3%E7%AD%96%E6%96%B9%E6%B3%95/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Decision">Decision</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MDP">MDP</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

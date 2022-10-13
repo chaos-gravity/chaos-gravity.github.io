@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Kaggle比赛系列：Conway's Reverse Game of Life 2020 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Kaggle比赛系列：Conway’s Reverse Game of Life 2020 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Kaggle比赛系列：Conway’s Reverse Game of Life 2020" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="     Conway是一位数学家，John Horton Conway，活跃于有限群论，结论，数论，组合博弈论和编码论。 他还为休闲数学的许多分支做出了贡献，最著名的是1970年，细胞自动机（cellular automaton）的发明，即生命游戏（The Game of Life）。即这个比赛需要攻克的游戏。Conway在利物浦出生，长大，在剑桥大学度过了职业生涯的前半段，后移居美国，在普林斯顿大学担任约翰·冯·诺依曼教授职位。     2020年4月11日，他享年82岁，死于COVID-19并发症。     这个比赛的发起者是Kaggle。六年前发起过，今年做了一些小的修改后再次发起，重新发起，应该是为了纪念这位在疫情中逝世数学家。     这是一款零人游戏，意味着其演变取决于其初始状态，无需进一步输入。趣味在于创建初始状态，然后观察其演变。该游戏是图灵完备（Turing complete）的，可以模拟通用构造函数或任何其他图灵机。     生命游戏的宇宙是一个无限的二维正交方格，每个方格都处于两种可能的状态，即活着或死了。每个方格都有八个相邻的方格，称之为邻居。然后，在每个时间步上，都会完成如下转换：     1. Underpopulation：任何具有少于两个活邻居的活细胞都会死亡，就好像人口不足一样。    2. Stasis: 任何有两个或三个活邻居的活细胞都可以存活到下一代。     3.  Reproduction: 具有正好三个活邻居的任何死细胞都变成活细胞，就像通过繁殖一样。     4. Overpopulation: 任何具有三个以上活邻居的活细胞都会死亡，就好像人口过多一样。     自从被发明，生命游戏就吸引了人们的极大兴趣，因为它可以以惊人的方式演变。即使初始状态没有经过设计，也能演变成有组织有设计的状态。对于计算机科学家，物理学家，生物学家，生物化学家，经济学家，数学家，哲学家，生成科学家以及其他人来说，执行非常简单的规则而出现复杂模式的这种现象非常有趣。它可以用来传达某种违反直觉的观念，即在没有设计师的情况下，“设计”和“组织”可以自发出现。哲学家和认知科学家丹尼尔·丹尼特（Daniel Dennett）广泛使用了生命游戏的宇宙的类似物，来说明复杂的哲学构造（比如意识或自由意志）可能是从简单的确定的物理定律演化而来的。     生命游戏会出现许多不同类型的模式，这些模式根据其行为进行分类，常见的包括：     静物，一代又一代不变，如下图：     振荡器，经过有限的世代后返回初始状态：     宇宙飞船，在整个网格中转换：     更多细节可以去看参考[1]。     而Kaggle这个比赛又与生命游戏略有不同，Conway’s Reverse Game of Life，这个比赛想知道的是，如果我们倒退时间，会发生什么。这个竞赛是一项实验，旨在研究机器学习（或其他方法）是否可以预测反向的生活游戏。 有序的结尾是否能用来预测混沌的开始？ Kaggle进行了许多不同开始的生命游戏，并提供参赛者最终的状态。要求参赛者预测每个最终状态的初始状态。     1. 数据构成     50,000个游戏样本作为训练数据，50,000个作为测试数据，任务：预测起始状态。理论上，生命游戏的宇宙是无穷大的，但现实中的游戏很难满足这个条件，在比赛中，生命游戏的宇宙为25x25的空间，总共625个单元。如果需要，参赛者可以自己生成更多的游戏样本作为训练样本。     训练文件的变量： id - 游戏编号 delta - 启动状态到停止状态经过的步数 start_0 - 启动状态第一行第一列的值 start_1 - 启动状态第一行第二列的值 … stop_0 - 停止状态第一行第一列的值 …     参赛者对于测试集的预测应该是停止状态在给定步数之前的状态，即启动状态。训练用的测试集和训练集是这样生成的： 以1%-99％的随机密度填充空间中的单元。 然后经历五步，生成启动状态。 然后启动状态开始经历一定步数到达停止状态。经历的步数是随机产生的，在1-5之间。如果停止状态是空的，即所有细胞都死了，那这个游戏样本不会被加入训练集和测试集 常见问题    为什么需要热身步骤？从最初的随机状态到下一个状态的演变可能会非常“非线性”且神奇。比如，如果初始状态大多数细胞都还活着，那么一步之后它们可能都死了。所以五个步骤的预热可以使细胞平静下来，更接近生命演变的方式。    生命游戏随着时间的流逝会丢失信息，什么原因？正确，这是一个多到一的问题（不同启动状态可能产生相同停止状态）。但在短步骤内，这应该是一个小问题。这项比赛中倒退的最大步长是5，就是希望退化不会成为问题。    我可以预测任何有效状态吗？任何能以指定步数达到结束状态的开始状态都将获得最佳分数。     2. 模型评估     计算误差用的是平均绝对误差（mean absolute error）     用参赛者给出的启动状态经历指定步数得到终止状态，再计算这个终止状态和被预测启动状态的终止状态的误差。     3. 时间     比赛截至:  November 30, 2020     4. 实现 ​ 解题思路一：基因算法（Genetic Algorithm）     参考[5]，该作者公布的算法，成绩是0.06189，可以在LeaderBoard上排到13，作者本人最好的成绩是0.05861，排到了12名。目前LeaderBoard上最好的成绩是0.00939，他用的什么算法呢？     基因算法概念上可以这样理解，有一群袋鼠，一开始随机在可能的解上均匀分布，然而，在劣势解上的袋鼠会被慢慢地消灭，而在优势解上的袋鼠会不断繁衍，这样，最后袋鼠们会慢慢聚拢到一个一个局部最优解上，然后从这些局部最优解中选择最优的作为最终解。基因算法并不能保证一定能得到最优解。     解题思路二：Z3约束 (Z3 Constraint Satisfaction)         参考[6]，分数是0.0857。Z3约束是微软开发的一套约束求解器，简单的可以理解为解方程的神器。很强大，可以了解看看。该作者还开源了另外一种方法，比这个方法成绩稍微低一点。     这世上，有人赢了，有人输了，有人已经死去了，有人还好好地活着，有人想预测未来，去触摸世界的尽头，也有人，想回溯过去，看看世界它本来的样子。     可谁说，不是一回事呢？ 参考：     [1] https://en.wikipedia.org/wiki/Conway’s_Game_of_Life     [2] https://www.kaggle.com/c/conways-reverse-game-of-life-2020     [3] http://jakevdp.github.io/blog/2013/08/07/conways-game-of-life/     [4] https://en.wikipedia.org/wiki/John_Horton_Conway     [5] Game of Life - Genetic Algorithm (Spanish), Desareca, 2020, https://www.kaggle.com/desareca/game-of-life-genetic-algorithm-spanish     [6] Game of Life - Z3 Constraint Satisfaction, James McGuigan, 2020, https://www.kaggle.com/jamesmcguigan/game-of-life-z3-constraint-satisfaction     [7] 番茄鸡蛋炒饭被抢注啦，[算法]超详细的遗传算法(Genetic Algorithm)解析，CSDN，2018" />
+<meta property="og:description" content="     Conway是一位数学家，John Horton Conway，活跃于有限群论，结论，数论，组合博弈论和编码论。 他还为休闲数学的许多分支做出了贡献，最著名的是1970年，细胞自动机（cellular automaton）的发明，即生命游戏（The Game of Life）。即这个比赛需要攻克的游戏。Conway在利物浦出生，长大，在剑桥大学度过了职业生涯的前半段，后移居美国，在普林斯顿大学担任约翰·冯·诺依曼教授职位。     2020年4月11日，他享年82岁，死于COVID-19并发症。     这个比赛的发起者是Kaggle。六年前发起过，今年做了一些小的修改后再次发起，重新发起，应该是为了纪念这位在疫情中逝世数学家。     这是一款零人游戏，意味着其演变取决于其初始状态，无需进一步输入。趣味在于创建初始状态，然后观察其演变。该游戏是图灵完备（Turing complete）的，可以模拟通用构造函数或任何其他图灵机。     生命游戏的宇宙是一个无限的二维正交方格，每个方格都处于两种可能的状态，即活着或死了。每个方格都有八个相邻的方格，称之为邻居。然后，在每个时间步上，都会完成如下转换：     1. Underpopulation：任何具有少于两个活邻居的活细胞都会死亡，就好像人口不足一样。    2. Stasis: 任何有两个或三个活邻居的活细胞都可以存活到下一代。     3.  Reproduction: 具有正好三个活邻居的任何死细胞都变成活细胞，就像通过繁殖一样。     4. Overpopulation: 任何具有三个以上活邻居的活细胞都会死亡，就好像人口过多一样。     自从被发明，生命游戏就吸引了人们的极大兴趣，因为它可以以惊人的方式演变。即使初始状态没有经过设计，也能演变成有组织有设计的状态。对于计算机科学家，物理学家，生物学家，生物化学家，经济学家，数学家，哲学家，生成科学家以及其他人来说，执行非常简单的规则而出现复杂模式的这种现象非常有趣。它可以用来传达某种违反直觉的观念，即在没有设计师的情况下，“设计”和“组织”可以自发出现。哲学家和认知科学家丹尼尔·丹尼特（Daniel Dennett）广泛使用了生命游戏的宇宙的类似物，来说明复杂的哲学构造（比如意识或自由意志）可能是从简单的确定的物理定律演化而来的。     生命游戏会出现许多不同类型的模式，这些模式根据其行为进行分类，常见的包括：     静物，一代又一代不变，如下图：     振荡器，经过有限的世代后返回初始状态：     宇宙飞船，在整个网格中转换：     更多细节可以去看参考[1]。     而Kaggle这个比赛又与生命游戏略有不同，Conway’s Reverse Game of Life，这个比赛想知道的是，如果我们倒退时间，会发生什么。这个竞赛是一项实验，旨在研究机器学习（或其他方法）是否可以预测反向的生活游戏。 有序的结尾是否能用来预测混沌的开始？ Kaggle进行了许多不同开始的生命游戏，并提供参赛者最终的状态。要求参赛者预测每个最终状态的初始状态。     1. 数据构成     50,000个游戏样本作为训练数据，50,000个作为测试数据，任务：预测起始状态。理论上，生命游戏的宇宙是无穷大的，但现实中的游戏很难满足这个条件，在比赛中，生命游戏的宇宙为25x25的空间，总共625个单元。如果需要，参赛者可以自己生成更多的游戏样本作为训练样本。     训练文件的变量： id - 游戏编号 delta - 启动状态到停止状态经过的步数 start_0 - 启动状态第一行第一列的值 start_1 - 启动状态第一行第二列的值 … stop_0 - 停止状态第一行第一列的值 …     参赛者对于测试集的预测应该是停止状态在给定步数之前的状态，即启动状态。训练用的测试集和训练集是这样生成的： 以1%-99％的随机密度填充空间中的单元。 然后经历五步，生成启动状态。 然后启动状态开始经历一定步数到达停止状态。经历的步数是随机产生的，在1-5之间。如果停止状态是空的，即所有细胞都死了，那这个游戏样本不会被加入训练集和测试集 常见问题    为什么需要热身步骤？从最初的随机状态到下一个状态的演变可能会非常“非线性”且神奇。比如，如果初始状态大多数细胞都还活着，那么一步之后它们可能都死了。所以五个步骤的预热可以使细胞平静下来，更接近生命演变的方式。    生命游戏随着时间的流逝会丢失信息，什么原因？正确，这是一个多到一的问题（不同启动状态可能产生相同停止状态）。但在短步骤内，这应该是一个小问题。这项比赛中倒退的最大步长是5，就是希望退化不会成为问题。    我可以预测任何有效状态吗？任何能以指定步数达到结束状态的开始状态都将获得最佳分数。     2. 模型评估     计算误差用的是平均绝对误差（mean absolute error）     用参赛者给出的启动状态经历指定步数得到终止状态，再计算这个终止状态和被预测启动状态的终止状态的误差。     3. 时间     比赛截至:  November 30, 2020     4. 实现 ​ 解题思路一：基因算法（Genetic Algorithm）     参考[5]，该作者公布的算法，成绩是0.06189，可以在LeaderBoard上排到13，作者本人最好的成绩是0.05861，排到了12名。目前LeaderBoard上最好的成绩是0.00939，他用的什么算法呢？     基因算法概念上可以这样理解，有一群袋鼠，一开始随机在可能的解上均匀分布，然而，在劣势解上的袋鼠会被慢慢地消灭，而在优势解上的袋鼠会不断繁衍，这样，最后袋鼠们会慢慢聚拢到一个一个局部最优解上，然后从这些局部最优解中选择最优的作为最终解。基因算法并不能保证一定能得到最优解。     解题思路二：Z3约束 (Z3 Constraint Satisfaction)         参考[6]，分数是0.0857。Z3约束是微软开发的一套约束求解器，简单的可以理解为解方程的神器。很强大，可以了解看看。该作者还开源了另外一种方法，比这个方法成绩稍微低一点。     这世上，有人赢了，有人输了，有人已经死去了，有人还好好地活着，有人想预测未来，去触摸世界的尽头，也有人，想回溯过去，看看世界它本来的样子。     可谁说，不是一回事呢？ 参考：     [1] https://en.wikipedia.org/wiki/Conway’s_Game_of_Life     [2] https://www.kaggle.com/c/conways-reverse-game-of-life-2020     [3] http://jakevdp.github.io/blog/2013/08/07/conways-game-of-life/     [4] https://en.wikipedia.org/wiki/John_Horton_Conway     [5] Game of Life - Genetic Algorithm (Spanish), Desareca, 2020, https://www.kaggle.com/desareca/game-of-life-genetic-algorithm-spanish     [6] Game of Life - Z3 Constraint Satisfaction, James McGuigan, 2020, https://www.kaggle.com/jamesmcguigan/game-of-life-z3-constraint-satisfaction     [7] 番茄鸡蛋炒饭被抢注啦，[算法]超详细的遗传算法(Genetic Algorithm)解析，CSDN，2018" />
+<link rel="canonical" href="http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/" />
+<meta property="og:url" content="http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97:Conway's%20Reverse%20Game%20of%20Life%202020/1.gif" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-11-10T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"     Conway是一位数学家，John Horton Conway，活跃于有限群论，结论，数论，组合博弈论和编码论。 他还为休闲数学的许多分支做出了贡献，最著名的是1970年，细胞自动机（cellular automaton）的发明，即生命游戏（The Game of Life）。即这个比赛需要攻克的游戏。Conway在利物浦出生，长大，在剑桥大学度过了职业生涯的前半段，后移居美国，在普林斯顿大学担任约翰·冯·诺依曼教授职位。     2020年4月11日，他享年82岁，死于COVID-19并发症。     这个比赛的发起者是Kaggle。六年前发起过，今年做了一些小的修改后再次发起，重新发起，应该是为了纪念这位在疫情中逝世数学家。     这是一款零人游戏，意味着其演变取决于其初始状态，无需进一步输入。趣味在于创建初始状态，然后观察其演变。该游戏是图灵完备（Turing complete）的，可以模拟通用构造函数或任何其他图灵机。     生命游戏的宇宙是一个无限的二维正交方格，每个方格都处于两种可能的状态，即活着或死了。每个方格都有八个相邻的方格，称之为邻居。然后，在每个时间步上，都会完成如下转换：     1. Underpopulation：任何具有少于两个活邻居的活细胞都会死亡，就好像人口不足一样。    2. Stasis: 任何有两个或三个活邻居的活细胞都可以存活到下一代。     3.  Reproduction: 具有正好三个活邻居的任何死细胞都变成活细胞，就像通过繁殖一样。     4. Overpopulation: 任何具有三个以上活邻居的活细胞都会死亡，就好像人口过多一样。     自从被发明，生命游戏就吸引了人们的极大兴趣，因为它可以以惊人的方式演变。即使初始状态没有经过设计，也能演变成有组织有设计的状态。对于计算机科学家，物理学家，生物学家，生物化学家，经济学家，数学家，哲学家，生成科学家以及其他人来说，执行非常简单的规则而出现复杂模式的这种现象非常有趣。它可以用来传达某种违反直觉的观念，即在没有设计师的情况下，“设计”和“组织”可以自发出现。哲学家和认知科学家丹尼尔·丹尼特（Daniel Dennett）广泛使用了生命游戏的宇宙的类似物，来说明复杂的哲学构造（比如意识或自由意志）可能是从简单的确定的物理定律演化而来的。     生命游戏会出现许多不同类型的模式，这些模式根据其行为进行分类，常见的包括：     静物，一代又一代不变，如下图：     振荡器，经过有限的世代后返回初始状态：     宇宙飞船，在整个网格中转换：     更多细节可以去看参考[1]。     而Kaggle这个比赛又与生命游戏略有不同，Conway’s Reverse Game of Life，这个比赛想知道的是，如果我们倒退时间，会发生什么。这个竞赛是一项实验，旨在研究机器学习（或其他方法）是否可以预测反向的生活游戏。 有序的结尾是否能用来预测混沌的开始？ Kaggle进行了许多不同开始的生命游戏，并提供参赛者最终的状态。要求参赛者预测每个最终状态的初始状态。     1. 数据构成     50,000个游戏样本作为训练数据，50,000个作为测试数据，任务：预测起始状态。理论上，生命游戏的宇宙是无穷大的，但现实中的游戏很难满足这个条件，在比赛中，生命游戏的宇宙为25x25的空间，总共625个单元。如果需要，参赛者可以自己生成更多的游戏样本作为训练样本。     训练文件的变量： id - 游戏编号 delta - 启动状态到停止状态经过的步数 start_0 - 启动状态第一行第一列的值 start_1 - 启动状态第一行第二列的值 … stop_0 - 停止状态第一行第一列的值 …     参赛者对于测试集的预测应该是停止状态在给定步数之前的状态，即启动状态。训练用的测试集和训练集是这样生成的： 以1%-99％的随机密度填充空间中的单元。 然后经历五步，生成启动状态。 然后启动状态开始经历一定步数到达停止状态。经历的步数是随机产生的，在1-5之间。如果停止状态是空的，即所有细胞都死了，那这个游戏样本不会被加入训练集和测试集 常见问题    为什么需要热身步骤？从最初的随机状态到下一个状态的演变可能会非常“非线性”且神奇。比如，如果初始状态大多数细胞都还活着，那么一步之后它们可能都死了。所以五个步骤的预热可以使细胞平静下来，更接近生命演变的方式。    生命游戏随着时间的流逝会丢失信息，什么原因？正确，这是一个多到一的问题（不同启动状态可能产生相同停止状态）。但在短步骤内，这应该是一个小问题。这项比赛中倒退的最大步长是5，就是希望退化不会成为问题。    我可以预测任何有效状态吗？任何能以指定步数达到结束状态的开始状态都将获得最佳分数。     2. 模型评估     计算误差用的是平均绝对误差（mean absolute error）     用参赛者给出的启动状态经历指定步数得到终止状态，再计算这个终止状态和被预测启动状态的终止状态的误差。     3. 时间     比赛截至:  November 30, 2020     4. 实现 ​ 解题思路一：基因算法（Genetic Algorithm）     参考[5]，该作者公布的算法，成绩是0.06189，可以在LeaderBoard上排到13，作者本人最好的成绩是0.05861，排到了12名。目前LeaderBoard上最好的成绩是0.00939，他用的什么算法呢？     基因算法概念上可以这样理解，有一群袋鼠，一开始随机在可能的解上均匀分布，然而，在劣势解上的袋鼠会被慢慢地消灭，而在优势解上的袋鼠会不断繁衍，这样，最后袋鼠们会慢慢聚拢到一个一个局部最优解上，然后从这些局部最优解中选择最优的作为最终解。基因算法并不能保证一定能得到最优解。     解题思路二：Z3约束 (Z3 Constraint Satisfaction)         参考[6]，分数是0.0857。Z3约束是微软开发的一套约束求解器，简单的可以理解为解方程的神器。很强大，可以了解看看。该作者还开源了另外一种方法，比这个方法成绩稍微低一点。     这世上，有人赢了，有人输了，有人已经死去了，有人还好好地活着，有人想预测未来，去触摸世界的尽头，也有人，想回溯过去，看看世界它本来的样子。     可谁说，不是一回事呢？ 参考：     [1] https://en.wikipedia.org/wiki/Conway’s_Game_of_Life     [2] https://www.kaggle.com/c/conways-reverse-game-of-life-2020     [3] http://jakevdp.github.io/blog/2013/08/07/conways-game-of-life/     [4] https://en.wikipedia.org/wiki/John_Horton_Conway     [5] Game of Life - Genetic Algorithm (Spanish), Desareca, 2020, https://www.kaggle.com/desareca/game-of-life-genetic-algorithm-spanish     [6] Game of Life - Z3 Constraint Satisfaction, James McGuigan, 2020, https://www.kaggle.com/jamesmcguigan/game-of-life-z3-constraint-satisfaction     [7] 番茄鸡蛋炒饭被抢注啦，[算法]超详细的遗传算法(Genetic Algorithm)解析，CSDN，2018","url":"http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/","image":"http://localhost:4000/assets/images/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97:Conway's%20Reverse%20Game%20of%20Life%202020/1.gif","@type":"BlogPosting","headline":"Kaggle比赛系列：Conway’s Reverse Game of Life 2020","dateModified":"2020-11-10T00:00:00+08:00","datePublished":"2020-11-10T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Kaggle比赛系列：Conway's Reverse Game of Life 2020</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-11-10">10 Nov 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/1.gif" alt="Kaggle比赛系列：Conway's Reverse Game of Life 2020">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>     Conway是一位数学家，<strong>John Horton Conway</strong>，活跃于有限群论，结论，数论，组合博弈论和编码论。 他还为休闲数学的许多分支做出了贡献，最著名的是1970年，细胞自动机（cellular automaton）的发明，即生命游戏（The <strong>Game of Life</strong>）。即这个比赛需要攻克的游戏。Conway在利物浦出生，长大，在剑桥大学度过了职业生涯的前半段，后移居美国，在普林斯顿大学担任约翰·冯·诺依曼教授职位。</p>
+
+<p>    <strong>2020年4月11日，他享年82岁，死于COVID-19并发症。</strong></p>
+
+<p>    这个比赛的发起者是Kaggle。六年前发起过，今年做了一些小的修改后再次发起，重新发起，应该是为了纪念这位在疫情中逝世数学家。</p>
+
+<p>    这是一款零人游戏，意味着其演变取决于其初始状态，无需进一步输入。趣味在于创建初始状态，然后观察其演变。该游戏是<strong>图灵完备</strong>（Turing complete）的，可以模拟通用构造函数或任何其他图灵机。</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/1.gif" alt="" /></p>
+
+<p>    生命游戏的宇宙是一个无限的二维正交方格，每个方格都处于两种可能的状态，即活着或死了。每个方格都有八个相邻的方格，称之为邻居。然后，在每个时间步上，都会完成如下转换：</p>
+
+<p>    1. Underpopulation：任何具有少于两个活邻居的活细胞都会死亡，就好像人口不足一样。
+   2. Stasis: 任何有两个或三个活邻居的活细胞都可以存活到下一代。</p>
+
+<p>    3.  Reproduction: 具有正好三个活邻居的任何死细胞都变成活细胞，就像通过繁殖一样。</p>
+
+<p>    4. Overpopulation: 任何具有三个以上活邻居的活细胞都会死亡，就好像人口过多一样。</p>
+
+<p>    自从被发明，生命游戏就吸引了人们的极大兴趣，因为它可以以惊人的方式演变。即使初始状态没有经过设计，也能演变成有组织有设计的状态。对于计算机科学家，物理学家，生物学家，生物化学家，经济学家，数学家，哲学家，生成科学家以及其他人来说，执行非常简单的规则而出现复杂模式的这种现象非常有趣。它可以用来传达某种违反直觉的观念，即在没有设计师的情况下，“设计”和“组织”可以自发出现。哲学家和认知科学家丹尼尔·丹尼特（Daniel Dennett）广泛使用了生命游戏的宇宙的类似物，来说明复杂的哲学构造（比如意识或自由意志）可能是从简单的确定的物理定律演化而来的。</p>
+
+<p>    生命游戏会出现许多不同类型的模式，这些模式根据其行为进行分类，常见的包括：</p>
+
+<p>    静物，一代又一代不变，如下图：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/2.png" style="zoom: 25%;" /></p>
+
+<p>    振荡器，经过有限的世代后返回初始状态：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/3.gif" alt="" /></p>
+
+<p>    宇宙飞船，在整个网格中转换：</p>
+
+<p><img src="../assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/4.gif" alt="" /></p>
+
+<p>    更多细节可以去看参考[1]。</p>
+
+<p>    而Kaggle这个比赛又与生命游戏略有不同，Conway’s <strong>Reverse</strong> Game of Life，这个比赛想知道的是，<strong>如果我们倒退时间，会发生什么。</strong>这个竞赛是一项实验，旨在研究机器学习（或其他方法）是否可以预测反向的生活游戏。 <strong>有序的结尾是否能用来预测混沌的开始？</strong> Kaggle进行了许多不同开始的生命游戏，并提供参赛者最终的状态。要求参赛者预测每个最终状态的初始状态。</p>
+
+<p>    <strong>1. 数据构成</strong></p>
+
+<p>    50,000个游戏样本作为训练数据，50,000个作为测试数据，任务：预测起始状态。理论上，生命游戏的宇宙是无穷大的，但现实中的游戏很难满足这个条件，在比赛中，生命游戏的宇宙为25x25的空间，总共625个单元。如果需要，参赛者可以自己生成更多的游戏样本作为训练样本。</p>
+
+<p>    训练文件的变量：</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">id</code> - 游戏编号</li>
+  <li><code class="language-plaintext highlighter-rouge">delta</code> - 启动状态到停止状态经过的步数</li>
+  <li><code class="language-plaintext highlighter-rouge">start_0</code> - 启动状态第一行第一列的值</li>
+  <li><code class="language-plaintext highlighter-rouge">start_1</code> - 启动状态第一行第二列的值</li>
+  <li>…</li>
+  <li><code class="language-plaintext highlighter-rouge">stop_0</code> - 停止状态第一行第一列的值</li>
+  <li>…</li>
+</ul>
+
+<p>    参赛者对于测试集的预测应该是停止状态在给定步数之前的状态，即启动状态。训练用的测试集和训练集是这样生成的：</p>
+
+<ol>
+  <li>以1%-99％的随机密度填充空间中的单元。</li>
+  <li>
+    <p>然后经历五步，生成启动状态。</p>
+  </li>
+  <li>然后启动状态开始经历一定步数到达停止状态。经历的步数是随机产生的，在1-5之间。如果停止状态是空的，即所有细胞都死了，那这个游戏样本不会被加入训练集和测试集</li>
+</ol>
+
+<p><strong>常见问题</strong>
+    <strong>为什么需要热身步骤？</strong>从最初的随机状态到下一个状态的演变可能会非常“非线性”且神奇。比如，如果初始状态大多数细胞都还活着，那么一步之后它们可能都死了。所以五个步骤的预热可以使细胞平静下来，更接近生命演变的方式。
+    <strong>生命游戏随着时间的流逝会丢失信息，什么原因？</strong>正确，这是一个多到一的问题（不同启动状态可能产生相同停止状态）。但在短步骤内，这应该是一个小问题。这项比赛中倒退的最大步长是5，就是希望退化不会成为问题。
+    <strong>我可以预测任何有效状态吗？</strong>任何能以指定步数达到结束状态的开始状态都将获得最佳分数。</p>
+
+<p>    <strong>2. 模型评估</strong></p>
+
+<p>    计算误差用的是平均绝对误差（mean absolute error）</p>
+
+<p>    用参赛者给出的启动状态经历指定步数得到终止状态，再计算这个终止状态和被预测启动状态的终止状态的误差。</p>
+
+<p>    <strong>3. 时间</strong></p>
+
+<p>    比赛截至<strong>:  November 30, 2020</strong></p>
+
+<p>    <strong>4. 实现
+</strong></p>
+
+<p>​     <strong>解题思路一：基因算法（Genetic Algorithm）</strong></p>
+
+<p>    参考[5]，该作者公布的算法，成绩是0.06189，可以在LeaderBoard上排到13，作者本人最好的成绩是0.05861，排到了12名。目前LeaderBoard上最好的成绩是0.00939，他用的什么算法呢？<img src="../assets/images/Kaggle比赛系列：Conway's Reverse Game of Life 2020/5.png" style="zoom:50%;" /></p>
+
+<p>    基因算法概念上可以这样理解，有一群袋鼠，一开始随机在可能的解上均匀分布，然而，在劣势解上的袋鼠会被慢慢地消灭，而在优势解上的袋鼠会不断繁衍，这样，最后袋鼠们会慢慢聚拢到一个一个局部最优解上，然后从这些局部最优解中选择最优的作为最终解。基因算法并不能保证一定能得到最优解。</p>
+
+<p>    <strong>解题思路二：Z3约束 (Z3 Constraint Satisfaction)</strong></p>
+
+<p>        参考[6]，分数是0.0857。Z3约束是微软开发的一套约束求解器，简单的可以理解为解方程的神器。很强大，可以了解看看。该作者还开源了另外一种方法，比这个方法成绩稍微低一点。</p>
+
+<p>    这世上，有人赢了，有人输了，有人已经死去了，有人还好好地活着，有人想预测未来，去触摸世界的尽头，也有人，想回溯过去，看看世界它本来的样子。</p>
+
+<p>    可谁说，不是一回事呢？</p>
+
+<p>参考：</p>
+
+<p>    [1] https://en.wikipedia.org/wiki/Conway’s_Game_of_Life</p>
+
+<p>    [2] https://www.kaggle.com/c/conways-reverse-game-of-life-2020</p>
+
+<p>    [3] http://jakevdp.github.io/blog/2013/08/07/conways-game-of-life/</p>
+
+<p>    [4] https://en.wikipedia.org/wiki/John_Horton_Conway</p>
+
+<p>    [5] Game of Life - Genetic Algorithm (Spanish), Desareca, 2020, https://www.kaggle.com/desareca/game-of-life-genetic-algorithm-spanish</p>
+
+<p>    [6] Game of Life - Z3 Constraint Satisfaction, James McGuigan, 2020, https://www.kaggle.com/jamesmcguigan/game-of-life-z3-constraint-satisfaction</p>
+
+<p>    [7] 番茄鸡蛋炒饭被抢注啦，[算法]超详细的遗传算法(Genetic Algorithm)解析，CSDN，2018</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Kaggle比赛系列：Conway's Reverse Game of Life 2020&url=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Conway's-Reverse-Game-of-Life-2020/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Game">Game</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Kaggle">Kaggle</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Math">Math</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Game">Game</a>               
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Math">Math</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements/2.png" alt="Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/Kaggle%E6%AF%94%E8%B5%9B%E7%B3%BB%E5%88%97-Two-Sigma-Using-News-to-Predict-Stock-Movements/">Kaggle比赛系列：[Two Sigma] Using News to Predict Stock Movements</a>
+                
+            </h2>
+            <h4 class="card-text">    不想学习的时候，不如想想怎么发财
+
+    这是一个和实现财富自由很接近的Kaggle比赛，通过新闻预测股价。
+
+    发起的公司叫Two Sigma，看公司图标：
+
+
+
+    这个名字，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Oct 2020</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

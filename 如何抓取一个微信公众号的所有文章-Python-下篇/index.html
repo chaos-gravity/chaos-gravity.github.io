@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>如何抓取一个微信公众号的所有文章（Python）下篇 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>如何抓取一个微信公众号的所有文章（Python）下篇 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="如何抓取一个微信公众号的所有文章（Python）下篇" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="声明：基本步骤和核心方法均参考[1]，[2]，细节有大不同，这篇着重于如何将抓取到的文章用markdown的格式保存下来。 1. 上篇中已经抓到了公众号的所有文章的题目和链接，下篇直接读入： import pandas as pd from newspaper import Article import html2text as ht import yaml import time import requests from bs4 import BeautifulSoup import os import tomd import re with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file: file_data = file.read() config = yaml.safe_load(file_data) def get_headers(config): headers = { &quot;Cookie&quot;: config[&#39;cookie&#39;], &quot;User-Agent&quot;: config[&#39;user-agent&#39;] } return headers pd.set_option(&#39;max_colwidth&#39;, 1000) article_list = pd.read_csv(&#39;article_list2.csv&#39;, encoding=&#39;GB18030&#39;) headers = get_headers(config) def download_images(soup, content): dir_name = &quot;assets/images/&quot; + str(filename[:-3]) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) cnt = 1 images = content.find_all(&quot;img&quot;) for image in images: img_src = image.get(&#39;data-src&#39;) img_type = image.get(&#39;data-type&#39;) img_name = &quot;{0:d}.{1:s}&quot;.format(cnt, img_type if img_type else &#39;png&#39;) cnt += 1 file_path = &quot;assets/images/{0:s}/{1:s}&quot;.format(filename[:-3], img_name) if not os.path.exists(file_path): with open (file_path, &#39;wb&#39;) as file: response = requests.get(url = img_src) for block in response.iter_content(1024): if block: file.write(block) else: break tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;![](assets/images/{0:s}/{1:s})&quot;.format(filename[:-3], img_name) image.replace_with(tag) def download_videos(soup, content): dir_name = &quot;assets/videos/&quot; + str(title) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) if videos: for video in videos: video_src = video.get(&#39;data-src&#39;) tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;[此处是视频]({0:s})&quot;.format(video_src) video.replace_with(tag) def for_list(content): for a in content.find_all(&quot;ol&quot;): i = 1 for b in a.find_all(&quot;li&quot;): tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;{0:d}. {1:s}\n&quot;.format(i, b.text) b.replace_with(tag) i = i+1 def for_code2(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): for b in a.find_all(&quot;code&quot;): tag = soup.new_tag(&#39;code&#39;) tag.string = &quot;\n&quot; + b.text b.replace_with(tag) def for_code(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): tag = soup.new_tag(&#39;code&#39;) string = &quot;&quot; length = len(a.find_all(&quot;code&quot;)) i = 1 for b in a.find_all(&quot;code&quot;): string = string + &quot;\n&quot; + b.text if i&lt;length: b.extract() i = i+1 tag.string = string b.replace_with(tag) for index, row in article_list.iterrows(): print(index) print(row) create_time = time.strftime(&quot;%Y-%m-%d&quot;,time.localtime(row[&quot;create_time&quot;])) url = row[&#39;link&#39;].replace(&quot;\/&quot;,&quot;/&quot;) article = requests.get(url,headers=headers) if article.status_code == 200: html = article.text # for_code html = html.replace(&quot;&lt;br /&gt;&quot;,&quot;\n&quot;) soup = BeautifulSoup(html, &#39;html.parser&#39;) content = soup.find(id=&#39;img-content&#39;) #有些文章已经被删除了，就提取不到content了 if content: title = content.find(class_=&#39;rich_media_title&#39;).text.strip() print(title) # \/:*?&quot;&lt;&gt;|这些字符不能作为文件名或者文件夹名 filename = title.replace(&#39;\/&#39;,&#39;-&#39;).replace(&#39;\\&#39;,&#39;-&#39;).replace(&#39;\&quot;&#39;,&#39;-&#39;).replace(&#39;|&#39;,&#39;-&#39;).replace(&quot;:&quot;,&quot;_&quot;).replace(&quot;?&quot;,&quot;_&quot;).replace(&quot;*&quot;,&quot;_&quot;).replace(&quot;&lt;&quot;,&quot;_&quot;).replace(&quot;&gt;&quot;,&quot;_&quot;) + &#39;.md&#39; try: copyright = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta icon_appmsg_tag appmsg_title_tag weui-wa-hotarea&#39;).text except: copyright = None try: author = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta_link weui-wa-hotarea&#39;).text except: author = content.find(class_ = &quot;rich_media_meta rich_media_meta_text&quot;).text.split(&quot;\n&quot;)[-2].split(&quot; &quot;)[-1] blog_name = content.find(class_=&#39;profile_nickname&#39;).text blog_sign = content.div.div.div.find_all(&#39;p&#39;)[1].span.text for i in soup.html.body.find_all(&#39;script&#39;): if &#39;publish_time&#39; in str(i): publish_time = int(i.text.split(&quot;document.getElementById&quot;)[0].split(&quot;{e(&quot;)[-1].split(&quot;,\&quot;&quot;)[-1].split(&quot;\&quot;,&quot;)[0]) content.find(id=&#39;meta_content&#39;).decompose() download_images(soup, content) brs = content.find_all(&#39;br&#39;) if brs: for br in brs: br.decompose() for_list(content) for_code2(content) mdText = str(content).replace(&#39;&lt;br/&gt;&#39;,&#39;&#39;).replace(&#39;&lt;/code&gt;&lt;code&gt;&#39;, &quot;&quot;).replace(&#39;\n&lt;/code&gt;&#39;,&#39;&lt;/code&gt;&#39;).replace(&#39;&lt;code&gt;\n&#39;,&#39;&lt;code&gt;&#39;) # 代码部分自动换行 mdText = tomd.Tomd(mdText).markdown # 改格式转错的地方 mdText = mdText.replace(&#39;# \n \n&#39;+title, &#39;## &#39;+title).replace(&quot;# \n&quot;, &quot;\n&quot;) mdText = re.sub(r&#39;\n[\- ]+[ ]+\n```&#39;, &quot;\n \n```&quot;, mdText) with open(filename, &#39;w&#39;, encoding=&#39;utf8&#39;) as file: file.write(mdText) 代码有点长，调起来费了九牛二虎之力，这里试的是微信公众号的文章转markdown，可能和其他网页不是那么匹配，主要还是要去熟悉soup的使用方法，并坚持将匹配错误的地方各个击破。 没有实现的功能： 视频没办法处理 不能百分百准确，文字和图谱还是偶有缺失，缺失率小于1% 有些文字格式会跑掉 列表不能准确转换，太懒了，懒得写了 基础版，特殊格式字符什么的，无法正确转换，需要自己开发 转换完扔需要校验，无法自动调校图片大小，需要手动 上面代码主要实现的功能： 代码模块可以成功换行了 图片可以自动下载保存到本地并赋予链接 一些匹配错误的地方做了校正" />
+<meta property="og:description" content="声明：基本步骤和核心方法均参考[1]，[2]，细节有大不同，这篇着重于如何将抓取到的文章用markdown的格式保存下来。 1. 上篇中已经抓到了公众号的所有文章的题目和链接，下篇直接读入： import pandas as pd from newspaper import Article import html2text as ht import yaml import time import requests from bs4 import BeautifulSoup import os import tomd import re with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file: file_data = file.read() config = yaml.safe_load(file_data) def get_headers(config): headers = { &quot;Cookie&quot;: config[&#39;cookie&#39;], &quot;User-Agent&quot;: config[&#39;user-agent&#39;] } return headers pd.set_option(&#39;max_colwidth&#39;, 1000) article_list = pd.read_csv(&#39;article_list2.csv&#39;, encoding=&#39;GB18030&#39;) headers = get_headers(config) def download_images(soup, content): dir_name = &quot;assets/images/&quot; + str(filename[:-3]) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) cnt = 1 images = content.find_all(&quot;img&quot;) for image in images: img_src = image.get(&#39;data-src&#39;) img_type = image.get(&#39;data-type&#39;) img_name = &quot;{0:d}.{1:s}&quot;.format(cnt, img_type if img_type else &#39;png&#39;) cnt += 1 file_path = &quot;assets/images/{0:s}/{1:s}&quot;.format(filename[:-3], img_name) if not os.path.exists(file_path): with open (file_path, &#39;wb&#39;) as file: response = requests.get(url = img_src) for block in response.iter_content(1024): if block: file.write(block) else: break tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;![](assets/images/{0:s}/{1:s})&quot;.format(filename[:-3], img_name) image.replace_with(tag) def download_videos(soup, content): dir_name = &quot;assets/videos/&quot; + str(title) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) if videos: for video in videos: video_src = video.get(&#39;data-src&#39;) tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;[此处是视频]({0:s})&quot;.format(video_src) video.replace_with(tag) def for_list(content): for a in content.find_all(&quot;ol&quot;): i = 1 for b in a.find_all(&quot;li&quot;): tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;{0:d}. {1:s}\n&quot;.format(i, b.text) b.replace_with(tag) i = i+1 def for_code2(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): for b in a.find_all(&quot;code&quot;): tag = soup.new_tag(&#39;code&#39;) tag.string = &quot;\n&quot; + b.text b.replace_with(tag) def for_code(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): tag = soup.new_tag(&#39;code&#39;) string = &quot;&quot; length = len(a.find_all(&quot;code&quot;)) i = 1 for b in a.find_all(&quot;code&quot;): string = string + &quot;\n&quot; + b.text if i&lt;length: b.extract() i = i+1 tag.string = string b.replace_with(tag) for index, row in article_list.iterrows(): print(index) print(row) create_time = time.strftime(&quot;%Y-%m-%d&quot;,time.localtime(row[&quot;create_time&quot;])) url = row[&#39;link&#39;].replace(&quot;\/&quot;,&quot;/&quot;) article = requests.get(url,headers=headers) if article.status_code == 200: html = article.text # for_code html = html.replace(&quot;&lt;br /&gt;&quot;,&quot;\n&quot;) soup = BeautifulSoup(html, &#39;html.parser&#39;) content = soup.find(id=&#39;img-content&#39;) #有些文章已经被删除了，就提取不到content了 if content: title = content.find(class_=&#39;rich_media_title&#39;).text.strip() print(title) # \/:*?&quot;&lt;&gt;|这些字符不能作为文件名或者文件夹名 filename = title.replace(&#39;\/&#39;,&#39;-&#39;).replace(&#39;\\&#39;,&#39;-&#39;).replace(&#39;\&quot;&#39;,&#39;-&#39;).replace(&#39;|&#39;,&#39;-&#39;).replace(&quot;:&quot;,&quot;_&quot;).replace(&quot;?&quot;,&quot;_&quot;).replace(&quot;*&quot;,&quot;_&quot;).replace(&quot;&lt;&quot;,&quot;_&quot;).replace(&quot;&gt;&quot;,&quot;_&quot;) + &#39;.md&#39; try: copyright = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta icon_appmsg_tag appmsg_title_tag weui-wa-hotarea&#39;).text except: copyright = None try: author = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta_link weui-wa-hotarea&#39;).text except: author = content.find(class_ = &quot;rich_media_meta rich_media_meta_text&quot;).text.split(&quot;\n&quot;)[-2].split(&quot; &quot;)[-1] blog_name = content.find(class_=&#39;profile_nickname&#39;).text blog_sign = content.div.div.div.find_all(&#39;p&#39;)[1].span.text for i in soup.html.body.find_all(&#39;script&#39;): if &#39;publish_time&#39; in str(i): publish_time = int(i.text.split(&quot;document.getElementById&quot;)[0].split(&quot;{e(&quot;)[-1].split(&quot;,\&quot;&quot;)[-1].split(&quot;\&quot;,&quot;)[0]) content.find(id=&#39;meta_content&#39;).decompose() download_images(soup, content) brs = content.find_all(&#39;br&#39;) if brs: for br in brs: br.decompose() for_list(content) for_code2(content) mdText = str(content).replace(&#39;&lt;br/&gt;&#39;,&#39;&#39;).replace(&#39;&lt;/code&gt;&lt;code&gt;&#39;, &quot;&quot;).replace(&#39;\n&lt;/code&gt;&#39;,&#39;&lt;/code&gt;&#39;).replace(&#39;&lt;code&gt;\n&#39;,&#39;&lt;code&gt;&#39;) # 代码部分自动换行 mdText = tomd.Tomd(mdText).markdown # 改格式转错的地方 mdText = mdText.replace(&#39;# \n \n&#39;+title, &#39;## &#39;+title).replace(&quot;# \n&quot;, &quot;\n&quot;) mdText = re.sub(r&#39;\n[\- ]+[ ]+\n```&#39;, &quot;\n \n```&quot;, mdText) with open(filename, &#39;w&#39;, encoding=&#39;utf8&#39;) as file: file.write(mdText) 代码有点长，调起来费了九牛二虎之力，这里试的是微信公众号的文章转markdown，可能和其他网页不是那么匹配，主要还是要去熟悉soup的使用方法，并坚持将匹配错误的地方各个击破。 没有实现的功能： 视频没办法处理 不能百分百准确，文字和图谱还是偶有缺失，缺失率小于1% 有些文字格式会跑掉 列表不能准确转换，太懒了，懒得写了 基础版，特殊格式字符什么的，无法正确转换，需要自己开发 转换完扔需要校验，无法自动调校图片大小，需要手动 上面代码主要实现的功能： 代码模块可以成功换行了 图片可以自动下载保存到本地并赋予链接 一些匹配错误的地方做了校正" />
+<link rel="canonical" href="http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/" />
+<meta property="og:url" content="http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0(Python)%E4%B8%8A%E7%AF%87/0.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-10-11T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"声明：基本步骤和核心方法均参考[1]，[2]，细节有大不同，这篇着重于如何将抓取到的文章用markdown的格式保存下来。 1. 上篇中已经抓到了公众号的所有文章的题目和链接，下篇直接读入： import pandas as pd from newspaper import Article import html2text as ht import yaml import time import requests from bs4 import BeautifulSoup import os import tomd import re with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file: file_data = file.read() config = yaml.safe_load(file_data) def get_headers(config): headers = { &quot;Cookie&quot;: config[&#39;cookie&#39;], &quot;User-Agent&quot;: config[&#39;user-agent&#39;] } return headers pd.set_option(&#39;max_colwidth&#39;, 1000) article_list = pd.read_csv(&#39;article_list2.csv&#39;, encoding=&#39;GB18030&#39;) headers = get_headers(config) def download_images(soup, content): dir_name = &quot;assets/images/&quot; + str(filename[:-3]) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) cnt = 1 images = content.find_all(&quot;img&quot;) for image in images: img_src = image.get(&#39;data-src&#39;) img_type = image.get(&#39;data-type&#39;) img_name = &quot;{0:d}.{1:s}&quot;.format(cnt, img_type if img_type else &#39;png&#39;) cnt += 1 file_path = &quot;assets/images/{0:s}/{1:s}&quot;.format(filename[:-3], img_name) if not os.path.exists(file_path): with open (file_path, &#39;wb&#39;) as file: response = requests.get(url = img_src) for block in response.iter_content(1024): if block: file.write(block) else: break tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;![](assets/images/{0:s}/{1:s})&quot;.format(filename[:-3], img_name) image.replace_with(tag) def download_videos(soup, content): dir_name = &quot;assets/videos/&quot; + str(title) + &quot;/&quot; if not os.path.isdir(dir_name): os.mkdir(dir_name) if videos: for video in videos: video_src = video.get(&#39;data-src&#39;) tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;[此处是视频]({0:s})&quot;.format(video_src) video.replace_with(tag) def for_list(content): for a in content.find_all(&quot;ol&quot;): i = 1 for b in a.find_all(&quot;li&quot;): tag = soup.new_tag(&#39;span&#39;) tag.string = &quot;{0:d}. {1:s}\\n&quot;.format(i, b.text) b.replace_with(tag) i = i+1 def for_code2(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): for b in a.find_all(&quot;code&quot;): tag = soup.new_tag(&#39;code&#39;) tag.string = &quot;\\n&quot; + b.text b.replace_with(tag) def for_code(content): for a in content.find_all(class_=&quot;code-snippet__fix code-snippet__js&quot;): tag = soup.new_tag(&#39;code&#39;) string = &quot;&quot; length = len(a.find_all(&quot;code&quot;)) i = 1 for b in a.find_all(&quot;code&quot;): string = string + &quot;\\n&quot; + b.text if i&lt;length: b.extract() i = i+1 tag.string = string b.replace_with(tag) for index, row in article_list.iterrows(): print(index) print(row) create_time = time.strftime(&quot;%Y-%m-%d&quot;,time.localtime(row[&quot;create_time&quot;])) url = row[&#39;link&#39;].replace(&quot;\\/&quot;,&quot;/&quot;) article = requests.get(url,headers=headers) if article.status_code == 200: html = article.text # for_code html = html.replace(&quot;&lt;br /&gt;&quot;,&quot;\\n&quot;) soup = BeautifulSoup(html, &#39;html.parser&#39;) content = soup.find(id=&#39;img-content&#39;) #有些文章已经被删除了，就提取不到content了 if content: title = content.find(class_=&#39;rich_media_title&#39;).text.strip() print(title) # \\/:*?&quot;&lt;&gt;|这些字符不能作为文件名或者文件夹名 filename = title.replace(&#39;\\/&#39;,&#39;-&#39;).replace(&#39;\\\\&#39;,&#39;-&#39;).replace(&#39;\\&quot;&#39;,&#39;-&#39;).replace(&#39;|&#39;,&#39;-&#39;).replace(&quot;:&quot;,&quot;_&quot;).replace(&quot;?&quot;,&quot;_&quot;).replace(&quot;*&quot;,&quot;_&quot;).replace(&quot;&lt;&quot;,&quot;_&quot;).replace(&quot;&gt;&quot;,&quot;_&quot;) + &#39;.md&#39; try: copyright = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta icon_appmsg_tag appmsg_title_tag weui-wa-hotarea&#39;).text except: copyright = None try: author = content.find(class_=&#39;wx_tap_link js_wx_tap_highlight rich_media_meta_link weui-wa-hotarea&#39;).text except: author = content.find(class_ = &quot;rich_media_meta rich_media_meta_text&quot;).text.split(&quot;\\n&quot;)[-2].split(&quot; &quot;)[-1] blog_name = content.find(class_=&#39;profile_nickname&#39;).text blog_sign = content.div.div.div.find_all(&#39;p&#39;)[1].span.text for i in soup.html.body.find_all(&#39;script&#39;): if &#39;publish_time&#39; in str(i): publish_time = int(i.text.split(&quot;document.getElementById&quot;)[0].split(&quot;{e(&quot;)[-1].split(&quot;,\\&quot;&quot;)[-1].split(&quot;\\&quot;,&quot;)[0]) content.find(id=&#39;meta_content&#39;).decompose() download_images(soup, content) brs = content.find_all(&#39;br&#39;) if brs: for br in brs: br.decompose() for_list(content) for_code2(content) mdText = str(content).replace(&#39;&lt;br/&gt;&#39;,&#39;&#39;).replace(&#39;&lt;/code&gt;&lt;code&gt;&#39;, &quot;&quot;).replace(&#39;\\n&lt;/code&gt;&#39;,&#39;&lt;/code&gt;&#39;).replace(&#39;&lt;code&gt;\\n&#39;,&#39;&lt;code&gt;&#39;) # 代码部分自动换行 mdText = tomd.Tomd(mdText).markdown # 改格式转错的地方 mdText = mdText.replace(&#39;# \\n \\n&#39;+title, &#39;## &#39;+title).replace(&quot;# \\n&quot;, &quot;\\n&quot;) mdText = re.sub(r&#39;\\n[\\- ]+[ ]+\\n```&#39;, &quot;\\n \\n```&quot;, mdText) with open(filename, &#39;w&#39;, encoding=&#39;utf8&#39;) as file: file.write(mdText) 代码有点长，调起来费了九牛二虎之力，这里试的是微信公众号的文章转markdown，可能和其他网页不是那么匹配，主要还是要去熟悉soup的使用方法，并坚持将匹配错误的地方各个击破。 没有实现的功能： 视频没办法处理 不能百分百准确，文字和图谱还是偶有缺失，缺失率小于1% 有些文字格式会跑掉 列表不能准确转换，太懒了，懒得写了 基础版，特殊格式字符什么的，无法正确转换，需要自己开发 转换完扔需要校验，无法自动调校图片大小，需要手动 上面代码主要实现的功能： 代码模块可以成功换行了 图片可以自动下载保存到本地并赋予链接 一些匹配错误的地方做了校正","url":"http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/","image":"http://localhost:4000/assets/images/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0(Python)%E4%B8%8A%E7%AF%87/0.png","@type":"BlogPosting","headline":"如何抓取一个微信公众号的所有文章（Python）下篇","dateModified":"2022-10-11T00:00:00+08:00","datePublished":"2022-10-11T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">如何抓取一个微信公众号的所有文章（Python）下篇</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-10-11">11 Oct 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/如何抓取一个微信公众号的所有文章（Python）上篇/0.png" alt="如何抓取一个微信公众号的所有文章（Python）下篇">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>声明：基本步骤和核心方法均参考[1]，[2]，细节有大不同，这篇着重于如何将抓取到的文章用markdown的格式保存下来。</p>
+
+<h4 id="1-上篇中已经抓到了公众号的所有文章的题目和链接下篇直接读入">1. 上篇中已经抓到了公众号的所有文章的题目和链接，下篇直接读入：</h4>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">pandas</span> <span class="k">as</span> <span class="n">pd</span>
+<span class="kn">from</span> <span class="nn">newspaper</span> <span class="kn">import</span> <span class="n">Article</span>
+<span class="kn">import</span> <span class="nn">html2text</span> <span class="k">as</span> <span class="n">ht</span>
+<span class="kn">import</span> <span class="nn">yaml</span>
+<span class="kn">import</span> <span class="nn">time</span>
+<span class="kn">import</span> <span class="nn">requests</span>
+<span class="kn">from</span> <span class="nn">bs4</span> <span class="kn">import</span> <span class="n">BeautifulSoup</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">tomd</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s">"chaos-gravity.yaml"</span><span class="p">,</span> <span class="s">"r"</span><span class="p">)</span> <span class="k">as</span> <span class="nb">file</span><span class="p">:</span>
+    <span class="n">file_data</span> <span class="o">=</span> <span class="nb">file</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">yaml</span><span class="p">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">file_data</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">get_headers</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+    <span class="n">headers</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s">"Cookie"</span><span class="p">:</span> <span class="n">config</span><span class="p">[</span><span class="s">'cookie'</span><span class="p">],</span>
+        <span class="s">"User-Agent"</span><span class="p">:</span> <span class="n">config</span><span class="p">[</span><span class="s">'user-agent'</span><span class="p">]</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">headers</span>
+
+<span class="n">pd</span><span class="p">.</span><span class="n">set_option</span><span class="p">(</span><span class="s">'max_colwidth'</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+<span class="n">article_list</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s">'article_list2.csv'</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">'GB18030'</span><span class="p">)</span>
+<span class="n">headers</span> <span class="o">=</span> <span class="n">get_headers</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+    
+<span class="k">def</span> <span class="nf">download_images</span><span class="p">(</span><span class="n">soup</span><span class="p">,</span> <span class="n">content</span><span class="p">):</span>
+    <span class="n">dir_name</span> <span class="o">=</span> <span class="s">"assets/images/"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">filename</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">])</span> <span class="o">+</span> <span class="s">"/"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">dir_name</span><span class="p">):</span>
+        <span class="n">os</span><span class="p">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">dir_name</span><span class="p">)</span>
+    <span class="n">cnt</span> <span class="o">=</span> <span class="mi">1</span>
+    <span class="n">images</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"img"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">image</span> <span class="ow">in</span> <span class="n">images</span><span class="p">:</span>
+        <span class="n">img_src</span> <span class="o">=</span> <span class="n">image</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'data-src'</span><span class="p">)</span>
+        <span class="n">img_type</span> <span class="o">=</span> <span class="n">image</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'data-type'</span><span class="p">)</span>
+        <span class="n">img_name</span> <span class="o">=</span> <span class="s">"{0:d}.{1:s}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">cnt</span><span class="p">,</span> <span class="n">img_type</span> <span class="k">if</span> <span class="n">img_type</span> <span class="k">else</span> <span class="s">'png'</span><span class="p">)</span>
+        <span class="n">cnt</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">file_path</span> <span class="o">=</span> <span class="s">"assets/images/{0:s}/{1:s}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">filename</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">],</span> <span class="n">img_name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">exists</span><span class="p">(</span><span class="n">file_path</span><span class="p">):</span>
+            <span class="k">with</span> <span class="nb">open</span> <span class="p">(</span><span class="n">file_path</span><span class="p">,</span> <span class="s">'wb'</span><span class="p">)</span> <span class="k">as</span> <span class="nb">file</span><span class="p">:</span>
+                <span class="n">response</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span> <span class="o">=</span> <span class="n">img_src</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">block</span> <span class="ow">in</span> <span class="n">response</span><span class="p">.</span><span class="n">iter_content</span><span class="p">(</span><span class="mi">1024</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="n">block</span><span class="p">:</span>
+                        <span class="nb">file</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">block</span><span class="p">)</span>
+                    <span class="k">else</span><span class="p">:</span>
+                        <span class="k">break</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">new_tag</span><span class="p">(</span><span class="s">'span'</span><span class="p">)</span>
+        <span class="n">tag</span><span class="p">.</span><span class="n">string</span> <span class="o">=</span> <span class="s">"![](assets/images/{0:s}/{1:s})"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">filename</span><span class="p">[:</span><span class="o">-</span><span class="mi">3</span><span class="p">],</span> <span class="n">img_name</span><span class="p">)</span>
+        <span class="n">image</span><span class="p">.</span><span class="n">replace_with</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+
+        
+<span class="k">def</span> <span class="nf">download_videos</span><span class="p">(</span><span class="n">soup</span><span class="p">,</span> <span class="n">content</span><span class="p">):</span>
+    <span class="n">dir_name</span> <span class="o">=</span> <span class="s">"assets/videos/"</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">title</span><span class="p">)</span> <span class="o">+</span> <span class="s">"/"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="n">isdir</span><span class="p">(</span><span class="n">dir_name</span><span class="p">):</span>
+        <span class="n">os</span><span class="p">.</span><span class="n">mkdir</span><span class="p">(</span><span class="n">dir_name</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">videos</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">video</span> <span class="ow">in</span> <span class="n">videos</span><span class="p">:</span>
+            <span class="n">video_src</span> <span class="o">=</span> <span class="n">video</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="s">'data-src'</span><span class="p">)</span>
+
+            <span class="n">tag</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">new_tag</span><span class="p">(</span><span class="s">'span'</span><span class="p">)</span>
+            <span class="n">tag</span><span class="p">.</span><span class="n">string</span> <span class="o">=</span> <span class="s">"[此处是视频]({0:s})"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">video_src</span><span class="p">)</span>
+            <span class="n">video</span><span class="p">.</span><span class="n">replace_with</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">for_list</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">content</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"ol"</span><span class="p">):</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">a</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"li"</span><span class="p">):</span>
+            <span class="n">tag</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">new_tag</span><span class="p">(</span><span class="s">'span'</span><span class="p">)</span>
+            <span class="n">tag</span><span class="p">.</span><span class="n">string</span> <span class="o">=</span> <span class="s">"{0:d}. {1:s}</span><span class="se">\n</span><span class="s">"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">text</span><span class="p">)</span>
+            <span class="n">b</span><span class="p">.</span><span class="n">replace_with</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+<span class="k">def</span> <span class="nf">for_code2</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">content</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">"code-snippet__fix code-snippet__js"</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">a</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"code"</span><span class="p">):</span>
+            <span class="n">tag</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">new_tag</span><span class="p">(</span><span class="s">'code'</span><span class="p">)</span>
+            <span class="n">tag</span><span class="p">.</span><span class="n">string</span> <span class="o">=</span> <span class="s">"</span><span class="se">\n</span><span class="s">"</span> <span class="o">+</span> <span class="n">b</span><span class="p">.</span><span class="n">text</span>
+            <span class="n">b</span><span class="p">.</span><span class="n">replace_with</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>            
+<span class="k">def</span> <span class="nf">for_code</span><span class="p">(</span><span class="n">content</span><span class="p">):</span>
+    <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">content</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">"code-snippet__fix code-snippet__js"</span><span class="p">):</span>
+        <span class="n">tag</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">new_tag</span><span class="p">(</span><span class="s">'code'</span><span class="p">)</span>
+        <span class="n">string</span> <span class="o">=</span> <span class="s">""</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">a</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"code"</span><span class="p">))</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">a</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">"code"</span><span class="p">):</span>
+            <span class="n">string</span> <span class="o">=</span> <span class="n">string</span> <span class="o">+</span> <span class="s">"</span><span class="se">\n</span><span class="s">"</span> <span class="o">+</span> <span class="n">b</span><span class="p">.</span><span class="n">text</span>
+            <span class="k">if</span> <span class="n">i</span><span class="o">&lt;</span><span class="n">length</span><span class="p">:</span>
+                <span class="n">b</span><span class="p">.</span><span class="n">extract</span><span class="p">()</span>
+            <span class="n">i</span> <span class="o">=</span> <span class="n">i</span><span class="o">+</span><span class="mi">1</span>
+        <span class="n">tag</span><span class="p">.</span><span class="n">string</span> <span class="o">=</span> <span class="n">string</span>
+        <span class="n">b</span><span class="p">.</span><span class="n">replace_with</span><span class="p">(</span><span class="n">tag</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">index</span><span class="p">,</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">article_list</span><span class="p">.</span><span class="n">iterrows</span><span class="p">():</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+    <span class="k">print</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+    <span class="n">create_time</span> <span class="o">=</span> <span class="n">time</span><span class="p">.</span><span class="n">strftime</span><span class="p">(</span><span class="s">"%Y-%m-%d"</span><span class="p">,</span><span class="n">time</span><span class="p">.</span><span class="n">localtime</span><span class="p">(</span><span class="n">row</span><span class="p">[</span><span class="s">"create_time"</span><span class="p">]))</span>
+    <span class="n">url</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s">'link'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"\/"</span><span class="p">,</span><span class="s">"/"</span><span class="p">)</span>
+    <span class="n">article</span> <span class="o">=</span> <span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">article</span><span class="p">.</span><span class="n">status_code</span> <span class="o">==</span> <span class="mi">200</span><span class="p">:</span>
+        <span class="n">html</span> <span class="o">=</span> <span class="n">article</span><span class="p">.</span><span class="n">text</span>
+    <span class="c1"># for_code 
+</span>    <span class="n">html</span> <span class="o">=</span> <span class="n">html</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">"&lt;br  /&gt;"</span><span class="p">,</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">)</span>
+    <span class="n">soup</span> <span class="o">=</span> <span class="n">BeautifulSoup</span><span class="p">(</span><span class="n">html</span><span class="p">,</span> <span class="s">'html.parser'</span><span class="p">)</span>
+    <span class="n">content</span> <span class="o">=</span> <span class="n">soup</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">'img-content'</span><span class="p">)</span>
+    <span class="c1">#有些文章已经被删除了，就提取不到content了
+</span>    <span class="k">if</span> <span class="n">content</span><span class="p">:</span>
+        <span class="n">title</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">'rich_media_title'</span><span class="p">).</span><span class="n">text</span><span class="p">.</span><span class="n">strip</span><span class="p">()</span>
+        <span class="k">print</span><span class="p">(</span><span class="n">title</span><span class="p">)</span>
+        <span class="c1"># \/:*?"&lt;&gt;|这些字符不能作为文件名或者文件夹名
+</span>        <span class="n">filename</span> <span class="o">=</span> <span class="n">title</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'\/'</span><span class="p">,</span><span class="s">'-'</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\\</span><span class="s">'</span><span class="p">,</span><span class="s">'-'</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\"</span><span class="s">'</span><span class="p">,</span><span class="s">'-'</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'|'</span><span class="p">,</span><span class="s">'-'</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">":"</span><span class="p">,</span><span class="s">"_"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"?"</span><span class="p">,</span><span class="s">"_"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"*"</span><span class="p">,</span><span class="s">"_"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"&lt;"</span><span class="p">,</span><span class="s">"_"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"&gt;"</span><span class="p">,</span><span class="s">"_"</span><span class="p">)</span> <span class="o">+</span> <span class="s">'.md'</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">copyright</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">'wx_tap_link js_wx_tap_highlight rich_media_meta icon_appmsg_tag appmsg_title_tag weui-wa-hotarea'</span><span class="p">).</span><span class="n">text</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">copyright</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">author</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">'wx_tap_link js_wx_tap_highlight rich_media_meta_link weui-wa-hotarea'</span><span class="p">).</span><span class="n">text</span>
+        <span class="k">except</span><span class="p">:</span>
+            <span class="n">author</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">class_</span> <span class="o">=</span> <span class="s">"rich_media_meta rich_media_meta_text"</span><span class="p">).</span><span class="n">text</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">)[</span><span class="o">-</span><span class="mi">2</span><span class="p">].</span><span class="n">split</span><span class="p">(</span><span class="s">" "</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">blog_name</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="n">class_</span><span class="o">=</span><span class="s">'profile_nickname'</span><span class="p">).</span><span class="n">text</span>
+        <span class="n">blog_sign</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">div</span><span class="p">.</span><span class="n">div</span><span class="p">.</span><span class="n">div</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">'p'</span><span class="p">)[</span><span class="mi">1</span><span class="p">].</span><span class="n">span</span><span class="p">.</span><span class="n">text</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">soup</span><span class="p">.</span><span class="n">html</span><span class="p">.</span><span class="n">body</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">'script'</span><span class="p">):</span>
+            <span class="k">if</span> <span class="s">'publish_time'</span> <span class="ow">in</span> <span class="nb">str</span><span class="p">(</span><span class="n">i</span><span class="p">):</span>
+                <span class="n">publish_time</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">i</span><span class="p">.</span><span class="n">text</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="s">"document.getElementById"</span><span class="p">)[</span><span class="mi">0</span><span class="p">].</span><span class="n">split</span><span class="p">(</span><span class="s">"{e("</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">].</span><span class="n">split</span><span class="p">(</span><span class="s">",</span><span class="se">\"</span><span class="s">"</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">].</span><span class="n">split</span><span class="p">(</span><span class="s">"</span><span class="se">\"</span><span class="s">,"</span><span class="p">)[</span><span class="mi">0</span><span class="p">])</span>
+        <span class="n">content</span><span class="p">.</span><span class="n">find</span><span class="p">(</span><span class="nb">id</span><span class="o">=</span><span class="s">'meta_content'</span><span class="p">).</span><span class="n">decompose</span><span class="p">()</span>
+        <span class="n">download_images</span><span class="p">(</span><span class="n">soup</span><span class="p">,</span> <span class="n">content</span><span class="p">)</span>
+        <span class="n">brs</span> <span class="o">=</span> <span class="n">content</span><span class="p">.</span><span class="n">find_all</span><span class="p">(</span><span class="s">'br'</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">brs</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">br</span> <span class="ow">in</span> <span class="n">brs</span><span class="p">:</span>
+                <span class="n">br</span><span class="p">.</span><span class="n">decompose</span><span class="p">()</span>
+        <span class="n">for_list</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">for_code2</span><span class="p">(</span><span class="n">content</span><span class="p">)</span>
+        <span class="n">mdText</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">content</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'&lt;br/&gt;'</span><span class="p">,</span><span class="s">''</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'&lt;/code&gt;&lt;code&gt;'</span><span class="p">,</span> <span class="s">""</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'</span><span class="se">\n</span><span class="s">&lt;/code&gt;'</span><span class="p">,</span><span class="s">'&lt;/code&gt;'</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">'&lt;code&gt;</span><span class="se">\n</span><span class="s">'</span><span class="p">,</span><span class="s">'&lt;code&gt;'</span><span class="p">)</span>
+        <span class="c1"># 代码部分自动换行
+</span>        <span class="n">mdText</span> <span class="o">=</span> <span class="n">tomd</span><span class="p">.</span><span class="n">Tomd</span><span class="p">(</span><span class="n">mdText</span><span class="p">).</span><span class="n">markdown</span>
+        <span class="c1"># 改格式转错的地方
+</span>        <span class="n">mdText</span> <span class="o">=</span> <span class="n">mdText</span><span class="p">.</span><span class="n">replace</span><span class="p">(</span><span class="s">'# </span><span class="se">\n</span><span class="s">            </span><span class="se">\n</span><span class="s">'</span><span class="o">+</span><span class="n">title</span><span class="p">,</span> <span class="s">'## '</span><span class="o">+</span><span class="n">title</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"# </span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">)</span>
+        <span class="n">mdText</span> <span class="o">=</span> <span class="n">re</span><span class="p">.</span><span class="n">sub</span><span class="p">(</span><span class="s">r'\n[\- ]+[ ]+\n```'</span><span class="p">,</span> <span class="s">"</span><span class="se">\n</span><span class="s"> </span><span class="se">\n</span><span class="s">```"</span><span class="p">,</span> <span class="n">mdText</span><span class="p">)</span>
+        <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">filename</span><span class="p">,</span> <span class="s">'w'</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s">'utf8'</span><span class="p">)</span> <span class="k">as</span> <span class="nb">file</span><span class="p">:</span>
+            <span class="nb">file</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">mdText</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>代码有点长，调起来费了九牛二虎之力，这里试的是微信公众号的文章转markdown，可能和其他网页不是那么匹配，主要还是要去熟悉soup的使用方法，并坚持将匹配错误的地方各个击破。</p>
+
+<p>没有实现的功能：</p>
+
+<ul>
+  <li>视频没办法处理</li>
+  <li>不能百分百准确，文字和图谱还是偶有缺失，缺失率小于1%</li>
+  <li>有些文字格式会跑掉</li>
+  <li>列表不能准确转换，太懒了，懒得写了</li>
+  <li>基础版，特殊格式字符什么的，无法正确转换，需要自己开发</li>
+  <li>转换完扔需要校验，无法自动调校图片大小，需要手动</li>
+</ul>
+
+<p>上面代码主要实现的功能：</p>
+
+<ul>
+  <li>
+    <p>代码模块可以成功换行了</p>
+  </li>
+  <li>
+    <p>图片可以自动下载保存到本地并赋予链接</p>
+  </li>
+  <li>
+    <p>一些匹配错误的地方做了校正</p>
+  </li>
+</ul>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=如何抓取一个微信公众号的所有文章（Python）下篇&url=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Tools">Tools</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Crawler">Crawler</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/如何抓取一个微信公众号的所有文章（Python）上篇/0.png" alt="如何抓取一个微信公众号的所有文章（Python）上篇"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/">如何抓取一个微信公众号的所有文章（Python）上篇</a>
+                
+            </h2>
+            <h4 class="card-text">声明：基本步骤和核心方法均参考[1]，未做诸多更改，但是细节上可能因为微信自己做了更新，爬取细节很不同，另外就是加入了一些文本处理的操作。
+
+1. 注册微信公众号 -&gt; 新建图文消息 -&gt;</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jul 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

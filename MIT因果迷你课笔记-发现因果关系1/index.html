@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 发现因果关系1 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 发现因果关系1 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 发现因果关系1" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="上上篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理     在这门课中，因果模型的形成主要包含因果关系的学习和发现(causal learning/discovery)，还有因果关系的推理(causal reasoning)。     课程里先说的是因果关系的推理，即有了因果模型，去推导结果或者干预后的状况。接下来说因果关系的发现。     因果关系的发现内容复杂，逻辑绕，可能会分两到三篇来说，这里是第一篇。     因果关系的发现，即从数据中发现因果关系，那么怎么从数据中归纳因果关系？         首先来了解一些基本概念。     RCCP **(Reichenbach’s Common Cause Principle), 是Hans Reichenbach死后出版的一本未完成的书《The Direction of Time**》中提出的概念。假设我们现在有两个事件，A和B，如果p(A∩B)&gt;p(A)p(B)说明事件A和B不相互独立，即两个事件相关，那么相关和因果是什么关系呢？Reichenbach’s Common Cause Principle (RCCP) 认为如果p(A∩B)&gt;p(A)p(B)，且A不是B的因，B也不是A的因，那么A，B应该有共同的因。     概念定义如下：     A、B是两个事件，如果：       遵循RCCP原理，则A是B的因，或者B是A的因，或者A，B有共同的因，在第三种情况下，如果共同因事件是C，那么A和B则是有条件的独立：     RCCP的概念还有很多可追究的地方，推荐斯坦福的一篇文章，这篇文章甚至还描述了RCCP在量子力学中的地位，有机会可以专门开个坑说一下这些概念，https://plato.stanford.edu/entries/physics-Rpcc/。     接下来说一下图的定义：     图由点和边构成，图可以是有向图和无向图，这个课程里的图基本都是有向图，在图形上的表现就是边是有箭头的，有指向的。v-structure是说，比如X2和X3均指向X1，但是X2和X3之间却没有直接的关联，这种结构就被称之为immorality。     d-separation, 一个和图还有RCCP相关的非常重要的概念，因为相对复杂，所以专门写了一篇**D-separation，d-connection**，一定要先看这篇。     Causal Markov Condition 有很多种定义方式，基于d-separation的定义方式如下：     换种写法如下，P是变量的分布情况（distribution），w.r.t. (with respect to) G表示这组变量之间的因果关系是按G图表示的那样：     我们认为分布P是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj |S。在这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。     我们回想一下RCCP的概念，则不难得出，马可夫状态是RCCP的一般化的形式。另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。     假设现在你获得了一批数据，你可以很容易得到各个变量的分布，即P，换言而之，你可以很轻松地知道Xi⊥Xj |S是否成立，现在你想通过分布推导出因果关系，那么可以用前面的Causal Markov Condition吗？明显不行，因为箭头是单向的，可以由d-separation推导出分布，但不能根据上面的定理推导出d-separation。     为了可以反过来推导，我们定义了一个假设：     faithfulness assumption，这个概念和马可夫是一个对应的概念，注意下面推理的箭头，和马可夫概念中推理的箭头是反方向。这个假设使我们可以通过分布来推导因果关系。如果可以反过来推，我们认为P faithful。     现在我们来做几道题，辅助理解一下上面的两个概念，我们假设P是markov且faithful w.r.t. G，现在P有如下几种状况，请分别推导出对应的因果图G：     （i）X⊥Z **(vars: **X, Y,Z)     （ii）X⊥Y|Z **(vars: **X, Y,Z)     （iii）X⊥Y，X⊥W|Z **，Y⊥W|Z ，X⊥W|Z, **Y，Y⊥W|Z, **X **(vars:X,Y,W, Z)     以上三种情况对应的G可以是（一种d-separation的状况可以匹配多个因果图）：     （i）X-&gt;Y&lt;-**Z **       （ii）X-&gt;Z-&gt;Y；X&lt;-Z&lt;-Y；X&lt;-Z-&gt;Y。     （iii）(X-&gt;Z)&amp;(Y-&gt;Z-&gt;W)     要得到因果图，从P中，首先找出所有的独立关系，和相对独立的关系，再根据Markov和Faithfulness的假设得到因果关系。     通过以上的例子，我们发现，一种d-separations的情况可以得到不同的因果图： 我们称这些由同样的d-separations的状况得到的因果图为Markov Equivalence的，反过来说就是，     Def：如果两个因果图能得到同样的d-separations，则称这两个图为Markov Equivalence的，是基于马可夫等价的。     再来看由此得到的一个命题：     Prop：(Verma &amp; Pearl)因果关系图G，H是Markov Equivalence &lt;=&gt; G和H有相同的骨架，和v-structrues。     可以对照上面三个案例来验证一下这个命题。     有P对于某个G不是faithful的案例吗？当然是有的，如果G是这样的：     那么，Y =2X - Z + Ny = 2X - 2X - Nz+ Ny = Ny  - Nz，所以X⊥Y，但是却并不能得到X和Y被一个空集d-separated的结果。简而言之，faithfulness的假设将这个世界的状况简化了，真实世界的数据是十分复杂的。     接下来，我们来回顾我们之前见过的一个案例：     案例：夜间照明和小孩患近视的因果关系     由统计数据可以知道，为孩子提供夜间照明和小孩患近视这两件事情是相关的。根据RCCP原理，要么这两件事存在因果关系，要么它们有共同的因。而通过调查得到一个d-separation，night light ⊥ child myopia | parent myopia，即night light (NL)和child myopia (CM)可以被parent myopia (PM) d-separated。所以，根据faithfulness的假设，这三件事之间的关系可能是：     (i) NL-&gt;PM-&gt;CM     (ii) CM-&gt;PM-&gt;NL     (iii) CM&lt;-PM-&gt;NL     由于(i)和(ii)可以用常识来否定，给孩子的夜间照明不能够成为大人近视的因，孩子的近视不能够成为大人近视的因，因此最后得到的因果关系是：     以上，我们知道，通过数据分布P得到的d-separations的状况，可以让我们得到一组Markov Equivalence的因果图，那么接下来一个显而易见的问题是，如何区分Markov Equivalence的因果图。如上例，我们怎么知道X，Y，Z之间的因果关系是X-&gt;Z-&gt;Y，或是X-&gt;Z-&gt;Y，或是X&lt;-Z-&gt;Y，显然，在同一个现实场景中，这三种因果关系不可能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？除了像上例一样依靠常识来排除，还有其他可行的方法吗？ 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理 上上篇：MIT因果迷你课笔记 —— 相关和因果 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html [3] https://plato.stanford.edu/entries/physics-Rpcc/ [4] Judea Pearl and Dana Mackenzie, The Book of Why, 2018" />
+<meta property="og:description" content="上上篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理     在这门课中，因果模型的形成主要包含因果关系的学习和发现(causal learning/discovery)，还有因果关系的推理(causal reasoning)。     课程里先说的是因果关系的推理，即有了因果模型，去推导结果或者干预后的状况。接下来说因果关系的发现。     因果关系的发现内容复杂，逻辑绕，可能会分两到三篇来说，这里是第一篇。     因果关系的发现，即从数据中发现因果关系，那么怎么从数据中归纳因果关系？         首先来了解一些基本概念。     RCCP **(Reichenbach’s Common Cause Principle), 是Hans Reichenbach死后出版的一本未完成的书《The Direction of Time**》中提出的概念。假设我们现在有两个事件，A和B，如果p(A∩B)&gt;p(A)p(B)说明事件A和B不相互独立，即两个事件相关，那么相关和因果是什么关系呢？Reichenbach’s Common Cause Principle (RCCP) 认为如果p(A∩B)&gt;p(A)p(B)，且A不是B的因，B也不是A的因，那么A，B应该有共同的因。     概念定义如下：     A、B是两个事件，如果：       遵循RCCP原理，则A是B的因，或者B是A的因，或者A，B有共同的因，在第三种情况下，如果共同因事件是C，那么A和B则是有条件的独立：     RCCP的概念还有很多可追究的地方，推荐斯坦福的一篇文章，这篇文章甚至还描述了RCCP在量子力学中的地位，有机会可以专门开个坑说一下这些概念，https://plato.stanford.edu/entries/physics-Rpcc/。     接下来说一下图的定义：     图由点和边构成，图可以是有向图和无向图，这个课程里的图基本都是有向图，在图形上的表现就是边是有箭头的，有指向的。v-structure是说，比如X2和X3均指向X1，但是X2和X3之间却没有直接的关联，这种结构就被称之为immorality。     d-separation, 一个和图还有RCCP相关的非常重要的概念，因为相对复杂，所以专门写了一篇**D-separation，d-connection**，一定要先看这篇。     Causal Markov Condition 有很多种定义方式，基于d-separation的定义方式如下：     换种写法如下，P是变量的分布情况（distribution），w.r.t. (with respect to) G表示这组变量之间的因果关系是按G图表示的那样：     我们认为分布P是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj |S。在这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。     我们回想一下RCCP的概念，则不难得出，马可夫状态是RCCP的一般化的形式。另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。     假设现在你获得了一批数据，你可以很容易得到各个变量的分布，即P，换言而之，你可以很轻松地知道Xi⊥Xj |S是否成立，现在你想通过分布推导出因果关系，那么可以用前面的Causal Markov Condition吗？明显不行，因为箭头是单向的，可以由d-separation推导出分布，但不能根据上面的定理推导出d-separation。     为了可以反过来推导，我们定义了一个假设：     faithfulness assumption，这个概念和马可夫是一个对应的概念，注意下面推理的箭头，和马可夫概念中推理的箭头是反方向。这个假设使我们可以通过分布来推导因果关系。如果可以反过来推，我们认为P faithful。     现在我们来做几道题，辅助理解一下上面的两个概念，我们假设P是markov且faithful w.r.t. G，现在P有如下几种状况，请分别推导出对应的因果图G：     （i）X⊥Z **(vars: **X, Y,Z)     （ii）X⊥Y|Z **(vars: **X, Y,Z)     （iii）X⊥Y，X⊥W|Z **，Y⊥W|Z ，X⊥W|Z, **Y，Y⊥W|Z, **X **(vars:X,Y,W, Z)     以上三种情况对应的G可以是（一种d-separation的状况可以匹配多个因果图）：     （i）X-&gt;Y&lt;-**Z **       （ii）X-&gt;Z-&gt;Y；X&lt;-Z&lt;-Y；X&lt;-Z-&gt;Y。     （iii）(X-&gt;Z)&amp;(Y-&gt;Z-&gt;W)     要得到因果图，从P中，首先找出所有的独立关系，和相对独立的关系，再根据Markov和Faithfulness的假设得到因果关系。     通过以上的例子，我们发现，一种d-separations的情况可以得到不同的因果图： 我们称这些由同样的d-separations的状况得到的因果图为Markov Equivalence的，反过来说就是，     Def：如果两个因果图能得到同样的d-separations，则称这两个图为Markov Equivalence的，是基于马可夫等价的。     再来看由此得到的一个命题：     Prop：(Verma &amp; Pearl)因果关系图G，H是Markov Equivalence &lt;=&gt; G和H有相同的骨架，和v-structrues。     可以对照上面三个案例来验证一下这个命题。     有P对于某个G不是faithful的案例吗？当然是有的，如果G是这样的：     那么，Y =2X - Z + Ny = 2X - 2X - Nz+ Ny = Ny  - Nz，所以X⊥Y，但是却并不能得到X和Y被一个空集d-separated的结果。简而言之，faithfulness的假设将这个世界的状况简化了，真实世界的数据是十分复杂的。     接下来，我们来回顾我们之前见过的一个案例：     案例：夜间照明和小孩患近视的因果关系     由统计数据可以知道，为孩子提供夜间照明和小孩患近视这两件事情是相关的。根据RCCP原理，要么这两件事存在因果关系，要么它们有共同的因。而通过调查得到一个d-separation，night light ⊥ child myopia | parent myopia，即night light (NL)和child myopia (CM)可以被parent myopia (PM) d-separated。所以，根据faithfulness的假设，这三件事之间的关系可能是：     (i) NL-&gt;PM-&gt;CM     (ii) CM-&gt;PM-&gt;NL     (iii) CM&lt;-PM-&gt;NL     由于(i)和(ii)可以用常识来否定，给孩子的夜间照明不能够成为大人近视的因，孩子的近视不能够成为大人近视的因，因此最后得到的因果关系是：     以上，我们知道，通过数据分布P得到的d-separations的状况，可以让我们得到一组Markov Equivalence的因果图，那么接下来一个显而易见的问题是，如何区分Markov Equivalence的因果图。如上例，我们怎么知道X，Y，Z之间的因果关系是X-&gt;Z-&gt;Y，或是X-&gt;Z-&gt;Y，或是X&lt;-Z-&gt;Y，显然，在同一个现实场景中，这三种因果关系不可能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？除了像上例一样依靠常识来排除，还有其他可行的方法吗？ 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理 上上篇：MIT因果迷你课笔记 —— 相关和因果 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html [3] https://plato.stanford.edu/entries/physics-Rpcc/ [4] Judea Pearl and Dana Mackenzie, The Book of Why, 2018" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-07-14T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"上上篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理     在这门课中，因果模型的形成主要包含因果关系的学习和发现(causal learning/discovery)，还有因果关系的推理(causal reasoning)。     课程里先说的是因果关系的推理，即有了因果模型，去推导结果或者干预后的状况。接下来说因果关系的发现。     因果关系的发现内容复杂，逻辑绕，可能会分两到三篇来说，这里是第一篇。     因果关系的发现，即从数据中发现因果关系，那么怎么从数据中归纳因果关系？         首先来了解一些基本概念。     RCCP **(Reichenbach’s Common Cause Principle), 是Hans Reichenbach死后出版的一本未完成的书《The Direction of Time**》中提出的概念。假设我们现在有两个事件，A和B，如果p(A∩B)&gt;p(A)p(B)说明事件A和B不相互独立，即两个事件相关，那么相关和因果是什么关系呢？Reichenbach’s Common Cause Principle (RCCP) 认为如果p(A∩B)&gt;p(A)p(B)，且A不是B的因，B也不是A的因，那么A，B应该有共同的因。     概念定义如下：     A、B是两个事件，如果：       遵循RCCP原理，则A是B的因，或者B是A的因，或者A，B有共同的因，在第三种情况下，如果共同因事件是C，那么A和B则是有条件的独立：     RCCP的概念还有很多可追究的地方，推荐斯坦福的一篇文章，这篇文章甚至还描述了RCCP在量子力学中的地位，有机会可以专门开个坑说一下这些概念，https://plato.stanford.edu/entries/physics-Rpcc/。     接下来说一下图的定义：     图由点和边构成，图可以是有向图和无向图，这个课程里的图基本都是有向图，在图形上的表现就是边是有箭头的，有指向的。v-structure是说，比如X2和X3均指向X1，但是X2和X3之间却没有直接的关联，这种结构就被称之为immorality。     d-separation, 一个和图还有RCCP相关的非常重要的概念，因为相对复杂，所以专门写了一篇**D-separation，d-connection**，一定要先看这篇。     Causal Markov Condition 有很多种定义方式，基于d-separation的定义方式如下：     换种写法如下，P是变量的分布情况（distribution），w.r.t. (with respect to) G表示这组变量之间的因果关系是按G图表示的那样：     我们认为分布P是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj |S。在这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。     我们回想一下RCCP的概念，则不难得出，马可夫状态是RCCP的一般化的形式。另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。     假设现在你获得了一批数据，你可以很容易得到各个变量的分布，即P，换言而之，你可以很轻松地知道Xi⊥Xj |S是否成立，现在你想通过分布推导出因果关系，那么可以用前面的Causal Markov Condition吗？明显不行，因为箭头是单向的，可以由d-separation推导出分布，但不能根据上面的定理推导出d-separation。     为了可以反过来推导，我们定义了一个假设：     faithfulness assumption，这个概念和马可夫是一个对应的概念，注意下面推理的箭头，和马可夫概念中推理的箭头是反方向。这个假设使我们可以通过分布来推导因果关系。如果可以反过来推，我们认为P faithful。     现在我们来做几道题，辅助理解一下上面的两个概念，我们假设P是markov且faithful w.r.t. G，现在P有如下几种状况，请分别推导出对应的因果图G：     （i）X⊥Z **(vars: **X, Y,Z)     （ii）X⊥Y|Z **(vars: **X, Y,Z)     （iii）X⊥Y，X⊥W|Z **，Y⊥W|Z ，X⊥W|Z, **Y，Y⊥W|Z, **X **(vars:X,Y,W, Z)     以上三种情况对应的G可以是（一种d-separation的状况可以匹配多个因果图）：     （i）X-&gt;Y&lt;-**Z **       （ii）X-&gt;Z-&gt;Y；X&lt;-Z&lt;-Y；X&lt;-Z-&gt;Y。     （iii）(X-&gt;Z)&amp;(Y-&gt;Z-&gt;W)     要得到因果图，从P中，首先找出所有的独立关系，和相对独立的关系，再根据Markov和Faithfulness的假设得到因果关系。     通过以上的例子，我们发现，一种d-separations的情况可以得到不同的因果图： 我们称这些由同样的d-separations的状况得到的因果图为Markov Equivalence的，反过来说就是，     Def：如果两个因果图能得到同样的d-separations，则称这两个图为Markov Equivalence的，是基于马可夫等价的。     再来看由此得到的一个命题：     Prop：(Verma &amp; Pearl)因果关系图G，H是Markov Equivalence &lt;=&gt; G和H有相同的骨架，和v-structrues。     可以对照上面三个案例来验证一下这个命题。     有P对于某个G不是faithful的案例吗？当然是有的，如果G是这样的：     那么，Y =2X - Z + Ny = 2X - 2X - Nz+ Ny = Ny  - Nz，所以X⊥Y，但是却并不能得到X和Y被一个空集d-separated的结果。简而言之，faithfulness的假设将这个世界的状况简化了，真实世界的数据是十分复杂的。     接下来，我们来回顾我们之前见过的一个案例：     案例：夜间照明和小孩患近视的因果关系     由统计数据可以知道，为孩子提供夜间照明和小孩患近视这两件事情是相关的。根据RCCP原理，要么这两件事存在因果关系，要么它们有共同的因。而通过调查得到一个d-separation，night light ⊥ child myopia | parent myopia，即night light (NL)和child myopia (CM)可以被parent myopia (PM) d-separated。所以，根据faithfulness的假设，这三件事之间的关系可能是：     (i) NL-&gt;PM-&gt;CM     (ii) CM-&gt;PM-&gt;NL     (iii) CM&lt;-PM-&gt;NL     由于(i)和(ii)可以用常识来否定，给孩子的夜间照明不能够成为大人近视的因，孩子的近视不能够成为大人近视的因，因此最后得到的因果关系是：     以上，我们知道，通过数据分布P得到的d-separations的状况，可以让我们得到一组Markov Equivalence的因果图，那么接下来一个显而易见的问题是，如何区分Markov Equivalence的因果图。如上例，我们怎么知道X，Y，Z之间的因果关系是X-&gt;Z-&gt;Y，或是X-&gt;Z-&gt;Y，或是X&lt;-Z-&gt;Y，显然，在同一个现实场景中，这三种因果关系不可能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？除了像上例一样依靠常识来排除，还有其他可行的方法吗？ 上篇：MIT因果迷你课笔记 —— 因果语言和因果推理 上上篇：MIT因果迷你课笔记 —— 相关和因果 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html [3] https://plato.stanford.edu/entries/physics-Rpcc/ [4] Judea Pearl and Dana Mackenzie, The Book of Why, 2018","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/2.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 发现因果关系1","dateModified":"2020-07-14T00:00:00+08:00","datePublished":"2020-07-14T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 发现因果关系1</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-07-14">14 Jul 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 发现因果关系1/2.png" alt="MIT因果迷你课笔记 —— 发现因果关系1">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>上上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483914&amp;idx=1&amp;sn=c07e3a981db1c11b53dd134567f2d846&amp;chksm=c06760c8f710e9deba24bf813f67f91eccd7824de42b3912147f1644c44211245edf6d16a21f&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 因果语言和因果推理</strong></a></p>
+
+<p>    在这门课中，因果模型的形成主要包含因果关系的学习和发现(causal learning/discovery)，还有因果关系的推理(causal reasoning)。</p>
+
+<p>    课程里先说的是因果关系的推理，即有了因果模型，去推导结果或者干预后的状况。接下来说因果关系的发现。</p>
+
+<p>    因果关系的发现内容复杂，逻辑绕，可能会分两到三篇来说，这里是第一篇。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/1.jpeg" style="zoom:80%;" /></p>
+
+<p>    因果关系的发现，即从数据中发现因果关系，那么怎么从数据中归纳因果关系？</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/2.png" style="zoom:80%;" /></p>
+
+<p>   </p>
+
+<p>    首先来了解一些基本概念。</p>
+
+<p>    <strong>RCCP **(</strong>Reichenbach’s Common Cause Principle<strong>), 是Hans
+Reichenbach死后出版的一本未完成的书《</strong>The Direction of Time**》中提出的概念。假设我们现在有两个事件，A和B，如果p(A∩B)&gt;p(A)p(B)说明事件A和B不相互独立，即两个事件相关，那么相关和因果是什么关系呢？Reichenbach’s Common Cause Principle (RCCP) 认为如果p(A∩B)&gt;p(A)p(B)，且A不是B的因，B也不是A的因，那么A，B应该有共同的因。</p>
+
+<p>    概念定义如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/3.png" style="zoom:80%;" /></p>
+
+<p>    A、B是两个事件，如果： </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/4.png" style="zoom:50%;" /></p>
+
+<p>     遵循RCCP原理，则A是B的因，或者B是A的因，或者A，B有共同的因，在第三种情况下，如果共同因事件是C，那么A和B则是有条件的独立：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/5.png" style="zoom:50%;" /></p>
+
+<p>    RCCP的概念还有很多可追究的地方，推荐斯坦福的一篇文章，这篇文章甚至还描述了RCCP在量子力学中的地位，有机会可以专门开个坑说一下这些概念，https://plato.stanford.edu/entries/physics-Rpcc/。</p>
+
+<p>    接下来说一下图的定义：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/6.png" style="zoom:80%;" /></p>
+
+<p>    图由点和边构成，图可以是有向图和无向图，这个课程里的图基本都是有向图，在图形上的表现就是边是有箭头的，有指向的。<strong>v-structure</strong>是说，比如X2和X3均指向X1，但是X2和X3之间却没有直接的关联，这种结构就被称之为<strong>immorality</strong>。</p>
+
+<p>    <strong>d-separation</strong>, 一个和图还有RCCP相关的非常重要的概念，因为相对复杂，所以专门写了一篇<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483768&amp;idx=1&amp;sn=0c644dc2a813a31142ce36cf4d128742&amp;chksm=c06763baf710eaac618abb98d70fb4de1a621d8cfad25783fdb58ea970c1de1a3bf9700008f1&amp;scene=21#wechat_redirect"><strong>**D-separation，d-connection</strong>**</a>，一定要先看这篇。</p>
+
+<p>    <strong>Causal Markov Condition</strong> 有很多种定义方式，基于d-separation的定义方式如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/7.png" style="zoom: 67%;" /></p>
+
+<p>    换种写法如下，<strong>P</strong>是变量的分布情况（distribution），w.r.t. (with respect to) <strong>G</strong>表示这组变量之间的因果关系是按<strong>G</strong>图表示的那样：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/8.png" style="zoom:67%;" /></p>
+
+<p>    我们认为分布<strong>P</strong>是Markov的，如果<strong>Xi</strong>和<strong>Xj</strong>在图<strong>G</strong>中被<strong>S</strong> d-separated能推导出<strong>Xi</strong>⊥<strong>Xj</strong> |<strong>S</strong>。在这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。</p>
+
+<p>    我们回想一下RCCP的概念，则不难得出，马可夫状态是RCCP的一般化的形式。另外，马可夫状态还有其他两种定义方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/9.png" style="zoom: 50%;" /></p>
+
+<p>    其中Y是一组变量的集合，PA(<strong>X</strong>)指<strong>X</strong>的所有的父变量的集合，ND(<strong>X</strong>)指除了<strong>X</strong>变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/10.png" style="zoom: 67%;" /></p>
+
+<p>    这几种定义方式是等价的。</p>
+
+<p>    假设现在你获得了一批数据，你可以很容易得到各个变量的分布，即<strong>P</strong>，换言而之，你可以很轻松地知道<strong>Xi</strong>⊥<strong>Xj</strong> |<strong>S</strong>是否成立，现在你想通过分布推导出因果关系，那么可以用前面的<strong>Causal Markov Condition</strong>吗？明显不行，因为箭头是单向的，可以由<strong>d-separation</strong>推导出分布，但不能根据上面的定理推导出<strong>d-separation</strong>。</p>
+
+<p>    为了可以反过来推导，我们定义了一个假设：</p>
+
+<p>    <strong>faithfulness assumption</strong>，这个概念和马可夫是一个对应的概念，注意下面推理的箭头，和马可夫概念中推理的箭头是反方向。这个假设使我们可以通过分布来推导因果关系。如果可以反过来推，我们认为<strong>P</strong> faithful。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/11.png" style="zoom:67%;" /></p>
+
+<p>    现在我们来做几道题，辅助理解一下上面的两个概念，我们假设<strong>P</strong>是markov且faithful w.r.t. <strong>G</strong>，现在P有如下几种状况，请分别推导出对应的因果图G：</p>
+
+<p>    （i）<strong>X</strong>⊥<strong>Z **(vars: **X</strong>, <strong>Y</strong>,<strong>Z</strong>)</p>
+
+<p>    （ii）<strong>X</strong>⊥<strong>Y</strong>|<strong>Z **(vars: **X</strong>, <strong>Y</strong>,<strong>Z</strong>)</p>
+
+<p>    （iii）<strong>X</strong>⊥<strong>Y</strong>，<strong>X</strong>⊥<strong>W</strong>|<strong>Z **，</strong>Y<strong>⊥</strong>W<strong>|</strong>Z <strong>，</strong>X<strong>⊥</strong>W<strong>|</strong>Z<strong>, **Y</strong>，<strong>Y</strong>⊥<strong>W</strong>|<strong>Z</strong>, **X **(vars:X,Y,W, Z)</p>
+
+<p>    以上三种情况对应的<strong>G</strong>可以是（一种d-separation的状况可以匹配多个因果图）：</p>
+
+<p>    （i）<strong>X</strong>-&gt;<strong>Y</strong>&lt;-**Z **  </p>
+
+<p>    （ii）<strong>X</strong>-&gt;<strong>Z</strong>-&gt;<strong>Y</strong>；<strong>X</strong>&lt;-<strong>Z</strong>&lt;-<strong>Y</strong>；<strong>X</strong>&lt;-<strong>Z</strong>-&gt;<strong>Y</strong>。</p>
+
+<p>    （iii）(<strong>X</strong>-&gt;<strong>Z</strong>)&amp;(<strong>Y</strong>-&gt;<strong>Z</strong>-&gt;<strong>W</strong>)</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/12.png" style="zoom:67%;" /></p>
+
+<p>    要得到因果图，从<strong>P</strong>中，首先找出所有的独立关系，和相对独立的关系，再根据Markov和Faithfulness的假设得到因果关系。</p>
+
+<p>    通过以上的例子，我们发现，一种d-separations的情况可以得到不同的因果图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/13.png" style="zoom:67%;" /></p>
+
+<p>我们称这些由同样的d-separations的状况得到的因果图为<strong>Markov Equivalence</strong>的，反过来说就是，</p>
+
+<p>    <strong>Def：</strong>如果两个因果图能得到同样的d-separations，则称这两个图为<strong>Markov Equivalence</strong>的，是基于马可夫等价的。</p>
+
+<p>    再来看由此得到的一个命题：</p>
+
+<p>    <strong>Prop：</strong>(Verma &amp; Pearl)因果关系图G，H是Markov Equivalence &lt;=&gt; G和H有相同的骨架，和v-structrues。</p>
+
+<p>    可以对照上面三个案例来验证一下这个命题。</p>
+
+<p>    有<strong>P</strong>对于某个<strong>G</strong>不是faithful的案例吗？当然是有的，如果<strong>G</strong>是这样的：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/14.png" style="zoom:67%;" /></p>
+
+<p>    那么，<strong>Y =2X - Z + Ny = 2X - 2X - Nz+ Ny = Ny  - Nz</strong>，所以<strong>X</strong>⊥<strong>Y，</strong>但是却并不能得到X和Y被一个空集d-separated的结果。简而言之，faithfulness的假设将这个世界的状况简化了，真实世界的数据是十分复杂的。</p>
+
+<p>    接下来，我们来回顾我们之前见过的一个案例：</p>
+
+<p>    <strong>案例：</strong>夜间照明和小孩患近视的因果关系</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/15.png" alt="" /></p>
+
+<p>    由统计数据可以知道，为孩子提供夜间照明和小孩患近视这两件事情是相关的。根据RCCP原理，要么这两件事存在因果关系，要么它们有共同的因。而通过调查得到一个d-separation，night light ⊥ child myopia | parent myopia，即night light (NL)和child myopia (CM)可以被parent myopia (PM) d-separated。所以，根据faithfulness的假设，这三件事之间的关系可能是：</p>
+
+<p>    (i) NL-&gt;PM-&gt;CM</p>
+
+<p>    (ii) CM-&gt;PM-&gt;NL</p>
+
+<p>    (iii) CM&lt;-PM-&gt;NL</p>
+
+<p>    由于(i)和(ii)可以用常识来否定，给孩子的夜间照明不能够成为大人近视的因，孩子的近视不能够成为大人近视的因，因此最后得到的因果关系是：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系1/16.png" alt="" /></p>
+
+<p>    以上，我们知道，通过数据分布<strong>P</strong>得到的d-separations的状况，可以让我们得到一组Markov Equivalence的因果图，那么接下来一个显而易见的问题是，如何区分Markov Equivalence的因果图。如上例，我们怎么知道<strong>X</strong>，<strong>Y</strong>，<strong>Z</strong>之间的因果关系是<strong>X</strong>-&gt;<strong>Z</strong>-&gt;<strong>Y</strong>，或是<strong>X</strong>-&gt;<strong>Z</strong>-&gt;<strong>Y</strong>，或是<strong>X</strong>&lt;-<strong>Z</strong>-&gt;<strong>Y</strong>，显然，在同一个现实场景中，这三种因果关系不可能同时成立。那么究竟是哪一个呢？如何才能知道是哪一个呢？除了像上例一样依靠常识来排除，还有其他可行的方法吗？</p>
+
+<p><strong>上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483914&amp;idx=1&amp;sn=c07e3a981db1c11b53dd134567f2d846&amp;chksm=c06760c8f710e9deba24bf813f67f91eccd7824de42b3912147f1644c44211245edf6d16a21f&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 因果语言和因果推理</strong></a></p>
+
+<p><strong>上上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] https://www.andrew.cmu.edu/user/scheines/tutor/d-sep.html</p>
+
+<p>[3] https://plato.stanford.edu/entries/physics-Rpcc/</p>
+
+<p>[4] Judea Pearl and Dana Mackenzie, <strong>The Book of Why</strong>, 2018</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 发现因果关系1&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB1/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

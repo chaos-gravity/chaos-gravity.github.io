@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    想系统学一下NLP，所以再开个新坑，如果有天我累死了，一定不要奇怪，都是自找的     一不小心写得小作文了，文章里不会所有概念都仔细说，但尽量会给参考链接，会对视频课程做一些延申。     给你们翻译一下这张图：     A：好吧，我可以不在乎！     B：我觉得你在说，你无法不在乎， 你说你可以不在乎，表示你至少是有一点在乎的。     A：我不知道。     A：我们是在虚空中漂流的复杂得难以置信的大脑，在一片黑暗中盲目地抛出文字，徒劳地想要通过这种方式和别人产生联系。（有没有觉得有点莎士比亚）     A：每一个关于措辞，拼写，语气，时间的选择都包含了无尽的信号，意义，和潜台词。而每个人都会用自己的方式来理解。语言不是一个规范的系统，语言是瑰丽又混沌的。     A：你永远无法明确知道任何一段文字对任何一个人的真正意义。     A：你可以做的，是尝试更好的揣测自己的语言会对别人造成的影响，那样，你才能能组词措句让他们感受到你想让他们感受的。其他都是毫无意义的。     A：我想，你告诉我你怎么理解我的话，是想让我觉得不那么孤单。如果是这样，感谢你。这对我来说意义非凡。     A：但如果你只是在用一些心理学的技巧在分析我说的话，来显示你知道很多。     A：那我想我不必在意。     这幅图是教授用来开题的，语言中带有很多不确定性，甚至说话的人都有可能受潜意识驱动，并不清楚自己真正想要表达的，而我们每个人对每句话可能都有不同的理解，语言是个瑰丽，混沌，模糊的系统，是一抹精致的灰。而不是逻辑严密，规整清晰的。《小王子》里也有一句很类似的话：”…..你先坐在草地上，离我稍微远些，就像这样。我从眼角里瞅着你，你什么也不要说。话语是误解的根源。但是，每天，你都可以坐得离我稍微近一些……”     在这里延申一个概念，图灵测试，图灵测试是英国计算机科学家图灵于1950年提出的，注意到“智能”这一概念难以确切定义，他提出了著名的图灵测试：如果一台机器能够与人类展开对话（通过电传设备）而不被辨别出其机器身份，那么称这台机器具有智能。因此，我们也可以这样理解图灵测试，它定义“智能”为掌握了语言，包括理解和应用。     要理解语言，首先我们要学字，词，计算机也一样。对于我们而言，每个单词，每个字都是有意思的，那么计算机要怎么也能让每个字在它那里有个意思呢？换句话说，我们要怎么将每个词的意思转换成计算机能读的形态。这样说可能还是觉得模糊，我们来看看一些已经有的一些解决方案来理解一下：     1. WordNet     WordNet的使用方法和一些基本概念可以参考[2]，这里简单说一下他的基本概念，英文中一个单词可以有很多词性，比如一个单词，可以是名词（noun），形容词（adj），副词（adv），动词（verb）。WordNet用下面这种结构来表达词义：     比如说dog既可以做名词用，又可以做动词用，那么dog就会被分为名词和动词两类，而这两类里又有不同的词义，dog做名词用时，可以有不同的涵义，而每个含义我们都给它一个符号表示。所以一个单词的一种具体含义就用“单词.词性.词义序号”这种方式来表达，比如：dog.n.01表示dog作为名词时的一种含义。下面这段代码就不难理解了：       from nltk.corpus import wordnet as wn #将所有词性缩写映射到词性名词上。 poses = { &#39;n&#39;:&#39;noun&#39;, &#39;v&#39;:&#39;verb&#39;, &#39;s&#39;:&#39;adj (s)&#39;, &#39;a&#39;:&#39;adj&#39;, &#39;r&#39;:&#39;adv&#39;} #找出good这个词的每个词义  for synset in wn.synsets(&quot;good&quot;): #打印出每个有这个词义的单词 print(&quot;{}: {}&quot;.format(poses[synset.pos()],&quot;, &quot;.join([l.name() for l in synset.lemmas()]))) 运行发现，good可以有很多种含义，而大多数含义不是只有good才有，大多数含义都可以用其他单词表达： 再看一个WordNet的例子： from nltk.corpus import wordnet as wn #panda可以有两种意思，一种是giant_panda.n.01指大熊猫 #一种是lesser_panda.n.01指小熊猫， #panda.n.01和giant_panda.n.01是一个意思 #这里panda得到的是giant_panda.n.01这个值 panda = wn.synset(&quot;panda.n.01&quot;) #求上位词，比如panda.n.01的上位词是procyonid.n.01 hyper = lambda s: s.hypernyms() #循环找自己的上位词  list(panda.closure(hyper)) panda = wn.synset(&quot;panda.n.01&quot;) 得到的结果如下，可以打印出大熊猫一层一层往上所属的类，可以发现WordNet是树状的，知识性的，明确的，规整的：  那理解了WordNet整理语言的方式，那么我们来看一下它的缺点： 我们开始提过，语言是混沌的，模糊的，不是规范的，规整的，但是WordNet的这种组织方式，非常规整，导致它并不能展现词与词之间的微妙差别，比如在WordNet里proficient和good可以表达同样的意思，但如果是同样的场景和上下文，用proficient和good其实是有细微差别的，而WordNet是无法表现这种差别的。 另外就是，这种结构是人为规范的，需要人的介入，时时更新，整理出新的词和词义。 因为是人整理的，所以这种结构是主观的，是出于人对语言的理解。 需要人力。 无法计算词与词之间的相似性，或者差别。 有这么多缺陷，所以啊，得想个新法子，我们看下一个。     2. One-Hot         每个单词都用一个向量来表示，每个单词在向量里都有一个专属的位置，比如说at这个单词，那么就用[0,0,1,0,…,0]这个向量来表示，即第三个位置表示at，所以第三个位置值为1，其他位置的值都是0，之所以这个方法名字叫one-hot，就是因为向量里只有一个位置的值是1，其他位置的值都为0。     但这个方法的缺陷也尤为明显： 单词量还是挺大的，比如如果我们有10000个单词，那就得用10000个长度为10000的向量来表示这个系统。而且大多数位置还是0，特别稀疏，非常浪费。 另外，就是所有的向量在数学层面来说都是正交的，这样的方式无法表达词的意思，也无法计算词与词之间的相似度。     3. Word2Vec     “You shall know a word by the company it keeps” (J. R. Firth 1957: 11)     中国有句古话，物以类聚，人以群分，上面这句话的意思就是，你想知道一个词是什么意思吗？那看看出现在它周边的单词就知道了。这个想法是1957年由一个语言学家提出来的。     根据这个想法，产生的一个概念叫分布语义： Distributional semantics: A word’s meaning is given by the words that frequently appear close-by. 一个词的意思是由周边经常出现的词决定的。 比如我们要表示banking这个词，我们就用围绕着banking的上下文，前前后后出现的单词来表示。     这个想法似乎有点古怪，不太能想通，也显得不太可靠，应该不管用吧，但事实是按照这个想法设计的算法，产生的词义，能很好的表达单词的意思。超乎预料的管用。     我们先不管算法，看看最后的结果可以是怎么样的： 比如banking这个词，就可以是一个长度为8的向量（这个长度可以根据单词量，样本量和精确度需求来决定，这里只是举个例子），每个维度应当都表达了一层意思，但这个意思不是人为去定义的，而在每个维度上的值就组成了banking的整体意思。     我们可以把一个向量想象成一个高维度的空间里的一个位置，比如说一个二维的向量，就可以表示一个平面上的点，一个三维的向量，则可以表示我们生活的这个三维空间里的一个点，一个四维的向量，立体空间再加上时间这个维度就是四维的。那么如果我们用一个长度为8的向量去表示一个词，则可以理解成，在一个高维度（八维）的空间里，banking这个词有个位置，它所在的位置即是它的意思。而在这个八个维度的空间里，每个在训练样本里的单词，都会有一个位置。比如像下图一样：     上面只是一个意思意思的示意图，因为超过两维的，咱画不出来。     Word2Vec就是运用这个概念的算法，那我们来看算法具体的思路： 翻译如下： 我们有一个语料库，里面有很多文章或者对话，总之是语言。- 每个单词我们都用一个向量来表示（实际算法一般是两个向量，一个中心词向量，一个周边词向量），每个单词的向量维度是一致的，刚开始的时候，向量里的值是随机赋予的随机数。 遍历每篇文章里的每个位置，经过那个位置的时候，在那个位置上的词为中心词c，周边的词是o。 利用c和o的相似度来计算给出c能得到o的概率，即c发生的条件下，o发生的概率P(o|c)，或者反过来P(c|o)也行。 调整词向量里的值来提高P(o|c)或P(c|o)。 循环重复之前的三个步骤，直到P(o|c)或者P(c|o)无法再提高。 举个例子如下图： 比如中心词为‘into’的时候，而临近词的区域设定为2的时候，就需要计算当into出现时，那些在区间内出现的词会出现概率。 计算完后，再以下一个单词为中心词，重复上面的过程。  条件概率的计算是一个softmax的方程（具体可以看Softmax）： vc是中心词向量，uo是周边词向量，V是所有单词的集合，uw是V中的单词。 这个问题的极大似然函数： 𝜃指所有可以调整的参数，这个任务里指所有词向量里的所有值，这里每个词有两个词向量，一个u（作周边词的时候用），一个v（作中心词的时候用）： T指所有位置的集合，经过一个位置时，位置上的词为中心词wt，周边的词为wt+j，m限制了周边词的范围，L(𝜃)求的是在参数为𝜃的情况下，遍历所有的文本位置，求每个中心词和周边词的条件概率，再把它们乘起来。得到的条件概率越大，L(𝜃)越大。而我们要做的是调整𝜃的值，使得L(𝜃)获得最大值。 损失函数的定义： 将最大似然函数调整一下，就可以得到通常会用的损失函数，最小化J(𝜃)和最大化L(𝜃)本质上是在做同一件事。 那如何根据损失函数来调整𝜃呢，求导，做梯度下降： 上面的公式是示意公式，实际上是对单个参数分别求导，做梯度下降： 过程如下图所示： 每次对𝜃做细微的调整，直到𝜃接近自己的最优值，即可以使L(𝜃)最小的值。上图中Cost即L(𝜃)。关于梯度下降的具体操作和方法细节，之后的笔记会做介绍。 最后我们来看看，怎么用别人训练好的Word2Vec做一些事情： import numpy as np # Get the interactive Tools for Matplotlib %matplotlib notebook import matplotlib.pyplot as plt plt.style.use(&#39;ggplot&#39;) from sklearn.decomposition import PCA from gensim.test.utils import datapath, get_tmpfile from gensim.models import KeyedVectors from gensim.scripts.glove2word2vec import glove2word2vec gensim是一个工具包，可以让我们导入训练好的模型参数，斯坦福有一个GloVe项目（https://nlp.stanford.edu/projects/glove/），在里面可以下载训练好的词向量： #将下载的词向量文件放在合适的目录，并读入 glove_file = datapath(&#39;D:/glove.6B.100d.txt&#39;) word2vec_glove_file = get_tmpfile(&quot;glove.6B.100d.word2vec.txt&quot;) glove2word2vec(glove_file, word2vec_glove_file) model = KeyedVectors.load_word2vec_format(word2vec_glove_file) 接下来，我们就可以做一些事情了，比如找近义词： &gt;&gt;model.most_similar(&#39;obama&#39;) [(&#39;barack&#39;, 0.937216579914093), (&#39;bush&#39;, 0.927285373210907), (&#39;clinton&#39;, 0.896000325679779), (&#39;mccain&#39;, 0.8875633478164673), (&#39;gore&#39;, 0.8000321388244629), (&#39;hillary&#39;, 0.7933662533760071), (&#39;dole&#39;, 0.7851964831352234), (&#39;rodham&#39;, 0.7518897652626038), (&#39;romney&#39;, 0.7488929629325867), (&#39;kerry&#39;, 0.7472624182701111)] 比如找反义词： &gt;&gt;model.most_similar(negative=&#39;banana&#39;) [(&#39;shunichi&#39;, 0.49618104100227356), (&#39;ieronymos&#39;, 0.4736502170562744), (&#39;pengrowth&#39;, 0.4668096601963043), (&#39;höss&#39;, 0.4636845588684082), (&#39;damaskinos&#39;, 0.4617849290370941), (&#39;yadin&#39;, 0.4617374837398529), (&#39;hundertwasser&#39;, 0.4588957726955414), (&#39;ncpa&#39;, 0.4577339291572571), (&#39;maccormac&#39;, 0.4566109776496887), (&#39;rothfeld&#39;, 0.4523947238922119)] 比如找对应的词： # king-woman 近似于 queen-man  &gt;&gt;model.most_similar(positive=[&#39;woman&#39;, &#39;king&#39;], negative=[&#39;man&#39;])[0] (&#39;queen&#39;, 0.7698540687561035) &gt;&gt;model.most_similar(positive=[&#39;australia&#39;, &#39;japanese&#39;], negative=[&#39;japan&#39;])[0] (&#39;australian&#39;, 0.8923497796058655) &gt;&gt;model.most_similar(positive=[&#39;france&#39;, &#39;beer&#39;], negative=[&#39;australia&#39;])[0] (&#39;champagne&#39;, 0.6480063796043396) &gt;&gt;model.most_similar(positive=[&#39;reagan&#39;, &#39;clinton&#39;], negative=[&#39;obama&#39;])[0] (&#39;nixon&#39;, 0.7844685316085815) &gt;&gt;model.most_similar(positive=[&#39;bad&#39;, &#39;fantastic&#39;], negative=[&#39;good&#39;])[0] (&#39;terrible&#39;, 0.7074226140975952) # 找出非我族类 &gt;&gt;model.doesnt_match(&quot;breakfast cereal dinner lunch&quot;.split()) &#39;cereal&#39; 可以看出来，Word2Vec使每个词都有了一个可以让计算机计算的独一无二的意思。而这个意思是非常非常接近人的理解的。而数值的复杂性和不可解释性也恰恰符合了语言混沌的特点。     那么这到底是不是最优解呢？我想这还需要时间来回答。但很显然，现在自然语言处理离强人工智能还有很远的距离。但毫无疑问，对于这个答案的探索，对人类本身的意义也是非常的。     第一课笔记结束啦，觉得有用就关注吧，右下角的‘在看’不要忘记点哦。  参考： [1] http://web.stanford.edu/class/cs224n/ [2] TinaSmile，手把手教你NLTK WordNet使用方法，IT人，https://iter01.com/521234.html" />
+<meta property="og:description" content="    想系统学一下NLP，所以再开个新坑，如果有天我累死了，一定不要奇怪，都是自找的     一不小心写得小作文了，文章里不会所有概念都仔细说，但尽量会给参考链接，会对视频课程做一些延申。     给你们翻译一下这张图：     A：好吧，我可以不在乎！     B：我觉得你在说，你无法不在乎， 你说你可以不在乎，表示你至少是有一点在乎的。     A：我不知道。     A：我们是在虚空中漂流的复杂得难以置信的大脑，在一片黑暗中盲目地抛出文字，徒劳地想要通过这种方式和别人产生联系。（有没有觉得有点莎士比亚）     A：每一个关于措辞，拼写，语气，时间的选择都包含了无尽的信号，意义，和潜台词。而每个人都会用自己的方式来理解。语言不是一个规范的系统，语言是瑰丽又混沌的。     A：你永远无法明确知道任何一段文字对任何一个人的真正意义。     A：你可以做的，是尝试更好的揣测自己的语言会对别人造成的影响，那样，你才能能组词措句让他们感受到你想让他们感受的。其他都是毫无意义的。     A：我想，你告诉我你怎么理解我的话，是想让我觉得不那么孤单。如果是这样，感谢你。这对我来说意义非凡。     A：但如果你只是在用一些心理学的技巧在分析我说的话，来显示你知道很多。     A：那我想我不必在意。     这幅图是教授用来开题的，语言中带有很多不确定性，甚至说话的人都有可能受潜意识驱动，并不清楚自己真正想要表达的，而我们每个人对每句话可能都有不同的理解，语言是个瑰丽，混沌，模糊的系统，是一抹精致的灰。而不是逻辑严密，规整清晰的。《小王子》里也有一句很类似的话：”…..你先坐在草地上，离我稍微远些，就像这样。我从眼角里瞅着你，你什么也不要说。话语是误解的根源。但是，每天，你都可以坐得离我稍微近一些……”     在这里延申一个概念，图灵测试，图灵测试是英国计算机科学家图灵于1950年提出的，注意到“智能”这一概念难以确切定义，他提出了著名的图灵测试：如果一台机器能够与人类展开对话（通过电传设备）而不被辨别出其机器身份，那么称这台机器具有智能。因此，我们也可以这样理解图灵测试，它定义“智能”为掌握了语言，包括理解和应用。     要理解语言，首先我们要学字，词，计算机也一样。对于我们而言，每个单词，每个字都是有意思的，那么计算机要怎么也能让每个字在它那里有个意思呢？换句话说，我们要怎么将每个词的意思转换成计算机能读的形态。这样说可能还是觉得模糊，我们来看看一些已经有的一些解决方案来理解一下：     1. WordNet     WordNet的使用方法和一些基本概念可以参考[2]，这里简单说一下他的基本概念，英文中一个单词可以有很多词性，比如一个单词，可以是名词（noun），形容词（adj），副词（adv），动词（verb）。WordNet用下面这种结构来表达词义：     比如说dog既可以做名词用，又可以做动词用，那么dog就会被分为名词和动词两类，而这两类里又有不同的词义，dog做名词用时，可以有不同的涵义，而每个含义我们都给它一个符号表示。所以一个单词的一种具体含义就用“单词.词性.词义序号”这种方式来表达，比如：dog.n.01表示dog作为名词时的一种含义。下面这段代码就不难理解了：       from nltk.corpus import wordnet as wn #将所有词性缩写映射到词性名词上。 poses = { &#39;n&#39;:&#39;noun&#39;, &#39;v&#39;:&#39;verb&#39;, &#39;s&#39;:&#39;adj (s)&#39;, &#39;a&#39;:&#39;adj&#39;, &#39;r&#39;:&#39;adv&#39;} #找出good这个词的每个词义  for synset in wn.synsets(&quot;good&quot;): #打印出每个有这个词义的单词 print(&quot;{}: {}&quot;.format(poses[synset.pos()],&quot;, &quot;.join([l.name() for l in synset.lemmas()]))) 运行发现，good可以有很多种含义，而大多数含义不是只有good才有，大多数含义都可以用其他单词表达： 再看一个WordNet的例子： from nltk.corpus import wordnet as wn #panda可以有两种意思，一种是giant_panda.n.01指大熊猫 #一种是lesser_panda.n.01指小熊猫， #panda.n.01和giant_panda.n.01是一个意思 #这里panda得到的是giant_panda.n.01这个值 panda = wn.synset(&quot;panda.n.01&quot;) #求上位词，比如panda.n.01的上位词是procyonid.n.01 hyper = lambda s: s.hypernyms() #循环找自己的上位词  list(panda.closure(hyper)) panda = wn.synset(&quot;panda.n.01&quot;) 得到的结果如下，可以打印出大熊猫一层一层往上所属的类，可以发现WordNet是树状的，知识性的，明确的，规整的：  那理解了WordNet整理语言的方式，那么我们来看一下它的缺点： 我们开始提过，语言是混沌的，模糊的，不是规范的，规整的，但是WordNet的这种组织方式，非常规整，导致它并不能展现词与词之间的微妙差别，比如在WordNet里proficient和good可以表达同样的意思，但如果是同样的场景和上下文，用proficient和good其实是有细微差别的，而WordNet是无法表现这种差别的。 另外就是，这种结构是人为规范的，需要人的介入，时时更新，整理出新的词和词义。 因为是人整理的，所以这种结构是主观的，是出于人对语言的理解。 需要人力。 无法计算词与词之间的相似性，或者差别。 有这么多缺陷，所以啊，得想个新法子，我们看下一个。     2. One-Hot         每个单词都用一个向量来表示，每个单词在向量里都有一个专属的位置，比如说at这个单词，那么就用[0,0,1,0,…,0]这个向量来表示，即第三个位置表示at，所以第三个位置值为1，其他位置的值都是0，之所以这个方法名字叫one-hot，就是因为向量里只有一个位置的值是1，其他位置的值都为0。     但这个方法的缺陷也尤为明显： 单词量还是挺大的，比如如果我们有10000个单词，那就得用10000个长度为10000的向量来表示这个系统。而且大多数位置还是0，特别稀疏，非常浪费。 另外，就是所有的向量在数学层面来说都是正交的，这样的方式无法表达词的意思，也无法计算词与词之间的相似度。     3. Word2Vec     “You shall know a word by the company it keeps” (J. R. Firth 1957: 11)     中国有句古话，物以类聚，人以群分，上面这句话的意思就是，你想知道一个词是什么意思吗？那看看出现在它周边的单词就知道了。这个想法是1957年由一个语言学家提出来的。     根据这个想法，产生的一个概念叫分布语义： Distributional semantics: A word’s meaning is given by the words that frequently appear close-by. 一个词的意思是由周边经常出现的词决定的。 比如我们要表示banking这个词，我们就用围绕着banking的上下文，前前后后出现的单词来表示。     这个想法似乎有点古怪，不太能想通，也显得不太可靠，应该不管用吧，但事实是按照这个想法设计的算法，产生的词义，能很好的表达单词的意思。超乎预料的管用。     我们先不管算法，看看最后的结果可以是怎么样的： 比如banking这个词，就可以是一个长度为8的向量（这个长度可以根据单词量，样本量和精确度需求来决定，这里只是举个例子），每个维度应当都表达了一层意思，但这个意思不是人为去定义的，而在每个维度上的值就组成了banking的整体意思。     我们可以把一个向量想象成一个高维度的空间里的一个位置，比如说一个二维的向量，就可以表示一个平面上的点，一个三维的向量，则可以表示我们生活的这个三维空间里的一个点，一个四维的向量，立体空间再加上时间这个维度就是四维的。那么如果我们用一个长度为8的向量去表示一个词，则可以理解成，在一个高维度（八维）的空间里，banking这个词有个位置，它所在的位置即是它的意思。而在这个八个维度的空间里，每个在训练样本里的单词，都会有一个位置。比如像下图一样：     上面只是一个意思意思的示意图，因为超过两维的，咱画不出来。     Word2Vec就是运用这个概念的算法，那我们来看算法具体的思路： 翻译如下： 我们有一个语料库，里面有很多文章或者对话，总之是语言。- 每个单词我们都用一个向量来表示（实际算法一般是两个向量，一个中心词向量，一个周边词向量），每个单词的向量维度是一致的，刚开始的时候，向量里的值是随机赋予的随机数。 遍历每篇文章里的每个位置，经过那个位置的时候，在那个位置上的词为中心词c，周边的词是o。 利用c和o的相似度来计算给出c能得到o的概率，即c发生的条件下，o发生的概率P(o|c)，或者反过来P(c|o)也行。 调整词向量里的值来提高P(o|c)或P(c|o)。 循环重复之前的三个步骤，直到P(o|c)或者P(c|o)无法再提高。 举个例子如下图： 比如中心词为‘into’的时候，而临近词的区域设定为2的时候，就需要计算当into出现时，那些在区间内出现的词会出现概率。 计算完后，再以下一个单词为中心词，重复上面的过程。  条件概率的计算是一个softmax的方程（具体可以看Softmax）： vc是中心词向量，uo是周边词向量，V是所有单词的集合，uw是V中的单词。 这个问题的极大似然函数： 𝜃指所有可以调整的参数，这个任务里指所有词向量里的所有值，这里每个词有两个词向量，一个u（作周边词的时候用），一个v（作中心词的时候用）： T指所有位置的集合，经过一个位置时，位置上的词为中心词wt，周边的词为wt+j，m限制了周边词的范围，L(𝜃)求的是在参数为𝜃的情况下，遍历所有的文本位置，求每个中心词和周边词的条件概率，再把它们乘起来。得到的条件概率越大，L(𝜃)越大。而我们要做的是调整𝜃的值，使得L(𝜃)获得最大值。 损失函数的定义： 将最大似然函数调整一下，就可以得到通常会用的损失函数，最小化J(𝜃)和最大化L(𝜃)本质上是在做同一件事。 那如何根据损失函数来调整𝜃呢，求导，做梯度下降： 上面的公式是示意公式，实际上是对单个参数分别求导，做梯度下降： 过程如下图所示： 每次对𝜃做细微的调整，直到𝜃接近自己的最优值，即可以使L(𝜃)最小的值。上图中Cost即L(𝜃)。关于梯度下降的具体操作和方法细节，之后的笔记会做介绍。 最后我们来看看，怎么用别人训练好的Word2Vec做一些事情： import numpy as np # Get the interactive Tools for Matplotlib %matplotlib notebook import matplotlib.pyplot as plt plt.style.use(&#39;ggplot&#39;) from sklearn.decomposition import PCA from gensim.test.utils import datapath, get_tmpfile from gensim.models import KeyedVectors from gensim.scripts.glove2word2vec import glove2word2vec gensim是一个工具包，可以让我们导入训练好的模型参数，斯坦福有一个GloVe项目（https://nlp.stanford.edu/projects/glove/），在里面可以下载训练好的词向量： #将下载的词向量文件放在合适的目录，并读入 glove_file = datapath(&#39;D:/glove.6B.100d.txt&#39;) word2vec_glove_file = get_tmpfile(&quot;glove.6B.100d.word2vec.txt&quot;) glove2word2vec(glove_file, word2vec_glove_file) model = KeyedVectors.load_word2vec_format(word2vec_glove_file) 接下来，我们就可以做一些事情了，比如找近义词： &gt;&gt;model.most_similar(&#39;obama&#39;) [(&#39;barack&#39;, 0.937216579914093), (&#39;bush&#39;, 0.927285373210907), (&#39;clinton&#39;, 0.896000325679779), (&#39;mccain&#39;, 0.8875633478164673), (&#39;gore&#39;, 0.8000321388244629), (&#39;hillary&#39;, 0.7933662533760071), (&#39;dole&#39;, 0.7851964831352234), (&#39;rodham&#39;, 0.7518897652626038), (&#39;romney&#39;, 0.7488929629325867), (&#39;kerry&#39;, 0.7472624182701111)] 比如找反义词： &gt;&gt;model.most_similar(negative=&#39;banana&#39;) [(&#39;shunichi&#39;, 0.49618104100227356), (&#39;ieronymos&#39;, 0.4736502170562744), (&#39;pengrowth&#39;, 0.4668096601963043), (&#39;höss&#39;, 0.4636845588684082), (&#39;damaskinos&#39;, 0.4617849290370941), (&#39;yadin&#39;, 0.4617374837398529), (&#39;hundertwasser&#39;, 0.4588957726955414), (&#39;ncpa&#39;, 0.4577339291572571), (&#39;maccormac&#39;, 0.4566109776496887), (&#39;rothfeld&#39;, 0.4523947238922119)] 比如找对应的词： # king-woman 近似于 queen-man  &gt;&gt;model.most_similar(positive=[&#39;woman&#39;, &#39;king&#39;], negative=[&#39;man&#39;])[0] (&#39;queen&#39;, 0.7698540687561035) &gt;&gt;model.most_similar(positive=[&#39;australia&#39;, &#39;japanese&#39;], negative=[&#39;japan&#39;])[0] (&#39;australian&#39;, 0.8923497796058655) &gt;&gt;model.most_similar(positive=[&#39;france&#39;, &#39;beer&#39;], negative=[&#39;australia&#39;])[0] (&#39;champagne&#39;, 0.6480063796043396) &gt;&gt;model.most_similar(positive=[&#39;reagan&#39;, &#39;clinton&#39;], negative=[&#39;obama&#39;])[0] (&#39;nixon&#39;, 0.7844685316085815) &gt;&gt;model.most_similar(positive=[&#39;bad&#39;, &#39;fantastic&#39;], negative=[&#39;good&#39;])[0] (&#39;terrible&#39;, 0.7074226140975952) # 找出非我族类 &gt;&gt;model.doesnt_match(&quot;breakfast cereal dinner lunch&quot;.split()) &#39;cereal&#39; 可以看出来，Word2Vec使每个词都有了一个可以让计算机计算的独一无二的意思。而这个意思是非常非常接近人的理解的。而数值的复杂性和不可解释性也恰恰符合了语言混沌的特点。     那么这到底是不是最优解呢？我想这还需要时间来回答。但很显然，现在自然语言处理离强人工智能还有很远的距离。但毫无疑问，对于这个答案的探索，对人类本身的意义也是非常的。     第一课笔记结束啦，觉得有用就关注吧，右下角的‘在看’不要忘记点哦。  参考： [1] http://web.stanford.edu/class/cs224n/ [2] TinaSmile，手把手教你NLTK WordNet使用方法，IT人，https://iter01.com/521234.html" />
+<link rel="canonical" href="http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/" />
+<meta property="og:url" content="http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Stanford%20CS224N%E7%AC%94%E8%AE%B0:%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89(Word%20Vectors%20and%20Word%20Senses)/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-09-06T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    想系统学一下NLP，所以再开个新坑，如果有天我累死了，一定不要奇怪，都是自找的     一不小心写得小作文了，文章里不会所有概念都仔细说，但尽量会给参考链接，会对视频课程做一些延申。     给你们翻译一下这张图：     A：好吧，我可以不在乎！     B：我觉得你在说，你无法不在乎， 你说你可以不在乎，表示你至少是有一点在乎的。     A：我不知道。     A：我们是在虚空中漂流的复杂得难以置信的大脑，在一片黑暗中盲目地抛出文字，徒劳地想要通过这种方式和别人产生联系。（有没有觉得有点莎士比亚）     A：每一个关于措辞，拼写，语气，时间的选择都包含了无尽的信号，意义，和潜台词。而每个人都会用自己的方式来理解。语言不是一个规范的系统，语言是瑰丽又混沌的。     A：你永远无法明确知道任何一段文字对任何一个人的真正意义。     A：你可以做的，是尝试更好的揣测自己的语言会对别人造成的影响，那样，你才能能组词措句让他们感受到你想让他们感受的。其他都是毫无意义的。     A：我想，你告诉我你怎么理解我的话，是想让我觉得不那么孤单。如果是这样，感谢你。这对我来说意义非凡。     A：但如果你只是在用一些心理学的技巧在分析我说的话，来显示你知道很多。     A：那我想我不必在意。     这幅图是教授用来开题的，语言中带有很多不确定性，甚至说话的人都有可能受潜意识驱动，并不清楚自己真正想要表达的，而我们每个人对每句话可能都有不同的理解，语言是个瑰丽，混沌，模糊的系统，是一抹精致的灰。而不是逻辑严密，规整清晰的。《小王子》里也有一句很类似的话：”…..你先坐在草地上，离我稍微远些，就像这样。我从眼角里瞅着你，你什么也不要说。话语是误解的根源。但是，每天，你都可以坐得离我稍微近一些……”     在这里延申一个概念，图灵测试，图灵测试是英国计算机科学家图灵于1950年提出的，注意到“智能”这一概念难以确切定义，他提出了著名的图灵测试：如果一台机器能够与人类展开对话（通过电传设备）而不被辨别出其机器身份，那么称这台机器具有智能。因此，我们也可以这样理解图灵测试，它定义“智能”为掌握了语言，包括理解和应用。     要理解语言，首先我们要学字，词，计算机也一样。对于我们而言，每个单词，每个字都是有意思的，那么计算机要怎么也能让每个字在它那里有个意思呢？换句话说，我们要怎么将每个词的意思转换成计算机能读的形态。这样说可能还是觉得模糊，我们来看看一些已经有的一些解决方案来理解一下：     1. WordNet     WordNet的使用方法和一些基本概念可以参考[2]，这里简单说一下他的基本概念，英文中一个单词可以有很多词性，比如一个单词，可以是名词（noun），形容词（adj），副词（adv），动词（verb）。WordNet用下面这种结构来表达词义：     比如说dog既可以做名词用，又可以做动词用，那么dog就会被分为名词和动词两类，而这两类里又有不同的词义，dog做名词用时，可以有不同的涵义，而每个含义我们都给它一个符号表示。所以一个单词的一种具体含义就用“单词.词性.词义序号”这种方式来表达，比如：dog.n.01表示dog作为名词时的一种含义。下面这段代码就不难理解了：       from nltk.corpus import wordnet as wn #将所有词性缩写映射到词性名词上。 poses = { &#39;n&#39;:&#39;noun&#39;, &#39;v&#39;:&#39;verb&#39;, &#39;s&#39;:&#39;adj (s)&#39;, &#39;a&#39;:&#39;adj&#39;, &#39;r&#39;:&#39;adv&#39;} #找出good这个词的每个词义  for synset in wn.synsets(&quot;good&quot;): #打印出每个有这个词义的单词 print(&quot;{}: {}&quot;.format(poses[synset.pos()],&quot;, &quot;.join([l.name() for l in synset.lemmas()]))) 运行发现，good可以有很多种含义，而大多数含义不是只有good才有，大多数含义都可以用其他单词表达： 再看一个WordNet的例子： from nltk.corpus import wordnet as wn #panda可以有两种意思，一种是giant_panda.n.01指大熊猫 #一种是lesser_panda.n.01指小熊猫， #panda.n.01和giant_panda.n.01是一个意思 #这里panda得到的是giant_panda.n.01这个值 panda = wn.synset(&quot;panda.n.01&quot;) #求上位词，比如panda.n.01的上位词是procyonid.n.01 hyper = lambda s: s.hypernyms() #循环找自己的上位词  list(panda.closure(hyper)) panda = wn.synset(&quot;panda.n.01&quot;) 得到的结果如下，可以打印出大熊猫一层一层往上所属的类，可以发现WordNet是树状的，知识性的，明确的，规整的：  那理解了WordNet整理语言的方式，那么我们来看一下它的缺点： 我们开始提过，语言是混沌的，模糊的，不是规范的，规整的，但是WordNet的这种组织方式，非常规整，导致它并不能展现词与词之间的微妙差别，比如在WordNet里proficient和good可以表达同样的意思，但如果是同样的场景和上下文，用proficient和good其实是有细微差别的，而WordNet是无法表现这种差别的。 另外就是，这种结构是人为规范的，需要人的介入，时时更新，整理出新的词和词义。 因为是人整理的，所以这种结构是主观的，是出于人对语言的理解。 需要人力。 无法计算词与词之间的相似性，或者差别。 有这么多缺陷，所以啊，得想个新法子，我们看下一个。     2. One-Hot         每个单词都用一个向量来表示，每个单词在向量里都有一个专属的位置，比如说at这个单词，那么就用[0,0,1,0,…,0]这个向量来表示，即第三个位置表示at，所以第三个位置值为1，其他位置的值都是0，之所以这个方法名字叫one-hot，就是因为向量里只有一个位置的值是1，其他位置的值都为0。     但这个方法的缺陷也尤为明显： 单词量还是挺大的，比如如果我们有10000个单词，那就得用10000个长度为10000的向量来表示这个系统。而且大多数位置还是0，特别稀疏，非常浪费。 另外，就是所有的向量在数学层面来说都是正交的，这样的方式无法表达词的意思，也无法计算词与词之间的相似度。     3. Word2Vec     “You shall know a word by the company it keeps” (J. R. Firth 1957: 11)     中国有句古话，物以类聚，人以群分，上面这句话的意思就是，你想知道一个词是什么意思吗？那看看出现在它周边的单词就知道了。这个想法是1957年由一个语言学家提出来的。     根据这个想法，产生的一个概念叫分布语义： Distributional semantics: A word’s meaning is given by the words that frequently appear close-by. 一个词的意思是由周边经常出现的词决定的。 比如我们要表示banking这个词，我们就用围绕着banking的上下文，前前后后出现的单词来表示。     这个想法似乎有点古怪，不太能想通，也显得不太可靠，应该不管用吧，但事实是按照这个想法设计的算法，产生的词义，能很好的表达单词的意思。超乎预料的管用。     我们先不管算法，看看最后的结果可以是怎么样的： 比如banking这个词，就可以是一个长度为8的向量（这个长度可以根据单词量，样本量和精确度需求来决定，这里只是举个例子），每个维度应当都表达了一层意思，但这个意思不是人为去定义的，而在每个维度上的值就组成了banking的整体意思。     我们可以把一个向量想象成一个高维度的空间里的一个位置，比如说一个二维的向量，就可以表示一个平面上的点，一个三维的向量，则可以表示我们生活的这个三维空间里的一个点，一个四维的向量，立体空间再加上时间这个维度就是四维的。那么如果我们用一个长度为8的向量去表示一个词，则可以理解成，在一个高维度（八维）的空间里，banking这个词有个位置，它所在的位置即是它的意思。而在这个八个维度的空间里，每个在训练样本里的单词，都会有一个位置。比如像下图一样：     上面只是一个意思意思的示意图，因为超过两维的，咱画不出来。     Word2Vec就是运用这个概念的算法，那我们来看算法具体的思路： 翻译如下： 我们有一个语料库，里面有很多文章或者对话，总之是语言。- 每个单词我们都用一个向量来表示（实际算法一般是两个向量，一个中心词向量，一个周边词向量），每个单词的向量维度是一致的，刚开始的时候，向量里的值是随机赋予的随机数。 遍历每篇文章里的每个位置，经过那个位置的时候，在那个位置上的词为中心词c，周边的词是o。 利用c和o的相似度来计算给出c能得到o的概率，即c发生的条件下，o发生的概率P(o|c)，或者反过来P(c|o)也行。 调整词向量里的值来提高P(o|c)或P(c|o)。 循环重复之前的三个步骤，直到P(o|c)或者P(c|o)无法再提高。 举个例子如下图： 比如中心词为‘into’的时候，而临近词的区域设定为2的时候，就需要计算当into出现时，那些在区间内出现的词会出现概率。 计算完后，再以下一个单词为中心词，重复上面的过程。  条件概率的计算是一个softmax的方程（具体可以看Softmax）： vc是中心词向量，uo是周边词向量，V是所有单词的集合，uw是V中的单词。 这个问题的极大似然函数： 𝜃指所有可以调整的参数，这个任务里指所有词向量里的所有值，这里每个词有两个词向量，一个u（作周边词的时候用），一个v（作中心词的时候用）： T指所有位置的集合，经过一个位置时，位置上的词为中心词wt，周边的词为wt+j，m限制了周边词的范围，L(𝜃)求的是在参数为𝜃的情况下，遍历所有的文本位置，求每个中心词和周边词的条件概率，再把它们乘起来。得到的条件概率越大，L(𝜃)越大。而我们要做的是调整𝜃的值，使得L(𝜃)获得最大值。 损失函数的定义： 将最大似然函数调整一下，就可以得到通常会用的损失函数，最小化J(𝜃)和最大化L(𝜃)本质上是在做同一件事。 那如何根据损失函数来调整𝜃呢，求导，做梯度下降： 上面的公式是示意公式，实际上是对单个参数分别求导，做梯度下降： 过程如下图所示： 每次对𝜃做细微的调整，直到𝜃接近自己的最优值，即可以使L(𝜃)最小的值。上图中Cost即L(𝜃)。关于梯度下降的具体操作和方法细节，之后的笔记会做介绍。 最后我们来看看，怎么用别人训练好的Word2Vec做一些事情： import numpy as np # Get the interactive Tools for Matplotlib %matplotlib notebook import matplotlib.pyplot as plt plt.style.use(&#39;ggplot&#39;) from sklearn.decomposition import PCA from gensim.test.utils import datapath, get_tmpfile from gensim.models import KeyedVectors from gensim.scripts.glove2word2vec import glove2word2vec gensim是一个工具包，可以让我们导入训练好的模型参数，斯坦福有一个GloVe项目（https://nlp.stanford.edu/projects/glove/），在里面可以下载训练好的词向量： #将下载的词向量文件放在合适的目录，并读入 glove_file = datapath(&#39;D:/glove.6B.100d.txt&#39;) word2vec_glove_file = get_tmpfile(&quot;glove.6B.100d.word2vec.txt&quot;) glove2word2vec(glove_file, word2vec_glove_file) model = KeyedVectors.load_word2vec_format(word2vec_glove_file) 接下来，我们就可以做一些事情了，比如找近义词： &gt;&gt;model.most_similar(&#39;obama&#39;) [(&#39;barack&#39;, 0.937216579914093), (&#39;bush&#39;, 0.927285373210907), (&#39;clinton&#39;, 0.896000325679779), (&#39;mccain&#39;, 0.8875633478164673), (&#39;gore&#39;, 0.8000321388244629), (&#39;hillary&#39;, 0.7933662533760071), (&#39;dole&#39;, 0.7851964831352234), (&#39;rodham&#39;, 0.7518897652626038), (&#39;romney&#39;, 0.7488929629325867), (&#39;kerry&#39;, 0.7472624182701111)] 比如找反义词： &gt;&gt;model.most_similar(negative=&#39;banana&#39;) [(&#39;shunichi&#39;, 0.49618104100227356), (&#39;ieronymos&#39;, 0.4736502170562744), (&#39;pengrowth&#39;, 0.4668096601963043), (&#39;höss&#39;, 0.4636845588684082), (&#39;damaskinos&#39;, 0.4617849290370941), (&#39;yadin&#39;, 0.4617374837398529), (&#39;hundertwasser&#39;, 0.4588957726955414), (&#39;ncpa&#39;, 0.4577339291572571), (&#39;maccormac&#39;, 0.4566109776496887), (&#39;rothfeld&#39;, 0.4523947238922119)] 比如找对应的词： # king-woman 近似于 queen-man  &gt;&gt;model.most_similar(positive=[&#39;woman&#39;, &#39;king&#39;], negative=[&#39;man&#39;])[0] (&#39;queen&#39;, 0.7698540687561035) &gt;&gt;model.most_similar(positive=[&#39;australia&#39;, &#39;japanese&#39;], negative=[&#39;japan&#39;])[0] (&#39;australian&#39;, 0.8923497796058655) &gt;&gt;model.most_similar(positive=[&#39;france&#39;, &#39;beer&#39;], negative=[&#39;australia&#39;])[0] (&#39;champagne&#39;, 0.6480063796043396) &gt;&gt;model.most_similar(positive=[&#39;reagan&#39;, &#39;clinton&#39;], negative=[&#39;obama&#39;])[0] (&#39;nixon&#39;, 0.7844685316085815) &gt;&gt;model.most_similar(positive=[&#39;bad&#39;, &#39;fantastic&#39;], negative=[&#39;good&#39;])[0] (&#39;terrible&#39;, 0.7074226140975952) # 找出非我族类 &gt;&gt;model.doesnt_match(&quot;breakfast cereal dinner lunch&quot;.split()) &#39;cereal&#39; 可以看出来，Word2Vec使每个词都有了一个可以让计算机计算的独一无二的意思。而这个意思是非常非常接近人的理解的。而数值的复杂性和不可解释性也恰恰符合了语言混沌的特点。     那么这到底是不是最优解呢？我想这还需要时间来回答。但很显然，现在自然语言处理离强人工智能还有很远的距离。但毫无疑问，对于这个答案的探索，对人类本身的意义也是非常的。     第一课笔记结束啦，觉得有用就关注吧，右下角的‘在看’不要忘记点哦。  参考： [1] http://web.stanford.edu/class/cs224n/ [2] TinaSmile，手把手教你NLTK WordNet使用方法，IT人，https://iter01.com/521234.html","url":"http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/","image":"http://localhost:4000/assets/images/Stanford%20CS224N%E7%AC%94%E8%AE%B0:%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89(Word%20Vectors%20and%20Word%20Senses)/2.png","@type":"BlogPosting","headline":"Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）","dateModified":"2021-09-06T00:00:00+08:00","datePublished":"2021-09-06T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-09-06">06 Sep 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/2.png" alt="Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    想系统学一下NLP，所以再开个新坑，如果有天我累死了，一定不要奇怪，都是自找的<img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/1.png" style="zoom:50%;" /></p>
+
+<p>    一不小心写得小作文了，文章里不会所有概念都仔细说，但尽量会给参考链接，会对视频课程做一些延申。</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/2.png" alt="" /></p>
+
+<p>    给你们翻译一下这张图：</p>
+
+<p>    A：好吧，我可以不在乎！</p>
+
+<p>    B：我觉得你在说，你无法不在乎， 你说你可以不在乎，表示你至少是有一点在乎的。</p>
+
+<p>    A：我不知道。</p>
+
+<p>    A：我们是在虚空中漂流的复杂得难以置信的大脑，在一片黑暗中盲目地抛出文字，徒劳地想要通过这种方式和别人产生联系。（有没有觉得有点莎士比亚<img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/3.png" style="zoom:50%;" />）</p>
+
+<p>    A：每一个关于措辞，拼写，语气，时间的选择都包含了无尽的信号，意义，和潜台词。而每个人都会用自己的方式来理解。语言不是一个规范的系统，语言是瑰丽又混沌的。</p>
+
+<p>    A：你永远无法明确知道任何一段文字对任何一个人的真正意义。</p>
+
+<p>    A：你可以做的，是尝试更好的揣测自己的语言会对别人造成的影响，那样，你才能能组词措句让他们感受到你想让他们感受的。其他都是毫无意义的。</p>
+
+<p>    A：我想，你告诉我你怎么理解我的话，是想让我觉得不那么孤单。如果是这样，感谢你。这对我来说意义非凡。</p>
+
+<p>    A：但如果你只是在用一些心理学的技巧在分析我说的话，来显示你知道很多。</p>
+
+<p>    A：那我想我不必在意。</p>
+
+<p>    这幅图是教授用来开题的，语言中带有很多不确定性，甚至说话的人都有可能受潜意识驱动，并不清楚自己真正想要表达的，而我们每个人对每句话可能都有不同的理解，语言是个瑰丽，混沌，模糊的系统，是一抹精致的灰。而不是逻辑严密，规整清晰的。《小王子》里也有一句很类似的话：”…..你先坐在草地上，离我稍微远些，就像这样。我从眼角里瞅着你，你什么也不要说。<strong>话语是误解的根源。</strong>但是，每天，你都可以坐得离我稍微近一些……”</p>
+
+<p>    在这里延申一个概念，<strong>图灵测试</strong>，图灵测试是英国计算机科学家图灵于1950年提出的，注意到“智能”这一概念难以确切定义，他提出了著名的图灵测试：如果一台机器能够与人类展开对话（通过电传设备）而不被辨别出其机器身份，那么称这台机器具有智能。因此，我们也可以这样理解图灵测试，它定义“智能”为掌握了语言，包括理解和应用。</p>
+
+<p>    要理解语言，首先我们要学字，词，计算机也一样。对于我们而言，每个单词，每个字都是有意思的，那么计算机要怎么也能让每个字在它那里有个意思呢？换句话说，我们要怎么将每个词的意思转换成计算机能读的形态。这样说可能还是觉得模糊，我们来看看一些已经有的一些解决方案来理解一下：</p>
+
+<p>    <strong>1. WordNet</strong></p>
+
+<p>    WordNet的使用方法和一些基本概念可以参考[2]，这里简单说一下他的基本概念，英文中一个单词可以有很多词性，比如一个单词，可以是名词（noun），形容词（adj），副词（adv），动词（verb）。WordNet用下面这种结构来表达词义：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/4.png" style="zoom:50%;" /></p>
+
+<p>    比如说dog既可以做名词用，又可以做动词用，那么dog就会被分为名词和动词两类，而这两类里又有不同的词义，dog做名词用时，可以有不同的涵义，而每个含义我们都给它一个符号表示。所以一个单词的一种具体含义就用“单词.词性.词义序号”这种方式来表达，比如：dog.n.01表示dog作为名词时的一种含义。下面这段代码就不难理解了：      </p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">nltk.corpus</span> <span class="kn">import</span> <span class="n">wordnet</span> <span class="k">as</span> <span class="n">wn</span>
+<span class="c1">#将所有词性缩写映射到词性名词上。
+</span><span class="n">poses</span> <span class="o">=</span> <span class="p">{</span> <span class="s">'n'</span><span class="p">:</span><span class="s">'noun'</span><span class="p">,</span> <span class="s">'v'</span><span class="p">:</span><span class="s">'verb'</span><span class="p">,</span> <span class="s">'s'</span><span class="p">:</span><span class="s">'adj (s)'</span><span class="p">,</span> <span class="s">'a'</span><span class="p">:</span><span class="s">'adj'</span><span class="p">,</span> <span class="s">'r'</span><span class="p">:</span><span class="s">'adv'</span><span class="p">}</span>
+<span class="c1">#找出good这个词的每个词义 
+</span><span class="k">for</span> <span class="n">synset</span> <span class="ow">in</span> <span class="n">wn</span><span class="p">.</span><span class="n">synsets</span><span class="p">(</span><span class="s">"good"</span><span class="p">):</span>
+    <span class="c1">#打印出每个有这个词义的单词
+</span>    <span class="k">print</span><span class="p">(</span><span class="s">"{}: {}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="n">poses</span><span class="p">[</span><span class="n">synset</span><span class="p">.</span><span class="n">pos</span><span class="p">()],</span><span class="s">", "</span><span class="p">.</span><span class="n">join</span><span class="p">([</span><span class="n">l</span><span class="p">.</span><span class="n">name</span><span class="p">()</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">synset</span><span class="p">.</span><span class="n">lemmas</span><span class="p">()])))</span>
+</code></pre></div></div>
+
+<p>运行发现，good可以有很多种含义，而大多数含义不是只有good才有，大多数含义都可以用其他单词表达：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/5.png" style="zoom:50%;" /></p>
+
+<p>再看一个WordNet的例子：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">nltk.corpus</span> <span class="kn">import</span> <span class="n">wordnet</span> <span class="k">as</span> <span class="n">wn</span>
+<span class="c1">#panda可以有两种意思，一种是giant_panda.n.01指大熊猫
+#一种是lesser_panda.n.01指小熊猫，
+#panda.n.01和giant_panda.n.01是一个意思
+#这里panda得到的是giant_panda.n.01这个值
+</span><span class="n">panda</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">wn</span><span class="p">.</span><span class="n">synset</span><span class="p">(</span><span class="s">"panda.n.01"</span><span class="p">)</span>
+<span class="c1">#求上位词，比如panda.n.01的上位词是procyonid.n.01
+</span><span class="n">hyper</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="k">lambda</span><span class="err"> </span><span class="n">s</span><span class="p">:</span><span class="err"> </span><span class="n">s</span><span class="p">.</span><span class="n">hypernyms</span><span class="p">()</span>
+<span class="c1">#循环找自己的上位词 
+</span><span class="nb">list</span><span class="p">(</span><span class="n">panda</span><span class="p">.</span><span class="n">closure</span><span class="p">(</span><span class="n">hyper</span><span class="p">))</span>
+<span class="n">panda</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">wn</span><span class="p">.</span><span class="n">synset</span><span class="p">(</span><span class="s">"panda.n.01"</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>得到的结果如下，可以打印出大熊猫一层一层往上所属的类，可以发现WordNet是树状的，知识性的，明确的，规整的： </p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/6.png" style="zoom:50%;" /></p>
+
+<p>那理解了WordNet整理语言的方式，那么我们来看一下它的缺点：</p>
+
+<ul>
+  <li>
+    <p>我们开始提过，语言是混沌的，模糊的，不是规范的，规整的，但是WordNet的这种组织方式，非常规整，导致它并不能展现词与词之间的微妙差别，比如在WordNet里proficient和good可以表达同样的意思，但如果是同样的场景和上下文，用proficient和good其实是有细微差别的，而WordNet是无法表现这种差别的。</p>
+  </li>
+  <li>
+    <p>另外就是，这种结构是人为规范的，需要人的介入，时时更新，整理出新的词和词义。</p>
+  </li>
+  <li>
+    <p>因为是人整理的，所以这种结构是主观的，是出于人对语言的理解。</p>
+  </li>
+  <li>
+    <p>需要人力。</p>
+  </li>
+  <li>
+    <p>无法计算词与词之间的相似性，或者差别。</p>
+  </li>
+</ul>
+
+<p>有这么多缺陷，所以啊，得想个新法子，我们看下一个。</p>
+
+<p>    <strong>2. One-Hot    </strong></p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/7.png" style="zoom: 67%;" /></p>
+
+<p>    每个单词都用一个向量来表示，每个单词在向量里都有一个专属的位置，比如说at这个单词，那么就用[0,0,1,0,…,0]这个向量来表示，即第三个位置表示at，所以第三个位置值为1，其他位置的值都是0，之所以这个方法名字叫one-hot，就是因为向量里只有一个位置的值是1，其他位置的值都为0。</p>
+
+<p>    但这个方法的缺陷也尤为明显：</p>
+<ul>
+  <li>单词量还是挺大的，比如如果我们有10000个单词，那就得用10000个长度为10000的向量来表示这个系统。而且大多数位置还是0，特别稀疏，非常浪费。</li>
+  <li>另外，就是所有的向量在数学层面来说都是正交的，这样的方式无法表达词的意思，也无法计算词与词之间的相似度。</li>
+</ul>
+
+<p>    <strong>3. Word2Vec</strong></p>
+
+<p>    “You shall know a word by the company it keeps” (J. R. Firth 1957: 11)</p>
+
+<p>    中国有句古话，物以类聚，人以群分，上面这句话的意思就是，你想知道一个词是什么意思吗？那看看出现在它周边的单词就知道了。这个想法是1957年由一个语言学家提出来的。</p>
+
+<p>    根据这个想法，产生的一个概念叫分布语义：</p>
+
+<p>Distributional semantics: A word’s meaning is given by the words that frequently appear close-by.</p>
+
+<p>一个词的意思是由周边经常出现的词决定的。</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/8.png" style="zoom:80%;" /></p>
+
+<p>比如我们要表示banking这个词，我们就用围绕着banking的上下文，前前后后出现的单词来表示。</p>
+
+<p>    这个想法似乎有点古怪，不太能想通，也显得不太可靠，应该不管用吧，但事实是按照这个想法设计的算法，产生的词义，能很好的表达单词的意思。超乎预料的管用。
+    我们先不管算法，看看最后的结果可以是怎么样的：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/9.png" style="zoom:33%;" /></p>
+
+<p>比如banking这个词，就可以是一个长度为8的向量（这个长度可以根据单词量，样本量和精确度需求来决定，这里只是举个例子），每个维度应当都表达了一层意思，但这个意思不是人为去定义的，而在每个维度上的值就组成了banking的整体意思。</p>
+
+<p>    我们可以把一个向量想象成一个高维度的空间里的一个位置，比如说一个二维的向量，就可以表示一个平面上的点，一个三维的向量，则可以表示我们生活的这个三维空间里的一个点，一个四维的向量，立体空间再加上时间这个维度就是四维的。那么如果我们用一个长度为8的向量去表示一个词，则可以理解成，在一个高维度（八维）的空间里，banking这个词有个位置，它所在的位置即是它的意思。而在这个八个维度的空间里，每个在训练样本里的单词，都会有一个位置。比如像下图一样：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/10.png" alt="" /></p>
+
+<p>    上面只是一个意思意思的示意图，因为超过两维的，咱画不出来<img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/11.png" style="zoom:50%;" />。</p>
+
+<p>    Word2Vec就是运用这个概念的算法，那我们来看算法具体的思路：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/12.png" style="zoom:80%;" /></p>
+
+<p>翻译如下：</p>
+<ul>
+  <li>我们有一个语料库，里面有很多文章或者对话，总之是语言。- 每个单词我们都用一个向量来表示（实际算法一般是两个向量，一个中心词向量，一个周边词向量），每个单词的向量维度是一致的，刚开始的时候，向量里的值是随机赋予的随机数。</li>
+  <li>遍历每篇文章里的每个位置，经过那个位置的时候，在那个位置上的词为中心词c，周边的词是o。</li>
+  <li>利用c和o的相似度来计算给出c能得到o的概率，即c发生的条件下，o发生的概率P(o|c)，或者反过来P(c|o)也行。</li>
+  <li>调整词向量里的值来提高P(o|c)或P(c|o)。</li>
+  <li>循环重复之前的三个步骤，直到P(o|c)或者P(c|o)无法再提高。</li>
+</ul>
+
+<p>举个例子如下图：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/13.png" style="zoom: 67%;" /></p>
+
+<p>比如中心词为‘into’的时候，而临近词的区域设定为2的时候，就需要计算当into出现时，那些在区间内出现的词会出现概率。</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/14.png" style="zoom:67%;" /></p>
+
+<p>计算完后，再以下一个单词为中心词，重复上面的过程。 </p>
+
+<p>条件概率的计算是一个softmax的方程（具体可以看<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a>）：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/15.png" style="zoom: 33%;" /></p>
+
+<p>vc是中心词向量，uo是周边词向量，V是所有单词的集合，uw是V中的单词。</p>
+
+<p>这个问题的极大似然函数：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/16.png" style="zoom: 50%;" /></p>
+
+<p>𝜃指所有可以调整的参数，这个任务里指所有词向量里的所有值，这里每个词有两个词向量，一个u（作周边词的时候用），一个v（作中心词的时候用）：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/17.png" style="zoom: 33%;" /></p>
+
+<p>T指所有位置的集合，经过一个位置时，位置上的词为中心词wt，周边的词为wt+j，m限制了周边词的范围，<strong>L</strong>(𝜃)求的是在参数为𝜃的情况下，遍历所有的文本位置，求每个中心词和周边词的条件概率，再把它们乘起来。得到的条件概率越大，<strong>L</strong>(𝜃)越大。而我们要做的是调整𝜃的值，使得<strong>L</strong>(𝜃)获得最大值。</p>
+
+<p>损失函数的定义：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/18.png" style="zoom:67%;" /></p>
+
+<p>将最大似然函数调整一下，就可以得到通常会用的损失函数，最小化<strong>J</strong>(𝜃)和最大化<strong>L</strong>(𝜃)本质上是在做同一件事。</p>
+
+<p>那如何根据损失函数来调整𝜃呢，求导，做梯度下降：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/19.png" style="zoom:33%;" /></p>
+
+<p>上面的公式是示意公式，实际上是对单个参数分别求导，做梯度下降：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/20.png" style="zoom: 33%;" /></p>
+
+<p>过程如下图所示：</p>
+
+<p><img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/21.png" style="zoom:50%;" /></p>
+
+<p>每次对𝜃做细微的调整，直到𝜃接近自己的最优值，即可以使<strong>L</strong>(𝜃)最小的值。上图中Cost即<strong>L</strong>(𝜃)。关于梯度下降的具体操作和方法细节，之后的笔记会做介绍。</p>
+
+<p>最后我们来看看，怎么用别人训练好的Word2Vec做一些事情：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="c1"># Get the interactive Tools for Matplotlib
+</span><span class="o">%</span><span class="n">matplotlib</span> <span class="n">notebook</span>
+<span class="kn">import</span> <span class="nn">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="n">plt</span><span class="p">.</span><span class="n">style</span><span class="p">.</span><span class="n">use</span><span class="p">(</span><span class="s">'ggplot'</span><span class="p">)</span>
+
+
+<span class="kn">from</span> <span class="nn">sklearn.decomposition</span> <span class="kn">import</span> <span class="n">PCA</span>
+
+
+<span class="kn">from</span> <span class="nn">gensim.test.utils</span> <span class="kn">import</span> <span class="n">datapath</span><span class="p">,</span> <span class="n">get_tmpfile</span>
+<span class="kn">from</span> <span class="nn">gensim.models</span> <span class="kn">import</span> <span class="n">KeyedVectors</span>
+<span class="kn">from</span> <span class="nn">gensim.scripts.glove2word2vec</span> <span class="kn">import</span> <span class="n">glove2word2vec</span>
+</code></pre></div></div>
+
+<p>gensim是一个工具包，可以让我们导入训练好的模型参数，斯坦福有一个GloVe项目（https://nlp.stanford.edu/projects/glove/），在里面可以下载训练好的词向量：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1">#将下载的词向量文件放在合适的目录，并读入
+</span><span class="n">glove_file</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">datapath</span><span class="p">(</span><span class="s">'D:/glove.6B.100d.txt'</span><span class="p">)</span>
+<span class="n">word2vec_glove_file</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">get_tmpfile</span><span class="p">(</span><span class="s">"glove.6B.100d.word2vec.txt"</span><span class="p">)</span>
+<span class="n">glove2word2vec</span><span class="p">(</span><span class="n">glove_file</span><span class="p">,</span><span class="err"> </span><span class="n">word2vec_glove_file</span><span class="p">)</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">KeyedVectors</span><span class="p">.</span><span class="n">load_word2vec_format</span><span class="p">(</span><span class="n">word2vec_glove_file</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>接下来，我们就可以做一些事情了，比如找近义词：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="s">'obama'</span><span class="p">)</span>
+<span class="p">[(</span><span class="s">'barack'</span><span class="p">,</span> <span class="mf">0.937216579914093</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'bush'</span><span class="p">,</span> <span class="mf">0.927285373210907</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'clinton'</span><span class="p">,</span> <span class="mf">0.896000325679779</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'mccain'</span><span class="p">,</span> <span class="mf">0.8875633478164673</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'gore'</span><span class="p">,</span> <span class="mf">0.8000321388244629</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'hillary'</span><span class="p">,</span> <span class="mf">0.7933662533760071</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'dole'</span><span class="p">,</span> <span class="mf">0.7851964831352234</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'rodham'</span><span class="p">,</span> <span class="mf">0.7518897652626038</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'romney'</span><span class="p">,</span> <span class="mf">0.7488929629325867</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'kerry'</span><span class="p">,</span> <span class="mf">0.7472624182701111</span><span class="p">)]</span>
+</code></pre></div></div>
+
+<p>比如找反义词：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">negative</span><span class="o">=</span><span class="s">'banana'</span><span class="p">)</span>
+<span class="p">[(</span><span class="s">'shunichi'</span><span class="p">,</span> <span class="mf">0.49618104100227356</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'ieronymos'</span><span class="p">,</span> <span class="mf">0.4736502170562744</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'pengrowth'</span><span class="p">,</span> <span class="mf">0.4668096601963043</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'höss'</span><span class="p">,</span> <span class="mf">0.4636845588684082</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'damaskinos'</span><span class="p">,</span> <span class="mf">0.4617849290370941</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'yadin'</span><span class="p">,</span> <span class="mf">0.4617374837398529</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'hundertwasser'</span><span class="p">,</span> <span class="mf">0.4588957726955414</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'ncpa'</span><span class="p">,</span> <span class="mf">0.4577339291572571</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'maccormac'</span><span class="p">,</span> <span class="mf">0.4566109776496887</span><span class="p">),</span>
+ <span class="p">(</span><span class="s">'rothfeld'</span><span class="p">,</span> <span class="mf">0.4523947238922119</span><span class="p">)]</span>
+</code></pre></div></div>
+
+<p>比如找对应的词：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># king-woman 近似于 queen-man 
+</span><span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'woman'</span><span class="p">,</span><span class="err"> </span><span class="s">'king'</span><span class="p">],</span><span class="err"> </span><span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'man'</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">(</span><span class="s">'queen'</span><span class="p">,</span> <span class="mf">0.7698540687561035</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'australia'</span><span class="p">,</span> <span class="s">'japanese'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'japan'</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">(</span><span class="s">'australian'</span><span class="p">,</span> <span class="mf">0.8923497796058655</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'france'</span><span class="p">,</span> <span class="s">'beer'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'australia'</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">(</span><span class="s">'champagne'</span><span class="p">,</span><span class="err"> </span><span class="mf">0.6480063796043396</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'reagan'</span><span class="p">,</span> <span class="s">'clinton'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'obama'</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">(</span><span class="s">'nixon'</span><span class="p">,</span> <span class="mf">0.7844685316085815</span><span class="p">)</span>
+<span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">most_similar</span><span class="p">(</span><span class="n">positive</span><span class="o">=</span><span class="p">[</span><span class="s">'bad'</span><span class="p">,</span> <span class="s">'fantastic'</span><span class="p">],</span> <span class="n">negative</span><span class="o">=</span><span class="p">[</span><span class="s">'good'</span><span class="p">])[</span><span class="mi">0</span><span class="p">]</span>
+<span class="p">(</span><span class="s">'terrible'</span><span class="p">,</span> <span class="mf">0.7074226140975952</span><span class="p">)</span>
+<span class="c1"># 找出非我族类
+</span><span class="o">&gt;&gt;</span><span class="n">model</span><span class="p">.</span><span class="n">doesnt_match</span><span class="p">(</span><span class="s">"breakfast cereal dinner lunch"</span><span class="p">.</span><span class="n">split</span><span class="p">())</span>
+<span class="s">'cereal'</span>
+</code></pre></div></div>
+
+<p>可以看出来，Word2Vec使每个词都有了一个可以让计算机计算的独一无二的意思。而这个意思是非常非常接近人的理解的。而数值的复杂性和不可解释性也恰恰符合了语言混沌的特点。</p>
+
+<p>    那么这到底是不是最优解呢？我想这还需要时间来回答。但很显然，现在自然语言处理离强人工智能还有很远的距离。但毫无疑问，对于这个答案的探索，对人类本身的意义也是非常的。</p>
+
+<p>    第一课笔记结束啦，觉得有用就关注吧，右下角的‘在看’不要忘记点哦<img src="../assets/images/Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）/22.png" style="zoom:50%;" />。 </p>
+
+<p>参考：</p>
+
+<p>[1] http://web.stanford.edu/class/cs224n/</p>
+
+<p>[2] TinaSmile，手把手教你NLTK WordNet使用方法，IT人，https://iter01.com/521234.html</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Stanford CS224N笔记：词向量和词义（Word Vectors and Word Senses）&url=http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Stanford-CS224N%E7%AC%94%E8%AE%B0-%E8%AF%8D%E5%90%91%E9%87%8F%E5%92%8C%E8%AF%8D%E4%B9%89-Word-Vectors-and-Word-Senses/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#NLP">NLP</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Stanford-CS224N">Stanford CS224N</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

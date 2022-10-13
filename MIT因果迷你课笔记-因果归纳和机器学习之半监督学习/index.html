@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第一部分，讲因果归纳和半监督学习。     关于半监督学习（semi-supervised learning），介绍的人很多，比如参考[2]，这里就不专门仔细介绍了，大概就是，在有标签数据+无标签数据混合成的训练数据中使用的机器学习算法吧[2]。     现在我们需要回顾一下MIT因果迷你课笔记 —— 发现因果关系1中RCCP，d-separation和Makov概念。     我们认为一个图是Markov的，如果图中的变量满足：     这种时候，如果一个变量的因的值都知道了，那么它应该是独立于其他知道因的变量的：     我们可以想象一下变量x1和x2的方程式，应该是有因和噪声组成的，如果因知道了，那么就只剩下噪声了，当然就是互相独立的。     接下来看一个特殊案例：     知道了因的果和因是相互独立的。     再来看半监督学习，半监督学习感兴趣的是P(Y|X)，即给你X（比如图片），你判断Y（比如图片里有一只狮子）发生的概率是多少。而半监督学习除了通过标注的数据训练模型，还想通过未标注的数据优化模型。如果把图片是因，Y是果，根据上面的理论，P(X)和P(Y|X)相互独立，更多的未标注的图片P(X)并不能为P(Y|X)带来更多的信息量。         因此，根据上面的理论，半监督学习对于X和Y存在严格的因果关系的任务是无效的。接下来看一个实验：     横轴标记了不同的数据集，纵轴则标记了使用未标注的优化模型后，模型的表现，0表示模型准确度没有因为未标注的数据参与优化而变，负值表示准确度反而降低了，正值表示准确度提高了。这里分别介绍一下Anticausal，Confounded，Causal，和Unclear的意思，Anticausal表示数据集中X至少有一个特征是Y的果，Confounded表示X中至少有一个特征和Y有共同的因，这两个要表达的意思是P(Y|X)和P(X)不相互独立，Causal表示，X中只有Y的因，没有Y的果，即P(Y|X)和P(X)相互独立，Unclear很好理解，就是什么因啊果啊的，分不清楚，不知道P(Y|X)和P(X)是相互独立呢还是相关。由上面的实验可知，半监督学习对于标记为Causal的数据集是无效的，但对于很多标记为Anticausal和Confounded的数据集是有效的。     所以在做半监督学习之前，不妨先研究一下数据集的因果关系吧。     上图是数据独立性判断的一些机制，和判断因果有共通之处，感兴趣的具体可以参考2012年发表在ICML上的论文On causal and anticausal learning，这里就不详细说了。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] 糯米稻谷，半监督深度学习小结，知乎，2018 [3] Schölkopf et al., On causal and anticausal learning, ICML, 2012" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第一部分，讲因果归纳和半监督学习。     关于半监督学习（semi-supervised learning），介绍的人很多，比如参考[2]，这里就不专门仔细介绍了，大概就是，在有标签数据+无标签数据混合成的训练数据中使用的机器学习算法吧[2]。     现在我们需要回顾一下MIT因果迷你课笔记 —— 发现因果关系1中RCCP，d-separation和Makov概念。     我们认为一个图是Markov的，如果图中的变量满足：     这种时候，如果一个变量的因的值都知道了，那么它应该是独立于其他知道因的变量的：     我们可以想象一下变量x1和x2的方程式，应该是有因和噪声组成的，如果因知道了，那么就只剩下噪声了，当然就是互相独立的。     接下来看一个特殊案例：     知道了因的果和因是相互独立的。     再来看半监督学习，半监督学习感兴趣的是P(Y|X)，即给你X（比如图片），你判断Y（比如图片里有一只狮子）发生的概率是多少。而半监督学习除了通过标注的数据训练模型，还想通过未标注的数据优化模型。如果把图片是因，Y是果，根据上面的理论，P(X)和P(Y|X)相互独立，更多的未标注的图片P(X)并不能为P(Y|X)带来更多的信息量。         因此，根据上面的理论，半监督学习对于X和Y存在严格的因果关系的任务是无效的。接下来看一个实验：     横轴标记了不同的数据集，纵轴则标记了使用未标注的优化模型后，模型的表现，0表示模型准确度没有因为未标注的数据参与优化而变，负值表示准确度反而降低了，正值表示准确度提高了。这里分别介绍一下Anticausal，Confounded，Causal，和Unclear的意思，Anticausal表示数据集中X至少有一个特征是Y的果，Confounded表示X中至少有一个特征和Y有共同的因，这两个要表达的意思是P(Y|X)和P(X)不相互独立，Causal表示，X中只有Y的因，没有Y的果，即P(Y|X)和P(X)相互独立，Unclear很好理解，就是什么因啊果啊的，分不清楚，不知道P(Y|X)和P(X)是相互独立呢还是相关。由上面的实验可知，半监督学习对于标记为Causal的数据集是无效的，但对于很多标记为Anticausal和Confounded的数据集是有效的。     所以在做半监督学习之前，不妨先研究一下数据集的因果关系吧。     上图是数据独立性判断的一些机制，和判断因果有共通之处，感兴趣的具体可以参考2012年发表在ICML上的论文On causal and anticausal learning，这里就不详细说了。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] 糯米稻谷，半监督深度学习小结，知乎，2018 [3] Schölkopf et al., On causal and anticausal learning, ICML, 2012" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/4.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-03-17T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）     这是这门课最后一部分的内容，因果归纳和机器学习。     总共分四个部分，这是第一部分，讲因果归纳和半监督学习。     关于半监督学习（semi-supervised learning），介绍的人很多，比如参考[2]，这里就不专门仔细介绍了，大概就是，在有标签数据+无标签数据混合成的训练数据中使用的机器学习算法吧[2]。     现在我们需要回顾一下MIT因果迷你课笔记 —— 发现因果关系1中RCCP，d-separation和Makov概念。     我们认为一个图是Markov的，如果图中的变量满足：     这种时候，如果一个变量的因的值都知道了，那么它应该是独立于其他知道因的变量的：     我们可以想象一下变量x1和x2的方程式，应该是有因和噪声组成的，如果因知道了，那么就只剩下噪声了，当然就是互相独立的。     接下来看一个特殊案例：     知道了因的果和因是相互独立的。     再来看半监督学习，半监督学习感兴趣的是P(Y|X)，即给你X（比如图片），你判断Y（比如图片里有一只狮子）发生的概率是多少。而半监督学习除了通过标注的数据训练模型，还想通过未标注的数据优化模型。如果把图片是因，Y是果，根据上面的理论，P(X)和P(Y|X)相互独立，更多的未标注的图片P(X)并不能为P(Y|X)带来更多的信息量。         因此，根据上面的理论，半监督学习对于X和Y存在严格的因果关系的任务是无效的。接下来看一个实验：     横轴标记了不同的数据集，纵轴则标记了使用未标注的优化模型后，模型的表现，0表示模型准确度没有因为未标注的数据参与优化而变，负值表示准确度反而降低了，正值表示准确度提高了。这里分别介绍一下Anticausal，Confounded，Causal，和Unclear的意思，Anticausal表示数据集中X至少有一个特征是Y的果，Confounded表示X中至少有一个特征和Y有共同的因，这两个要表达的意思是P(Y|X)和P(X)不相互独立，Causal表示，X中只有Y的因，没有Y的果，即P(Y|X)和P(X)相互独立，Unclear很好理解，就是什么因啊果啊的，分不清楚，不知道P(Y|X)和P(X)是相互独立呢还是相关。由上面的实验可知，半监督学习对于标记为Causal的数据集是无效的，但对于很多标记为Anticausal和Confounded的数据集是有效的。     所以在做半监督学习之前，不妨先研究一下数据集的因果关系吧。     上图是数据独立性判断的一些机制，和判断因果有共通之处，感兴趣的具体可以参考2012年发表在ICML上的论文On causal and anticausal learning，这里就不详细说了。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction） 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] 糯米稻谷，半监督深度学习小结，知乎，2018 [3] Schölkopf et al., On causal and anticausal learning, ICML, 2012","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/4.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习","dateModified":"2021-03-17T00:00:00+08:00","datePublished":"2021-03-17T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-03-17">17 Mar 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/4.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484323&amp;idx=1&amp;sn=96855551c8133f766aa6dfc5d5d44299&amp;chksm=c0676161f710e87763614fd1c743808718937c40312d67b646d7228433a1ae77b73c008c3080&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）</a></strong></p>
+
+<p>    这是这门课最后一部分的内容，因果归纳和机器学习。</p>
+
+<p>    总共分四个部分，这是第一部分，讲因果归纳和半监督学习。</p>
+
+<p>    关于<strong>半监督学习（semi-supervised learning），</strong>介绍的人很多，比如参考[2]，这里就不专门仔细介绍了，大概就是，在有标签数据+无标签数据混合成的训练数据中使用的机器学习算法吧[2]。</p>
+
+<p>    现在我们需要回顾一下<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483979&amp;idx=1&amp;sn=8f2c863833e69ec786a4720c59274d88&amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系1</a>中RCCP，d-separation和Makov概念。</p>
+
+<p>    我们认为一个图是Markov的，如果图中的变量满足：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/1.png" style="zoom:50%;" /></p>
+
+<p>    这种时候，如果一个变量的因的值都知道了，那么它应该是独立于其他知道因的变量的：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/2.png" style="zoom: 67%;" /></p>
+
+<p>    我们可以想象一下变量x1和x2的方程式，应该是有因和噪声组成的，如果因知道了，那么就只剩下噪声了，当然就是互相独立的。</p>
+
+<p>    接下来看一个特殊案例：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/3.png" style="zoom: 67%;" /></p>
+
+<p>    知道了因的果和因是相互独立的。</p>
+
+<p>    再来看半监督学习，半监督学习感兴趣的是P(Y|X)，即给你X（比如图片），你判断Y（比如图片里有一只狮子）发生的概率是多少。而半监督学习除了通过标注的数据训练模型，还想通过未标注的数据优化模型。如果把图片是因，Y是果，根据上面的理论，P(X)和P(Y|X)相互独立，更多的未标注的图片P(X)并不能为P(Y|X)带来更多的信息量。    </p>
+
+<p>    因此，根据上面的理论，半监督学习对于X和Y存在严格的因果关系的任务是无效的。接下来看一个实验：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/4.png" style="zoom:80%;" /></p>
+
+<p>    横轴标记了不同的数据集，纵轴则标记了使用未标注的优化模型后，模型的表现，0表示模型准确度没有因为未标注的数据参与优化而变，负值表示准确度反而降低了，正值表示准确度提高了。这里分别介绍一下Anticausal，Confounded，Causal，和Unclear的意思，Anticausal表示数据集中X至少有一个特征是Y的果，Confounded表示X中至少有一个特征和Y有共同的因，这两个要表达的意思是P(Y|X)和P(X)不相互独立，Causal表示，X中只有Y的因，没有Y的果，即P(Y|X)和P(X)相互独立，Unclear很好理解，就是什么因啊果啊的，分不清楚，不知道P(Y|X)和P(X)是相互独立呢还是相关。由上面的实验可知，半监督学习对于标记为Causal的数据集是无效的，但对于很多标记为Anticausal和Confounded的数据集是有效的。</p>
+
+<p>    所以在做半监督学习之前，不妨先研究一下数据集的因果关系吧。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习/5.png" style="zoom:67%;" /></p>
+
+<p>    上图是数据独立性判断的一些机制，和判断因果有共通之处，感兴趣的具体可以参考2012年发表在ICML上的论文On causal and anticausal learning，这里就不详细说了。</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484323&amp;idx=1&amp;sn=96855551c8133f766aa6dfc5d5d44299&amp;chksm=c0676161f710e87763614fd1c743808718937c40312d67b646d7228433a1ae77b73c008c3080&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 基于不变性的因果预测（invariant causal prediction）</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] 糯米稻谷，半监督深度学习小结，知乎，2018</p>
+
+<p>[3] Schölkopf et al., On causal and anticausal learning, ICML, 2012</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%8D%8A%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

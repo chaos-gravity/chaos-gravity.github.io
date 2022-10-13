@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – Moco中的ViT | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – Moco中的ViT" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     系列上篇：Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析     Moco v3 代码链接： https://github.com/facebookresearch/moco-v3     看vits.py： from timm.models.vision_transformer import VisionTransformer, _cfg from timm.models.layers.helpers import to_2tuple from timm.models.layers import PatchEmbed # 释出的代码定义了四种不同的vit模型给moco v3 __all__ = [ &#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;,   &#39;vit_conv_base&#39;, ]     vits.py定义了四种ViT，分别是vit_small，vit_base，vit_conv_small，vit_conv_base。继承的都是timm里的VisionTransformer。     要先了解moco v3中的vit，首先我们得了解vit的基本原理，可以看ViT (Vision Transformer)原理及代码解析     在ViT (Vision Transformer)原理及代码解析这篇我们说过，timm里的Position Embedding初始是随机数，到Moco v3中，又把它改成了2d sin cos。 def build_2d_sincos_position_embedding(self, temperature=10000.):     # grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])     # num_patches = grid_size[0] * grid_size[1]     # grid_size即横纵坐标上patch数量     h, w = self.patch_embed.grid_size     # grid_w = tensor([0., 1., 2., ..., w-1])         grid_w = torch.arange(w, dtype=torch.float32)     # grid_h = tensor([0., 1., 2., ..., h-1])     grid_h = torch.arange(h, dtype=torch.float32)     # h*w     # grid_w = tensor([[0., 0., ..., 0.], [1., 1., ..., 1.], ..., [w-1, w-1, ..., w-1]])     # grid_h = tensor([[0., ..., h-1], [0., ..., h-1], ..., [0., ..., h-1]])     grid_w, grid_h = torch.meshgrid(grid_w, grid_h)     assert self.embed_dim % 4 == 0, &#39;Embed dimension must be divisible by 4 for 2D sin-cos position embedding&#39;     pos_dim = self.embed_dim // 4     # pos_dim     omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim     omega = 1. / (temperature**omega)     # 外积 12, 16 -&gt; (12, 16)     out_w = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_w.flatten(), omega])     out_h = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_h.flatten(), omega])     # (1, 12, embed_dim)     pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]     assert self.num_tokens == 1, &#39;Assuming one and only one token, [cls]&#39;     pe_token = torch.zeros([1, 1, self.embed_dim], dtype=torch.float32)     self.pos_embed = nn.Parameter(torch.cat([pe_token, pos_emb], dim=1))     self.pos_embed.requires_grad = False Moco v3 中 position embedding 的图示效果见上图，第一行是cls token的position embedding，是全0，第一个patch的position embedding，则是分四块0，1交替，和ViT (Vision Transformer)原理及代码解析中分两块和单双数0，1交替都不一样。这边为什么要这么设计position embedding呢？我的理解，如果是做语义处理，patch和patch之间只有一个距离，patch的坐标是一个一维向量，因为句子是词组成的一个序列。而做图像处理的时候，图像是一个二维信息块，切割成patch，每个patch的坐标也是二维的，而用于语义处理的position embedding并不能很好地表达这个二维信息。Moco v3中的position embedding代码则能很好的表达这个二维的位置信息，从上图不难看出，embedding的前半部分要表达的是行信息，而embedding的后半部分要表达的是列信息。我们再看一个（8，8）结构的patch的position embedding： class VisionTransformerMoCo(VisionTransformer): def __init__(self, stop_grad_conv1=False, **kwargs): super().__init__(**kwargs) # Use fixed 2D sin-cos position embedding         # 初始化position embedding         self.build_2d_sincos_position_embedding()          # weight initialization for name, m in self.named_modules():             # 挑拣出所有的全连接层 if isinstance(m, nn.Linear):                 # 挑拣出qkv字符串在名字里的全连接层                 # blocks.i.attn.qkv,其中i是block的id，从0-block总数 if &#39;qkv&#39; in name: # treat the weights of Q, K, V separately val = math.sqrt(6. / float(m.weight.shape[0] // 3 + m.weight.shape[1])) # 使值服从均匀分布U(a,b) nn.init.uniform_(m.weight, -val, val)                 # blocks.i.attn.qkv, blocks.i.mlp.fc1, blocks.i.mlp.fc2                 # head                 else:                  # xavier初始化方法中服从均匀分布U(−a,a) nn.init.xavier_uniform_(m.weight) nn.init.zeros_(m.bias) nn.init.normal_(self.cls_token, std=1e-6) if isinstance(self.patch_embed, PatchEmbed): # xavier_uniform initialization val = math.sqrt(6. / float(3 * reduce(mul, self.patch_embed.patch_size, 1) + self.embed_dim)) nn.init.uniform_(self.patch_embed.proj.weight, -val, val) nn.init.zeros_(self.patch_embed.proj.bias)             # Moco v3的核心，即patch embedding那层不参与收敛 if stop_grad_conv1: self.patch_embed.proj.weight.requires_grad = False self.patch_embed.proj.bias.requires_grad = False 这一段主要是Moco v3调整模型初始化的一些方式，以及允许将产生patch embedding的本来可以参与反向传播调整参数的proj参数固定，不参与整个反向传播，不调整参数，这是Moco v3的核心。     这里有些问题可以细究一下，比如为什么要这么调整这些初始化方式，其中包括，position embedding的方式，还有各个全连接层的调整方式。     这里还引入了patch embedding的改进方式ConvStem，由于代码只有proj相关的部分不同，因此这里也只贴proj这部分出来： class ConvStem(nn.Module): &quot;&quot;&quot; ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881 &quot;&quot;&quot; def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):         super().__init__() assert patch_size == 16, &#39;ConvStem only supports patch size of 16&#39;         assert embed_dim % 8 == 0, &#39;Embed dimension must be divisible by 8 for ConvStem&#39; # build stem, similar to the design in https://arxiv.org/abs/2106.14881 stem = [] input_dim, output_dim = 3, embed_dim // 8 for l in range(4):             # 卷积：输入通道，输出通道，卷积核大小，步长             # (B, 3, H, W) -&gt; (B, embed_dim // 8, (H+1)//2, (W+1)//2)             # (B, embed_dim // 8, H&#39;, W&#39;)-&gt;  (B, embed_dim // 4, (H+1)//2, (W+1)//2)             # (B, embed_dim // 4, H&#39;&#39;, W&#39;&#39;)-&gt;  (B, embed_dim // 2, (H+1)//2, (W+1)//2)             # (B, embed_dim // 2, H&#39;&#39;&#39;, W&#39;&#39;&#39;) -&gt; (B, embed_dim, (H+1)//2, (W+1)//2) stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False)) stem.append(nn.BatchNorm2d(output_dim)) stem.append(nn.ReLU(inplace=True)) input_dim = output_dim output_dim *= 2         # (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) -&gt; (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) stem.append(nn.Conv2d(input_dim, embed_dim, kernel_size=1))         # proj总共有五层卷积         self.proj = nn.Sequential(*stem) 由此可见在做patch embedding的时候，ConvStem将原本的全连接层替换成了四层卷积层（最后一层不太能算）。有机会我们可以详细解说一下ConvStem，对了ConvStem同样也是Facebook的成果。 最后我们来看一下Moco v3定义的四种vit分别长什么样子，以及有哪些不同： def vit_small(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model def vit_base(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model 这两个模型只有embed_dim的区别，一个小一个大。 def vit_conv_small(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model def vit_conv_base(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model 这里的主要区别是embed layer的区别，有没有用ConvStem，另外depth也浅了一层。 Moco v3 paper中的vit更丰富一点，也会有各种不同参数vit的训练效果，想要详细了解的可以去看一下。 参考： [1] 我是啤酒，ViT (Vision Transformer)原理及代码解析，Chaos万有引力，2021  [2] Jay Alammar, The Illustrated Transformer, jalammar.github.io, 2018" />
+<meta property="og:description" content="    系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     系列上篇：Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析     Moco v3 代码链接： https://github.com/facebookresearch/moco-v3     看vits.py： from timm.models.vision_transformer import VisionTransformer, _cfg from timm.models.layers.helpers import to_2tuple from timm.models.layers import PatchEmbed # 释出的代码定义了四种不同的vit模型给moco v3 __all__ = [ &#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;,   &#39;vit_conv_base&#39;, ]     vits.py定义了四种ViT，分别是vit_small，vit_base，vit_conv_small，vit_conv_base。继承的都是timm里的VisionTransformer。     要先了解moco v3中的vit，首先我们得了解vit的基本原理，可以看ViT (Vision Transformer)原理及代码解析     在ViT (Vision Transformer)原理及代码解析这篇我们说过，timm里的Position Embedding初始是随机数，到Moco v3中，又把它改成了2d sin cos。 def build_2d_sincos_position_embedding(self, temperature=10000.):     # grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])     # num_patches = grid_size[0] * grid_size[1]     # grid_size即横纵坐标上patch数量     h, w = self.patch_embed.grid_size     # grid_w = tensor([0., 1., 2., ..., w-1])         grid_w = torch.arange(w, dtype=torch.float32)     # grid_h = tensor([0., 1., 2., ..., h-1])     grid_h = torch.arange(h, dtype=torch.float32)     # h*w     # grid_w = tensor([[0., 0., ..., 0.], [1., 1., ..., 1.], ..., [w-1, w-1, ..., w-1]])     # grid_h = tensor([[0., ..., h-1], [0., ..., h-1], ..., [0., ..., h-1]])     grid_w, grid_h = torch.meshgrid(grid_w, grid_h)     assert self.embed_dim % 4 == 0, &#39;Embed dimension must be divisible by 4 for 2D sin-cos position embedding&#39;     pos_dim = self.embed_dim // 4     # pos_dim     omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim     omega = 1. / (temperature**omega)     # 外积 12, 16 -&gt; (12, 16)     out_w = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_w.flatten(), omega])     out_h = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_h.flatten(), omega])     # (1, 12, embed_dim)     pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]     assert self.num_tokens == 1, &#39;Assuming one and only one token, [cls]&#39;     pe_token = torch.zeros([1, 1, self.embed_dim], dtype=torch.float32)     self.pos_embed = nn.Parameter(torch.cat([pe_token, pos_emb], dim=1))     self.pos_embed.requires_grad = False Moco v3 中 position embedding 的图示效果见上图，第一行是cls token的position embedding，是全0，第一个patch的position embedding，则是分四块0，1交替，和ViT (Vision Transformer)原理及代码解析中分两块和单双数0，1交替都不一样。这边为什么要这么设计position embedding呢？我的理解，如果是做语义处理，patch和patch之间只有一个距离，patch的坐标是一个一维向量，因为句子是词组成的一个序列。而做图像处理的时候，图像是一个二维信息块，切割成patch，每个patch的坐标也是二维的，而用于语义处理的position embedding并不能很好地表达这个二维信息。Moco v3中的position embedding代码则能很好的表达这个二维的位置信息，从上图不难看出，embedding的前半部分要表达的是行信息，而embedding的后半部分要表达的是列信息。我们再看一个（8，8）结构的patch的position embedding： class VisionTransformerMoCo(VisionTransformer): def __init__(self, stop_grad_conv1=False, **kwargs): super().__init__(**kwargs) # Use fixed 2D sin-cos position embedding         # 初始化position embedding         self.build_2d_sincos_position_embedding()          # weight initialization for name, m in self.named_modules():             # 挑拣出所有的全连接层 if isinstance(m, nn.Linear):                 # 挑拣出qkv字符串在名字里的全连接层                 # blocks.i.attn.qkv,其中i是block的id，从0-block总数 if &#39;qkv&#39; in name: # treat the weights of Q, K, V separately val = math.sqrt(6. / float(m.weight.shape[0] // 3 + m.weight.shape[1])) # 使值服从均匀分布U(a,b) nn.init.uniform_(m.weight, -val, val)                 # blocks.i.attn.qkv, blocks.i.mlp.fc1, blocks.i.mlp.fc2                 # head                 else:                  # xavier初始化方法中服从均匀分布U(−a,a) nn.init.xavier_uniform_(m.weight) nn.init.zeros_(m.bias) nn.init.normal_(self.cls_token, std=1e-6) if isinstance(self.patch_embed, PatchEmbed): # xavier_uniform initialization val = math.sqrt(6. / float(3 * reduce(mul, self.patch_embed.patch_size, 1) + self.embed_dim)) nn.init.uniform_(self.patch_embed.proj.weight, -val, val) nn.init.zeros_(self.patch_embed.proj.bias)             # Moco v3的核心，即patch embedding那层不参与收敛 if stop_grad_conv1: self.patch_embed.proj.weight.requires_grad = False self.patch_embed.proj.bias.requires_grad = False 这一段主要是Moco v3调整模型初始化的一些方式，以及允许将产生patch embedding的本来可以参与反向传播调整参数的proj参数固定，不参与整个反向传播，不调整参数，这是Moco v3的核心。     这里有些问题可以细究一下，比如为什么要这么调整这些初始化方式，其中包括，position embedding的方式，还有各个全连接层的调整方式。     这里还引入了patch embedding的改进方式ConvStem，由于代码只有proj相关的部分不同，因此这里也只贴proj这部分出来： class ConvStem(nn.Module): &quot;&quot;&quot; ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881 &quot;&quot;&quot; def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):         super().__init__() assert patch_size == 16, &#39;ConvStem only supports patch size of 16&#39;         assert embed_dim % 8 == 0, &#39;Embed dimension must be divisible by 8 for ConvStem&#39; # build stem, similar to the design in https://arxiv.org/abs/2106.14881 stem = [] input_dim, output_dim = 3, embed_dim // 8 for l in range(4):             # 卷积：输入通道，输出通道，卷积核大小，步长             # (B, 3, H, W) -&gt; (B, embed_dim // 8, (H+1)//2, (W+1)//2)             # (B, embed_dim // 8, H&#39;, W&#39;)-&gt;  (B, embed_dim // 4, (H+1)//2, (W+1)//2)             # (B, embed_dim // 4, H&#39;&#39;, W&#39;&#39;)-&gt;  (B, embed_dim // 2, (H+1)//2, (W+1)//2)             # (B, embed_dim // 2, H&#39;&#39;&#39;, W&#39;&#39;&#39;) -&gt; (B, embed_dim, (H+1)//2, (W+1)//2) stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False)) stem.append(nn.BatchNorm2d(output_dim)) stem.append(nn.ReLU(inplace=True)) input_dim = output_dim output_dim *= 2         # (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) -&gt; (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) stem.append(nn.Conv2d(input_dim, embed_dim, kernel_size=1))         # proj总共有五层卷积         self.proj = nn.Sequential(*stem) 由此可见在做patch embedding的时候，ConvStem将原本的全连接层替换成了四层卷积层（最后一层不太能算）。有机会我们可以详细解说一下ConvStem，对了ConvStem同样也是Facebook的成果。 最后我们来看一下Moco v3定义的四种vit分别长什么样子，以及有哪些不同： def vit_small(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model def vit_base(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model 这两个模型只有embed_dim的区别，一个小一个大。 def vit_conv_small(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model def vit_conv_base(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model 这里的主要区别是embed layer的区别，有没有用ConvStem，另外depth也浅了一层。 Moco v3 paper中的vit更丰富一点，也会有各种不同参数vit的训练效果，想要详细了解的可以去看一下。 参考： [1] 我是啤酒，ViT (Vision Transformer)原理及代码解析，Chaos万有引力，2021  [2] Jay Alammar, The Illustrated Transformer, jalammar.github.io, 2018" />
+<link rel="canonical" href="http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/" />
+<meta property="og:url" content="http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20Moco%E4%B8%AD%E7%9A%84ViT/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-11-07T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    系列首篇：自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析     系列上篇：Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析     Moco v3 代码链接： https://github.com/facebookresearch/moco-v3     看vits.py： from timm.models.vision_transformer import VisionTransformer, _cfg from timm.models.layers.helpers import to_2tuple from timm.models.layers import PatchEmbed # 释出的代码定义了四种不同的vit模型给moco v3 __all__ = [ &#39;vit_small&#39;, &#39;vit_base&#39;, &#39;vit_conv_small&#39;,   &#39;vit_conv_base&#39;, ]     vits.py定义了四种ViT，分别是vit_small，vit_base，vit_conv_small，vit_conv_base。继承的都是timm里的VisionTransformer。     要先了解moco v3中的vit，首先我们得了解vit的基本原理，可以看ViT (Vision Transformer)原理及代码解析     在ViT (Vision Transformer)原理及代码解析这篇我们说过，timm里的Position Embedding初始是随机数，到Moco v3中，又把它改成了2d sin cos。 def build_2d_sincos_position_embedding(self, temperature=10000.):     # grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])     # num_patches = grid_size[0] * grid_size[1]     # grid_size即横纵坐标上patch数量     h, w = self.patch_embed.grid_size     # grid_w = tensor([0., 1., 2., ..., w-1])         grid_w = torch.arange(w, dtype=torch.float32)     # grid_h = tensor([0., 1., 2., ..., h-1])     grid_h = torch.arange(h, dtype=torch.float32)     # h*w     # grid_w = tensor([[0., 0., ..., 0.], [1., 1., ..., 1.], ..., [w-1, w-1, ..., w-1]])     # grid_h = tensor([[0., ..., h-1], [0., ..., h-1], ..., [0., ..., h-1]])     grid_w, grid_h = torch.meshgrid(grid_w, grid_h)     assert self.embed_dim % 4 == 0, &#39;Embed dimension must be divisible by 4 for 2D sin-cos position embedding&#39;     pos_dim = self.embed_dim // 4     # pos_dim     omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim     omega = 1. / (temperature**omega)     # 外积 12, 16 -&gt; (12, 16)     out_w = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_w.flatten(), omega])     out_h = torch.einsum(&#39;m,d-&gt;md&#39;, [grid_h.flatten(), omega])     # (1, 12, embed_dim)     pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]     assert self.num_tokens == 1, &#39;Assuming one and only one token, [cls]&#39;     pe_token = torch.zeros([1, 1, self.embed_dim], dtype=torch.float32)     self.pos_embed = nn.Parameter(torch.cat([pe_token, pos_emb], dim=1))     self.pos_embed.requires_grad = False Moco v3 中 position embedding 的图示效果见上图，第一行是cls token的position embedding，是全0，第一个patch的position embedding，则是分四块0，1交替，和ViT (Vision Transformer)原理及代码解析中分两块和单双数0，1交替都不一样。这边为什么要这么设计position embedding呢？我的理解，如果是做语义处理，patch和patch之间只有一个距离，patch的坐标是一个一维向量，因为句子是词组成的一个序列。而做图像处理的时候，图像是一个二维信息块，切割成patch，每个patch的坐标也是二维的，而用于语义处理的position embedding并不能很好地表达这个二维信息。Moco v3中的position embedding代码则能很好的表达这个二维的位置信息，从上图不难看出，embedding的前半部分要表达的是行信息，而embedding的后半部分要表达的是列信息。我们再看一个（8，8）结构的patch的position embedding： class VisionTransformerMoCo(VisionTransformer): def __init__(self, stop_grad_conv1=False, **kwargs): super().__init__(**kwargs) # Use fixed 2D sin-cos position embedding         # 初始化position embedding         self.build_2d_sincos_position_embedding()          # weight initialization for name, m in self.named_modules():             # 挑拣出所有的全连接层 if isinstance(m, nn.Linear):                 # 挑拣出qkv字符串在名字里的全连接层                 # blocks.i.attn.qkv,其中i是block的id，从0-block总数 if &#39;qkv&#39; in name: # treat the weights of Q, K, V separately val = math.sqrt(6. / float(m.weight.shape[0] // 3 + m.weight.shape[1])) # 使值服从均匀分布U(a,b) nn.init.uniform_(m.weight, -val, val)                 # blocks.i.attn.qkv, blocks.i.mlp.fc1, blocks.i.mlp.fc2                 # head                 else:                  # xavier初始化方法中服从均匀分布U(−a,a) nn.init.xavier_uniform_(m.weight) nn.init.zeros_(m.bias) nn.init.normal_(self.cls_token, std=1e-6) if isinstance(self.patch_embed, PatchEmbed): # xavier_uniform initialization val = math.sqrt(6. / float(3 * reduce(mul, self.patch_embed.patch_size, 1) + self.embed_dim)) nn.init.uniform_(self.patch_embed.proj.weight, -val, val) nn.init.zeros_(self.patch_embed.proj.bias)             # Moco v3的核心，即patch embedding那层不参与收敛 if stop_grad_conv1: self.patch_embed.proj.weight.requires_grad = False self.patch_embed.proj.bias.requires_grad = False 这一段主要是Moco v3调整模型初始化的一些方式，以及允许将产生patch embedding的本来可以参与反向传播调整参数的proj参数固定，不参与整个反向传播，不调整参数，这是Moco v3的核心。     这里有些问题可以细究一下，比如为什么要这么调整这些初始化方式，其中包括，position embedding的方式，还有各个全连接层的调整方式。     这里还引入了patch embedding的改进方式ConvStem，由于代码只有proj相关的部分不同，因此这里也只贴proj这部分出来： class ConvStem(nn.Module): &quot;&quot;&quot; ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881 &quot;&quot;&quot; def __init__(self, img_size=224, patch_size=16, in_chans=3, embed_dim=768, norm_layer=None, flatten=True):         super().__init__() assert patch_size == 16, &#39;ConvStem only supports patch size of 16&#39;         assert embed_dim % 8 == 0, &#39;Embed dimension must be divisible by 8 for ConvStem&#39; # build stem, similar to the design in https://arxiv.org/abs/2106.14881 stem = [] input_dim, output_dim = 3, embed_dim // 8 for l in range(4):             # 卷积：输入通道，输出通道，卷积核大小，步长             # (B, 3, H, W) -&gt; (B, embed_dim // 8, (H+1)//2, (W+1)//2)             # (B, embed_dim // 8, H&#39;, W&#39;)-&gt;  (B, embed_dim // 4, (H+1)//2, (W+1)//2)             # (B, embed_dim // 4, H&#39;&#39;, W&#39;&#39;)-&gt;  (B, embed_dim // 2, (H+1)//2, (W+1)//2)             # (B, embed_dim // 2, H&#39;&#39;&#39;, W&#39;&#39;&#39;) -&gt; (B, embed_dim, (H+1)//2, (W+1)//2) stem.append(nn.Conv2d(input_dim, output_dim, kernel_size=3, stride=2, padding=1, bias=False)) stem.append(nn.BatchNorm2d(output_dim)) stem.append(nn.ReLU(inplace=True)) input_dim = output_dim output_dim *= 2         # (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) -&gt; (B, embed_dim, H&#39;&#39;&#39;&#39;, W&#39;&#39;&#39;&#39;) stem.append(nn.Conv2d(input_dim, embed_dim, kernel_size=1))         # proj总共有五层卷积         self.proj = nn.Sequential(*stem) 由此可见在做patch embedding的时候，ConvStem将原本的全连接层替换成了四层卷积层（最后一层不太能算）。有机会我们可以详细解说一下ConvStem，对了ConvStem同样也是Facebook的成果。 最后我们来看一下Moco v3定义的四种vit分别长什么样子，以及有哪些不同： def vit_small(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model def vit_base(**kwargs): model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs) model.default_cfg = _cfg() return model 这两个模型只有embed_dim的区别，一个小一个大。 def vit_conv_small(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=384, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model def vit_conv_base(**kwargs): # minus one ViT block model = VisionTransformerMoCo( patch_size=16, embed_dim=768, depth=11, num_heads=12, mlp_ratio=4, qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), embed_layer=ConvStem, **kwargs) model.default_cfg = _cfg() return model 这里的主要区别是embed layer的区别，有没有用ConvStem，另外depth也浅了一层。 Moco v3 paper中的vit更丰富一点，也会有各种不同参数vit的训练效果，想要详细了解的可以去看一下。 参考： [1] 我是啤酒，ViT (Vision Transformer)原理及代码解析，Chaos万有引力，2021  [2] Jay Alammar, The Illustrated Transformer, jalammar.github.io, 2018","url":"http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/","image":"http://localhost:4000/assets/images/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual%20Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco%20v3)%20--%20Moco%E4%B8%AD%E7%9A%84ViT/1.png","@type":"BlogPosting","headline":"Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – Moco中的ViT","dateModified":"2021-11-07T00:00:00+08:00","datePublished":"2021-11-07T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-11-07">07 Nov 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT/1.png" alt="Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    系列首篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484512&amp;idx=1&amp;sn=23438dac5f58698c6d809e53b8a90078&amp;chksm=c06766a2f710efb4c7deafe9619d3dcc4a4590691a99d9d8bb83c4a8205be4f7f37a4f2bc334&amp;scene=21#wechat_redirect">自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 论文解析</a></p>
+
+<p>    系列上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484588&amp;idx=1&amp;sn=ea9411bd4fa36afebbf0328b53e65f9b&amp;chksm=c067666ef710ef782467d2989f3280b581d1c4dd49e02edb2015af6224231b0a2d1673b27f64&amp;scene=21#wechat_redirect">Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) – 训练代码解析</a></p>
+
+<p>    Moco v3 代码链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/facebookresearch/moco-v3
+</code></pre></div></div>
+
+<p>    看<strong>vits.py</strong>：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kn">from</span> <span class="nn">timm.models.vision_transformer</span> <span class="kn">import</span> <span class="n">VisionTransformer</span><span class="p">,</span> <span class="n">_cfg</span>
+<span class="kn">from</span> <span class="nn">timm.models.layers.helpers</span> <span class="kn">import</span> <span class="n">to_2tuple</span>
+<span class="kn">from</span> <span class="nn">timm.models.layers</span> <span class="kn">import</span> <span class="n">PatchEmbed</span>
+<span class="c1"># 释出的代码定义了四种不同的vit模型给moco v3
+</span><span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span>    
+  <span class="s">'vit_small'</span><span class="p">,</span>     
+  <span class="s">'vit_base'</span><span class="p">,</span>    
+  <span class="s">'vit_conv_small'</span><span class="p">,</span>    
+<span class="err">  </span><span class="s">'vit_conv_base'</span><span class="p">,</span>
+<span class="p">]</span>
+</code></pre></div></div>
+
+<p>    vits.py定义了四种ViT，分别是vit_small，vit_base，vit_conv_small，vit_conv_base。继承的都是timm里的VisionTransformer。</p>
+
+<p>    要先了解moco v3中的vit，首先我们得了解vit的基本原理，可以看<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a></p>
+
+<p><img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT/1.png" style="zoom:67%;" /></p>
+
+<p>    在<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a>这篇我们说过，timm里的Position Embedding初始是随机数，到Moco v3中，又把它改成了2d sin cos。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">def</span><span class="err"> </span><span class="n">build_2d_sincos_position_embedding</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="err"> </span><span class="n">temperature</span><span class="o">=</span><span class="mf">10000.</span><span class="p">):</span>
+<span class="err">    </span><span class="c1"># grid_size = (img_size[0] // patch_size[0], img_size[1] // patch_size[1])
+</span><span class="err">    </span><span class="c1"># num_patches = grid_size[0] * grid_size[1]
+</span><span class="err">    </span><span class="c1"># grid_size即横纵坐标上patch数量
+</span><span class="err">    </span><span class="n">h</span><span class="p">,</span><span class="err"> </span><span class="n">w</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">grid_size</span>
+<span class="err">    </span><span class="c1"># grid_w = tensor([0., 1., 2., ..., w-1])    
+</span><span class="err">    </span><span class="n">grid_w</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">arange</span><span class="p">(</span><span class="n">w</span><span class="p">,</span><span class="err"> </span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># grid_h = tensor([0., 1., 2., ..., h-1])
+</span><span class="err">    </span><span class="n">grid_h</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">arange</span><span class="p">(</span><span class="n">h</span><span class="p">,</span><span class="err"> </span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># h*w
+</span><span class="err">    </span><span class="c1"># grid_w = tensor([[0., 0., ..., 0.], [1., 1., ..., 1.], ..., [w-1, w-1, ..., w-1]])
+</span><span class="err">    </span><span class="c1"># grid_h = tensor([[0., ..., h-1], [0., ..., h-1], ..., [0., ..., h-1]])
+</span><span class="err">    </span><span class="n">grid_w</span><span class="p">,</span><span class="err"> </span><span class="n">grid_h</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">meshgrid</span><span class="p">(</span><span class="n">grid_w</span><span class="p">,</span><span class="err"> </span><span class="n">grid_h</span><span class="p">)</span>
+<span class="err">    </span><span class="k">assert</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">embed_dim</span><span class="err"> </span><span class="o">%</span><span class="err"> </span><span class="mi">4</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">0</span><span class="p">,</span><span class="err"> </span><span class="s">'Embed dimension must be divisible by 4 for 2D sin-cos position embedding'</span>
+<span class="err">    </span><span class="n">pos_dim</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">embed_dim</span><span class="err"> </span><span class="o">//</span><span class="err"> </span><span class="mi">4</span>
+<span class="err">    </span><span class="c1"># pos_dim
+</span><span class="err">    </span><span class="n">omega</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">arange</span><span class="p">(</span><span class="n">pos_dim</span><span class="p">,</span><span class="err"> </span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span><span class="err"> </span><span class="o">/</span><span class="err"> </span><span class="n">pos_dim</span>
+<span class="err">    </span><span class="n">omega</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="mf">1.</span><span class="err"> </span><span class="o">/</span><span class="err"> </span><span class="p">(</span><span class="n">temperature</span><span class="o">**</span><span class="n">omega</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># 外积 12, 16 -&gt; (12, 16)
+</span><span class="err">    </span><span class="n">out_w</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">einsum</span><span class="p">(</span><span class="s">'m,d-&gt;md'</span><span class="p">,</span><span class="err"> </span><span class="p">[</span><span class="n">grid_w</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span><span class="err"> </span><span class="n">omega</span><span class="p">])</span>
+<span class="err">    </span><span class="n">out_h</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">einsum</span><span class="p">(</span><span class="s">'m,d-&gt;md'</span><span class="p">,</span><span class="err"> </span><span class="p">[</span><span class="n">grid_h</span><span class="p">.</span><span class="n">flatten</span><span class="p">(),</span><span class="err"> </span><span class="n">omega</span><span class="p">])</span>
+<span class="err">    </span><span class="c1"># (1, 12, embed_dim)
+</span><span class="err">    </span><span class="n">pos_emb</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">torch</span><span class="p">.</span><span class="n">sin</span><span class="p">(</span><span class="n">out_w</span><span class="p">),</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">cos</span><span class="p">(</span><span class="n">out_w</span><span class="p">),</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">sin</span><span class="p">(</span><span class="n">out_h</span><span class="p">),</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">cos</span><span class="p">(</span><span class="n">out_h</span><span class="p">)],</span><span class="err"> </span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)[</span><span class="bp">None</span><span class="p">,</span><span class="err"> </span><span class="p">:,</span><span class="err"> </span><span class="p">:]</span>
+<span class="err">    </span><span class="k">assert</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">num_tokens</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="s">'Assuming one and only one token, [cls]'</span>
+<span class="err">    </span><span class="n">pe_token</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">torch</span><span class="p">.</span><span class="n">zeros</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">embed_dim</span><span class="p">],</span><span class="err"> </span><span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="p">.</span><span class="n">float32</span><span class="p">)</span>
+<span class="err">    </span><span class="bp">self</span><span class="p">.</span><span class="n">pos_embed</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Parameter</span><span class="p">(</span><span class="n">torch</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">pe_token</span><span class="p">,</span><span class="err"> </span><span class="n">pos_emb</span><span class="p">],</span><span class="err"> </span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+<span class="err">    </span><span class="bp">self</span><span class="p">.</span><span class="n">pos_embed</span><span class="p">.</span><span class="n">requires_grad</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">False</span>
+</code></pre></div></div>
+
+<p><img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT/2.png" alt="" /></p>
+
+<p>Moco v3 中 position embedding 的图示效果见上图，第一行是cls token的position embedding，是全0，第一个patch的position embedding，则是分四块0，1交替，和<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a>中分两块和单双数0，1交替都不一样。这边为什么要这么设计position embedding呢？我的理解，如果是做语义处理，patch和patch之间只有一个距离，patch的坐标是一个一维向量，因为句子是词组成的一个序列。而做图像处理的时候，图像是一个二维信息块，切割成patch，每个patch的坐标也是二维的，而用于语义处理的position embedding并不能很好地表达这个二维信息。Moco v3中的position embedding代码则能很好的表达这个二维的位置信息，从上图不难看出，embedding的前半部分要表达的是行信息，而embedding的后半部分要表达的是列信息。我们再看一个（8，8）结构的patch的position embedding：</p>
+
+<p><img src="../assets/images/Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT/3.png" alt="" /></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">VisionTransformerMoCo</span><span class="p">(</span><span class="n">VisionTransformer</span><span class="p">):</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">stop_grad_conv1</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="c1"># Use fixed 2D sin-cos position embedding
+</span><span class="err">        </span><span class="c1"># 初始化position embedding
+</span><span class="err">        </span><span class="bp">self</span><span class="p">.</span><span class="n">build_2d_sincos_position_embedding</span><span class="p">()</span>
+<span class="err">        </span>
+        <span class="c1"># weight initialization
+</span>        <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">m</span> <span class="ow">in</span> <span class="bp">self</span><span class="p">.</span><span class="n">named_modules</span><span class="p">():</span>
+<span class="err">            </span><span class="c1"># 挑拣出所有的全连接层
+</span>            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">):</span>
+<span class="err">                </span><span class="c1"># 挑拣出qkv字符串在名字里的全连接层
+</span><span class="err">                </span><span class="c1"># blocks.i.attn.qkv,其中i是block的id，从0-block总数
+</span>                <span class="k">if</span> <span class="s">'qkv'</span> <span class="ow">in</span> <span class="n">name</span><span class="p">:</span>
+                    <span class="c1"># treat the weights of Q, K, V separately
+</span>                    <span class="n">val</span> <span class="o">=</span> <span class="n">math</span><span class="p">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">6.</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">m</span><span class="p">.</span><span class="n">weight</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">3</span> <span class="o">+</span> <span class="n">m</span><span class="p">.</span><span class="n">weight</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+                    <span class="c1"># 使值服从均匀分布U(a,b)
+</span>                    <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">uniform_</span><span class="p">(</span><span class="n">m</span><span class="p">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">-</span><span class="n">val</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+<span class="err">                </span><span class="c1"># blocks.i.attn.qkv, blocks.i.mlp.fc1, blocks.i.mlp.fc2
+</span><span class="err">                </span><span class="c1"># head
+</span><span class="err">                </span><span class="k">else</span><span class="p">:</span>
+<span class="err">                </span>    <span class="c1"># xavier初始化方法中服从均匀分布U(−a,a)
+</span>                    <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">xavier_uniform_</span><span class="p">(</span><span class="n">m</span><span class="p">.</span><span class="n">weight</span><span class="p">)</span>
+                <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">zeros_</span><span class="p">(</span><span class="n">m</span><span class="p">.</span><span class="n">bias</span><span class="p">)</span>
+        <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">normal_</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">cls_token</span><span class="p">,</span> <span class="n">std</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">)</span>
+
+
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">,</span> <span class="n">PatchEmbed</span><span class="p">):</span>
+            <span class="c1"># xavier_uniform initialization
+</span>            <span class="n">val</span> <span class="o">=</span> <span class="n">math</span><span class="p">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mf">6.</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="nb">reduce</span><span class="p">(</span><span class="n">mul</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">patch_size</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">+</span> <span class="bp">self</span><span class="p">.</span><span class="n">embed_dim</span><span class="p">))</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">uniform_</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">proj</span><span class="p">.</span><span class="n">weight</span><span class="p">,</span> <span class="o">-</span><span class="n">val</span><span class="p">,</span> <span class="n">val</span><span class="p">)</span>
+            <span class="n">nn</span><span class="p">.</span><span class="n">init</span><span class="p">.</span><span class="n">zeros_</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">proj</span><span class="p">.</span><span class="n">bias</span><span class="p">)</span>
+<span class="err">            </span><span class="c1"># Moco v3的核心，即patch embedding那层不参与收敛
+</span>            <span class="k">if</span> <span class="n">stop_grad_conv1</span><span class="p">:</span>
+                <span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">proj</span><span class="p">.</span><span class="n">weight</span><span class="p">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="bp">False</span>
+                <span class="bp">self</span><span class="p">.</span><span class="n">patch_embed</span><span class="p">.</span><span class="n">proj</span><span class="p">.</span><span class="n">bias</span><span class="p">.</span><span class="n">requires_grad</span> <span class="o">=</span> <span class="bp">False</span>
+</code></pre></div></div>
+
+<p>这一段主要是Moco v3调整模型初始化的一些方式，以及允许将产生patch embedding的本来可以参与反向传播调整参数的proj参数固定，不参与整个反向传播，不调整参数，这是Moco v3的核心。</p>
+
+<p>    这里有些问题可以细究一下，比如为什么要这么调整这些初始化方式，其中包括，position embedding的方式，还有各个全连接层的调整方式。</p>
+
+<p>    这里还引入了patch embedding的改进方式<strong>ConvStem</strong>，由于代码只有proj相关的部分不同，因此这里也只贴proj这部分出来：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">class</span> <span class="nc">ConvStem</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="s">""" 
+    ConvStem, from Early Convolutions Help Transformers See Better, Tete et al. https://arxiv.org/abs/2106.14881
+    """</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">img_size</span><span class="o">=</span><span class="mi">224</span><span class="p">,</span> <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">in_chans</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">,</span> <span class="n">norm_layer</span><span class="o">=</span><span class="bp">None</span><span class="p">,</span> <span class="n">flatten</span><span class="o">=</span><span class="bp">True</span><span class="p">):</span>
+<span class="err">        </span><span class="nb">super</span><span class="p">().</span><span class="n">__init__</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="n">patch_size</span> <span class="o">==</span> <span class="mi">16</span><span class="p">,</span> <span class="s">'ConvStem only supports patch size of 16'</span>
+<span class="err">        </span><span class="k">assert</span><span class="err"> </span><span class="n">embed_dim</span><span class="err"> </span><span class="o">%</span><span class="err"> </span><span class="mi">8</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">0</span><span class="p">,</span><span class="err"> </span><span class="s">'Embed dimension must be divisible by 8 for ConvStem'</span>
+        <span class="c1"># build stem, similar to the design in https://arxiv.org/abs/2106.14881
+</span>        <span class="n">stem</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">input_dim</span><span class="p">,</span> <span class="n">output_dim</span> <span class="o">=</span> <span class="mi">3</span><span class="p">,</span> <span class="n">embed_dim</span> <span class="o">//</span> <span class="mi">8</span>
+        <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">):</span>
+<span class="err">            </span><span class="c1"># 卷积：输入通道，输出通道，卷积核大小，步长
+</span><span class="err">            </span><span class="c1"># (B, 3, H, W) -&gt; (B, embed_dim // 8, (H+1)//2, (W+1)//2)
+</span><span class="err">            </span><span class="c1"># (B, embed_dim // 8, H', W')-&gt;  (B, embed_dim // 4, (H+1)//2, (W+1)//2)
+</span><span class="err">            </span><span class="c1"># (B, embed_dim // 4, H'', W'')-&gt;  (B, embed_dim // 2, (H+1)//2, (W+1)//2)
+</span><span class="err">            </span><span class="c1"># (B, embed_dim // 2, H''', W''') -&gt; (B, embed_dim, (H+1)//2, (W+1)//2)
+</span>            <span class="n">stem</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">input_dim</span><span class="p">,</span> <span class="n">output_dim</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">stride</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="bp">False</span><span class="p">))</span>
+            <span class="n">stem</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">BatchNorm2d</span><span class="p">(</span><span class="n">output_dim</span><span class="p">))</span>
+            <span class="n">stem</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">ReLU</span><span class="p">(</span><span class="n">inplace</span><span class="o">=</span><span class="bp">True</span><span class="p">))</span>
+            <span class="n">input_dim</span> <span class="o">=</span> <span class="n">output_dim</span>
+            <span class="n">output_dim</span> <span class="o">*=</span> <span class="mi">2</span>
+<span class="err">        </span><span class="c1"># (B, embed_dim, H'''', W'''') -&gt; (B, embed_dim, H'''', W'''')
+</span>        <span class="n">stem</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">Conv2d</span><span class="p">(</span><span class="n">input_dim</span><span class="p">,</span> <span class="n">embed_dim</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+<span class="err">        </span><span class="c1"># proj总共有五层卷积
+</span><span class="err">        </span><span class="bp">self</span><span class="p">.</span><span class="n">proj</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Sequential</span><span class="p">(</span><span class="o">*</span><span class="n">stem</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>由此可见在做patch embedding的时候，ConvStem将原本的全连接层替换成了四层卷积层（最后一层不太能算）。有机会我们可以详细解说一下ConvStem，对了ConvStem同样也是Facebook的成果。</p>
+
+<p>最后我们来看一下Moco v3定义的四种vit分别长什么样子，以及有哪些不同：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">vit_small</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">VisionTransformerMoCo</span><span class="p">(</span>
+        <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">384</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">qkv_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">norm_layer</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">LayerNorm</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">model</span><span class="p">.</span><span class="n">default_cfg</span> <span class="o">=</span> <span class="n">_cfg</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">model</span>
+
+
+<span class="k">def</span> <span class="nf">vit_base</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">VisionTransformerMoCo</span><span class="p">(</span>
+        <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">qkv_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">norm_layer</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">LayerNorm</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">model</span><span class="p">.</span><span class="n">default_cfg</span> <span class="o">=</span> <span class="n">_cfg</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">model</span>
+</code></pre></div></div>
+
+<p>这两个模型只有embed_dim的区别，一个小一个大。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">vit_conv_small</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="c1"># minus one ViT block
+</span>    <span class="n">model</span> <span class="o">=</span> <span class="n">VisionTransformerMoCo</span><span class="p">(</span>
+        <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">384</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">qkv_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">norm_layer</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">LayerNorm</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span> <span class="n">embed_layer</span><span class="o">=</span><span class="n">ConvStem</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">model</span><span class="p">.</span><span class="n">default_cfg</span> <span class="o">=</span> <span class="n">_cfg</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">model</span>
+
+
+<span class="k">def</span> <span class="nf">vit_conv_base</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="c1"># minus one ViT block
+</span>    <span class="n">model</span> <span class="o">=</span> <span class="n">VisionTransformerMoCo</span><span class="p">(</span>
+        <span class="n">patch_size</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span> <span class="n">embed_dim</span><span class="o">=</span><span class="mi">768</span><span class="p">,</span> <span class="n">depth</span><span class="o">=</span><span class="mi">11</span><span class="p">,</span> <span class="n">num_heads</span><span class="o">=</span><span class="mi">12</span><span class="p">,</span> <span class="n">mlp_ratio</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span> <span class="n">qkv_bias</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+        <span class="n">norm_layer</span><span class="o">=</span><span class="n">partial</span><span class="p">(</span><span class="n">nn</span><span class="p">.</span><span class="n">LayerNorm</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">),</span> <span class="n">embed_layer</span><span class="o">=</span><span class="n">ConvStem</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+    <span class="n">model</span><span class="p">.</span><span class="n">default_cfg</span> <span class="o">=</span> <span class="n">_cfg</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">model</span>
+</code></pre></div></div>
+
+<p>这里的主要区别是embed layer的区别，有没有用ConvStem，另外depth也浅了一层。</p>
+
+<p>Moco v3 paper中的vit更丰富一点，也会有各种不同参数vit的训练效果，想要详细了解的可以去看一下。</p>
+
+<p>参考：</p>
+
+<p>[1] 我是啤酒，<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a>，Chaos万有引力，2021 </p>
+
+<p>[2] Jay Alammar, The Illustrated Transformer, jalammar.github.io, 2018</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Facebook自监督学习Visual Transformers(ViT)的训练经验(Moco v3) -- Moco中的ViT&url=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Facebook%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0Visual-Transformers(ViT)%E7%9A%84%E8%AE%AD%E7%BB%83%E7%BB%8F%E9%AA%8C(Moco-v3)-Moco%E4%B8%AD%E7%9A%84ViT/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Representation-Learning">Representation Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#ViT">ViT</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/piano_trans_paper_2020/0.png" alt="钢琴曲转谱（Solo Piano Transcription）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">钢琴曲转谱（Solo Piano Transcription）</a>
+                
+            </h2>
+            <h4 class="card-text">​    今天来看一篇钢琴琴谱翻译的文章，出自ByteDance字节跳动，Giant-Piano（GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集）采用的转谱模型就是这个：
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jun 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

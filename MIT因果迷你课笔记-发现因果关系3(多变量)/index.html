@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 发现因果关系3(多变量) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 发现因果关系3(多变量) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 发现因果关系3(多变量)" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 这节继续讲 restricted structural causal model，会从两个变量的因果归纳，延伸到多个变量。     多个变量的问题通常可以转换成两个变量的问题来解决，怎么转换？     假设你现在有三个变量，它们三个的关系可能会是下面两种：     一种是左边这种，x是y和z的因，z是y的因。另一种，x是y和z的因，y是z的因。那怎么转换成两个变量的因果判断呢，固定x的值即可，赋予x一个固定值，那么x到y和z的因果关系就被切断了。接下来的问题就变成了判断z是y的因还是y是z。              我们可以通过联合分布推出有向无环因果图吗？答案是不能。但如果噪声呈联合独立高斯分布，且函数都是非线性的话，那么就可以从左边的分布式推出右边的因果图。至于这其中的道理，概括着讲就是，如果满足非线性且高斯分布的条件，那么因和噪音会相互独立的，但果和噪音不相互独立，可以根据这一点来判断因果。具体请看上一篇MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)。     分类概括，有下面的公式可以参考，第一种structural causal model，不能从分布函数推导出因果图，但是additive noise model和causal additive model可以，linear Gaussian model又不行。PAi指结点i的父节点。     现有additive noise model，一种是X-&gt;Y的分布，分布函数所有的可能性用下图中红色的区域表达，一种是Y-&gt;X的分布，所有的可能性用绿色的区域表达。如果函数是线性的，那么因果关系既可以是X-&gt;Y，也可以是Y-&gt;X，交线表达的是线性情况。但如果函数非线性，则不会有相交的部分。     假如说X和Y的真实分布是P，而我们实验得到的分布是P’，如何根据P’来判断是X-&gt;Y，还是Y-&gt;X，可以分别计算P’到两个分布函数空间的距离，离哪个空间近，就认为属于哪个空间。     计算两个分布之间的距离可以用KL散度，即相对熵，具体的定义和解释可以见Cross Entropy Loss，而这里要做的是找到最近的分布函数，即最小化相对熵或者KL散度（最小化交叉熵（或KL散度[相对熵]）和极大似然估计是等价的，关于这个，这里不做详细说明，具体原理见参考[2]）。上图表达的是两个变量的分布域，而现实中，可能会有多个变量，多个变量可以有多种可能的因果，每一种因果都会有一个分布域。因此可用下面的方法找到最有可能的因果关系：     上式中residuals是残差，即观察值与估计值（拟合值）之间的差。用一句话说明就是：遍历每一种可能的因果关系，基于每种因果关系，拟合出分布函数，再计算拟合出的分布与真实分布之间的距离，最后选择那个与真实分布距离最小的分布函数基于的因果关系。     用空间感强一点的方式解释是，每个因果关系都有一个分布域，将真实分布投射到每个分布域上，再计算真实分布与投射点的距离，选出最小距离的投射，对应的因果关系就是这个方法的结果。     下面有一段R语言代码，演示了如果判断两个变量间的因果关系，仅供参考： library(dHSIC) library(mgcv) set.seed(1) # 模拟出数据，x是因，y是果 # 现实中数据是实验观察所得，而观察者可能并不知道真实的因果关系 x&lt;-rnorm(200) y&lt;-x^3+rnorm(200) # 假设x-&gt;y，拟合出分布函数，广义加性模型gam在R语言中用于拟合非线性关系。 modelforw &lt;- gam(y ~ s(x)) # 假设y-&gt;x，拟合出分布函数 modelbackw &lt;- gam(x ~ s(y)) # 独立性测试，modelforw的残差与输入值的独立性更大 # p-value为假设检验，p值越小，拒绝原假设的理由越充分 dhsic.test(modelforw$residuals, x)$p.value # 0.771228771228771 dhsic.test(modelbackw$residuals, y)$p.value # 0.00699300699300699 # 似然估计，很明显modelforw离真实分布距离更近 -log(var(x)) - log(var(modelforw$residuals)) # 0.142006280126033 -log(var(y)) - log(var(modelbackw$residuals)) # -1.01401349632063      根据上面的代码，会发现归纳两个变量之间的因果关系似乎还挺简单的，那么这个方法有什么问题呢？     1. 当变量增多，如果只有一个变量，没有因果关系会存在，如果有两个变量，那么有两种可能的因果关系，如果有三个变量呢？有25种可能的因果关系（有向无环图）。如果有20个呢？答案是无数个，看下图：     关于这个问题，有些研究提出了一些算法解决，这里就不细说了： 边越多，拟合出来的效果会越好，似然估计值会越大，但是有些边是无用的。需要一些其他方法来剔除掉多余的边。这里也不展开了。     另外一个点，就是你需要多少数据来归纳因果关系。这时候，可能就需要计算正确的分布和错误的分布之间的距离，如果它们距离很近，那么很明显，因果关系就比较难归纳。     怎么计算呢？不同情况，方式不一样，下面举例了一种情况，从下面公式可以看出，当噪音强的时候，两种分布就会离的比较近，我们就可能需要更多样本来归纳因果关系： 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2]轻墨，极大似然估计与最小化交叉熵损失或者KL散度为什么等价？https://zhuanlan.zhihu.com/p/84764177" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 这节继续讲 restricted structural causal model，会从两个变量的因果归纳，延伸到多个变量。     多个变量的问题通常可以转换成两个变量的问题来解决，怎么转换？     假设你现在有三个变量，它们三个的关系可能会是下面两种：     一种是左边这种，x是y和z的因，z是y的因。另一种，x是y和z的因，y是z的因。那怎么转换成两个变量的因果判断呢，固定x的值即可，赋予x一个固定值，那么x到y和z的因果关系就被切断了。接下来的问题就变成了判断z是y的因还是y是z。              我们可以通过联合分布推出有向无环因果图吗？答案是不能。但如果噪声呈联合独立高斯分布，且函数都是非线性的话，那么就可以从左边的分布式推出右边的因果图。至于这其中的道理，概括着讲就是，如果满足非线性且高斯分布的条件，那么因和噪音会相互独立的，但果和噪音不相互独立，可以根据这一点来判断因果。具体请看上一篇MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)。     分类概括，有下面的公式可以参考，第一种structural causal model，不能从分布函数推导出因果图，但是additive noise model和causal additive model可以，linear Gaussian model又不行。PAi指结点i的父节点。     现有additive noise model，一种是X-&gt;Y的分布，分布函数所有的可能性用下图中红色的区域表达，一种是Y-&gt;X的分布，所有的可能性用绿色的区域表达。如果函数是线性的，那么因果关系既可以是X-&gt;Y，也可以是Y-&gt;X，交线表达的是线性情况。但如果函数非线性，则不会有相交的部分。     假如说X和Y的真实分布是P，而我们实验得到的分布是P’，如何根据P’来判断是X-&gt;Y，还是Y-&gt;X，可以分别计算P’到两个分布函数空间的距离，离哪个空间近，就认为属于哪个空间。     计算两个分布之间的距离可以用KL散度，即相对熵，具体的定义和解释可以见Cross Entropy Loss，而这里要做的是找到最近的分布函数，即最小化相对熵或者KL散度（最小化交叉熵（或KL散度[相对熵]）和极大似然估计是等价的，关于这个，这里不做详细说明，具体原理见参考[2]）。上图表达的是两个变量的分布域，而现实中，可能会有多个变量，多个变量可以有多种可能的因果，每一种因果都会有一个分布域。因此可用下面的方法找到最有可能的因果关系：     上式中residuals是残差，即观察值与估计值（拟合值）之间的差。用一句话说明就是：遍历每一种可能的因果关系，基于每种因果关系，拟合出分布函数，再计算拟合出的分布与真实分布之间的距离，最后选择那个与真实分布距离最小的分布函数基于的因果关系。     用空间感强一点的方式解释是，每个因果关系都有一个分布域，将真实分布投射到每个分布域上，再计算真实分布与投射点的距离，选出最小距离的投射，对应的因果关系就是这个方法的结果。     下面有一段R语言代码，演示了如果判断两个变量间的因果关系，仅供参考： library(dHSIC) library(mgcv) set.seed(1) # 模拟出数据，x是因，y是果 # 现实中数据是实验观察所得，而观察者可能并不知道真实的因果关系 x&lt;-rnorm(200) y&lt;-x^3+rnorm(200) # 假设x-&gt;y，拟合出分布函数，广义加性模型gam在R语言中用于拟合非线性关系。 modelforw &lt;- gam(y ~ s(x)) # 假设y-&gt;x，拟合出分布函数 modelbackw &lt;- gam(x ~ s(y)) # 独立性测试，modelforw的残差与输入值的独立性更大 # p-value为假设检验，p值越小，拒绝原假设的理由越充分 dhsic.test(modelforw$residuals, x)$p.value # 0.771228771228771 dhsic.test(modelbackw$residuals, y)$p.value # 0.00699300699300699 # 似然估计，很明显modelforw离真实分布距离更近 -log(var(x)) - log(var(modelforw$residuals)) # 0.142006280126033 -log(var(y)) - log(var(modelbackw$residuals)) # -1.01401349632063      根据上面的代码，会发现归纳两个变量之间的因果关系似乎还挺简单的，那么这个方法有什么问题呢？     1. 当变量增多，如果只有一个变量，没有因果关系会存在，如果有两个变量，那么有两种可能的因果关系，如果有三个变量呢？有25种可能的因果关系（有向无环图）。如果有20个呢？答案是无数个，看下图：     关于这个问题，有些研究提出了一些算法解决，这里就不细说了： 边越多，拟合出来的效果会越好，似然估计值会越大，但是有些边是无用的。需要一些其他方法来剔除掉多余的边。这里也不展开了。     另外一个点，就是你需要多少数据来归纳因果关系。这时候，可能就需要计算正确的分布和错误的分布之间的距离，如果它们距离很近，那么很明显，因果关系就比较难归纳。     怎么计算呢？不同情况，方式不一样，下面举例了一种情况，从下面公式可以看出，当噪音强的时候，两种分布就会离的比较近，我们就可能需要更多样本来归纳因果关系： 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2]轻墨，极大似然估计与最小化交叉熵损失或者KL散度为什么等价？https://zhuanlan.zhihu.com/p/84764177" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/3.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-02-04T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 这节继续讲 restricted structural causal model，会从两个变量的因果归纳，延伸到多个变量。     多个变量的问题通常可以转换成两个变量的问题来解决，怎么转换？     假设你现在有三个变量，它们三个的关系可能会是下面两种：     一种是左边这种，x是y和z的因，z是y的因。另一种，x是y和z的因，y是z的因。那怎么转换成两个变量的因果判断呢，固定x的值即可，赋予x一个固定值，那么x到y和z的因果关系就被切断了。接下来的问题就变成了判断z是y的因还是y是z。              我们可以通过联合分布推出有向无环因果图吗？答案是不能。但如果噪声呈联合独立高斯分布，且函数都是非线性的话，那么就可以从左边的分布式推出右边的因果图。至于这其中的道理，概括着讲就是，如果满足非线性且高斯分布的条件，那么因和噪音会相互独立的，但果和噪音不相互独立，可以根据这一点来判断因果。具体请看上一篇MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)。     分类概括，有下面的公式可以参考，第一种structural causal model，不能从分布函数推导出因果图，但是additive noise model和causal additive model可以，linear Gaussian model又不行。PAi指结点i的父节点。     现有additive noise model，一种是X-&gt;Y的分布，分布函数所有的可能性用下图中红色的区域表达，一种是Y-&gt;X的分布，所有的可能性用绿色的区域表达。如果函数是线性的，那么因果关系既可以是X-&gt;Y，也可以是Y-&gt;X，交线表达的是线性情况。但如果函数非线性，则不会有相交的部分。     假如说X和Y的真实分布是P，而我们实验得到的分布是P’，如何根据P’来判断是X-&gt;Y，还是Y-&gt;X，可以分别计算P’到两个分布函数空间的距离，离哪个空间近，就认为属于哪个空间。     计算两个分布之间的距离可以用KL散度，即相对熵，具体的定义和解释可以见Cross Entropy Loss，而这里要做的是找到最近的分布函数，即最小化相对熵或者KL散度（最小化交叉熵（或KL散度[相对熵]）和极大似然估计是等价的，关于这个，这里不做详细说明，具体原理见参考[2]）。上图表达的是两个变量的分布域，而现实中，可能会有多个变量，多个变量可以有多种可能的因果，每一种因果都会有一个分布域。因此可用下面的方法找到最有可能的因果关系：     上式中residuals是残差，即观察值与估计值（拟合值）之间的差。用一句话说明就是：遍历每一种可能的因果关系，基于每种因果关系，拟合出分布函数，再计算拟合出的分布与真实分布之间的距离，最后选择那个与真实分布距离最小的分布函数基于的因果关系。     用空间感强一点的方式解释是，每个因果关系都有一个分布域，将真实分布投射到每个分布域上，再计算真实分布与投射点的距离，选出最小距离的投射，对应的因果关系就是这个方法的结果。     下面有一段R语言代码，演示了如果判断两个变量间的因果关系，仅供参考： library(dHSIC) library(mgcv) set.seed(1) # 模拟出数据，x是因，y是果 # 现实中数据是实验观察所得，而观察者可能并不知道真实的因果关系 x&lt;-rnorm(200) y&lt;-x^3+rnorm(200) # 假设x-&gt;y，拟合出分布函数，广义加性模型gam在R语言中用于拟合非线性关系。 modelforw &lt;- gam(y ~ s(x)) # 假设y-&gt;x，拟合出分布函数 modelbackw &lt;- gam(x ~ s(y)) # 独立性测试，modelforw的残差与输入值的独立性更大 # p-value为假设检验，p值越小，拒绝原假设的理由越充分 dhsic.test(modelforw$residuals, x)$p.value # 0.771228771228771 dhsic.test(modelbackw$residuals, y)$p.value # 0.00699300699300699 # 似然估计，很明显modelforw离真实分布距离更近 -log(var(x)) - log(var(modelforw$residuals)) # 0.142006280126033 -log(var(y)) - log(var(modelbackw$residuals)) # -1.01401349632063      根据上面的代码，会发现归纳两个变量之间的因果关系似乎还挺简单的，那么这个方法有什么问题呢？     1. 当变量增多，如果只有一个变量，没有因果关系会存在，如果有两个变量，那么有两种可能的因果关系，如果有三个变量呢？有25种可能的因果关系（有向无环图）。如果有20个呢？答案是无数个，看下图：     关于这个问题，有些研究提出了一些算法解决，这里就不细说了： 边越多，拟合出来的效果会越好，似然估计值会越大，但是有些边是无用的。需要一些其他方法来剔除掉多余的边。这里也不展开了。     另外一个点，就是你需要多少数据来归纳因果关系。这时候，可能就需要计算正确的分布和错误的分布之间的距离，如果它们距离很近，那么很明显，因果关系就比较难归纳。     怎么计算呢？不同情况，方式不一样，下面举例了一种情况，从下面公式可以看出，当噪音强的时候，两种分布就会离的比较近，我们就可能需要更多样本来归纳因果关系： 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model) 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2]轻墨，极大似然估计与最小化交叉熵损失或者KL散度为什么等价？https://zhuanlan.zhihu.com/p/84764177","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/3.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 发现因果关系3(多变量)","dateModified":"2021-02-04T00:00:00+08:00","datePublished":"2021-02-04T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 发现因果关系3(多变量)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-02-04">04 Feb 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/3.png" alt="MIT因果迷你课笔记 —— 发现因果关系3(多变量)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484077&amp;idx=1&amp;sn=7f7d173d64a4b582837de7e7f808913b&amp;chksm=c067606ff710e9798755848990b2a08df86b488771feee16bc8ab7ea7f78797b315ed016cd54&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</a></strong></p>
+
+<p><strong>这节继续讲 restricted structural causal model</strong>，会从两个变量的因果归纳，延伸到多个变量。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/1.png" style="zoom: 80%;" /></p>
+
+<p>    多个变量的问题通常可以转换成两个变量的问题来解决，怎么转换？</p>
+
+<p>    假设你现在有三个变量，它们三个的关系可能会是下面两种：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/2.jpeg" style="zoom:80%;" /></p>
+
+<p>    一种是左边这种，x是y和z的因，z是y的因。另一种，x是y和z的因，y是z的因。那怎么转换成两个变量的因果判断呢，固定x的值即可，赋予x一个固定值，那么x到y和z的因果关系就被切断了。接下来的问题就变成了判断z是y的因还是y是z。</p>
+
+<p>        </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/3.png" style="zoom: 67%;" /></p>
+
+<p>    我们可以通过联合分布推出有向无环因果图吗？答案是不能。但如果噪声呈联合独立高斯分布，且函数都是非线性的话，那么就可以从左边的分布式推出右边的因果图。至于这其中的道理，概括着讲就是，如果满足非线性且高斯分布的条件，那么因和噪音会相互独立的，但果和噪音不相互独立，可以根据这一点来判断因果。具体请看上一篇<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484077&amp;idx=1&amp;sn=7f7d173d64a4b582837de7e7f808913b&amp;chksm=c067606ff710e9798755848990b2a08df86b488771feee16bc8ab7ea7f78797b315ed016cd54&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</a>。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/4.png" style="zoom: 80%;" /></p>
+
+<p>    分类概括，有下面的公式可以参考，第一种structural causal model，不能从分布函数推导出因果图，但是additive noise model和causal additive model可以，linear Gaussian model又不行。PA<strong>i</strong>指结点<strong>i</strong>的父节点。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/5.png" style="zoom: 67%;" /></p>
+
+<p>    现有additive noise model，一种是X-&gt;Y的分布，分布函数所有的可能性用下图中红色的区域表达，一种是Y-&gt;X的分布，所有的可能性用绿色的区域表达。如果函数是线性的，那么因果关系既可以是X-&gt;Y，也可以是Y-&gt;X，交线表达的是线性情况。但如果函数非线性，则不会有相交的部分。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/6.png" style="zoom: 67%;" /></p>
+
+<p>    假如说X和Y的真实分布是P，而我们实验得到的分布是P’，如何根据P’来判断是X-&gt;Y，还是Y-&gt;X，可以分别计算P’到两个分布函数空间的距离，离哪个空间近，就认为属于哪个空间。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/7.png" style="zoom: 67%;" /></p>
+
+<p>    计算两个分布之间的距离可以用<strong>KL散度</strong>，即<strong>相对熵</strong>，具体的定义和解释可以见<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect"><strong>Cross Entropy Loss</strong>，</a>而这里要做的是找到最近的分布函数，即最小化相对熵或者KL散度（最小化交叉熵（或KL散度[相对熵]）和极大似然估计是等价的，关于这个，这里不做详细说明，具体原理见参考[2]）。上图表达的是两个变量的分布域，而现实中，可能会有多个变量，多个变量可以有多种可能的因果，每一种因果都会有一个分布域。因此可用下面的方法找到最有可能的因果关系：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/8.png" style="zoom:67%;" /></p>
+
+<p>    上式中residuals是残差，即观察值与估计值（拟合值）之间的差。用一句话说明就是：遍历每一种可能的因果关系，基于每种因果关系，拟合出分布函数，再计算拟合出的分布与真实分布之间的距离，最后选择那个与真实分布距离最小的分布函数基于的因果关系。</p>
+
+<p>    用空间感强一点的方式解释是，每个因果关系都有一个分布域，将真实分布投射到每个分布域上，再计算真实分布与投射点的距离，选出最小距离的投射，对应的因果关系就是这个方法的结果。</p>
+
+<p>    下面有一段R语言代码，演示了如果判断两个变量间的因果关系，仅供参考：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">library</span><span class="p">(</span><span class="n">dHSIC</span><span class="p">)</span>
+<span class="n">library</span><span class="p">(</span><span class="n">mgcv</span><span class="p">)</span>
+
+
+<span class="nb">set</span><span class="p">.</span><span class="n">seed</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="c1"># 模拟出数据，x是因，y是果
+# 现实中数据是实验观察所得，而观察者可能并不知道真实的因果关系
+</span><span class="n">x</span><span class="o">&lt;-</span><span class="n">rnorm</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span>
+<span class="n">y</span><span class="o">&lt;-</span><span class="n">x</span><span class="o">^</span><span class="mi">3</span><span class="o">+</span><span class="n">rnorm</span><span class="p">(</span><span class="mi">200</span><span class="p">)</span>
+<span class="c1"># 假设x-&gt;y，拟合出分布函数，广义加性模型gam在R语言中用于拟合非线性关系。
+</span><span class="n">modelforw</span> <span class="o">&lt;-</span> <span class="n">gam</span><span class="p">(</span><span class="n">y</span> <span class="o">~</span> <span class="n">s</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="c1"># 假设y-&gt;x，拟合出分布函数
+</span><span class="n">modelbackw</span><span class="err"> </span><span class="o">&lt;-</span><span class="err"> </span><span class="n">gam</span><span class="p">(</span><span class="n">x</span><span class="err"> </span><span class="o">~</span><span class="err"> </span><span class="n">s</span><span class="p">(</span><span class="n">y</span><span class="p">))</span>
+<span class="c1"># 独立性测试，modelforw的残差与输入值的独立性更大
+# p-value为假设检验，p值越小，拒绝原假设的理由越充分
+</span><span class="n">dhsic</span><span class="p">.</span><span class="n">test</span><span class="p">(</span><span class="n">modelforw</span><span class="err">$</span><span class="n">residuals</span><span class="p">,</span> <span class="n">x</span><span class="p">)</span><span class="err">$</span><span class="n">p</span><span class="p">.</span><span class="n">value</span>
+<span class="c1"># 0.771228771228771
+</span><span class="n">dhsic</span><span class="p">.</span><span class="n">test</span><span class="p">(</span><span class="n">modelbackw</span><span class="err">$</span><span class="n">residuals</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span><span class="err">$</span><span class="n">p</span><span class="p">.</span><span class="n">value</span>
+<span class="c1"># 0.00699300699300699
+# 似然估计，很明显modelforw离真实分布距离更近
+</span><span class="o">-</span><span class="n">log</span><span class="p">(</span><span class="n">var</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">-</span> <span class="n">log</span><span class="p">(</span><span class="n">var</span><span class="p">(</span><span class="n">modelforw</span><span class="err">$</span><span class="n">residuals</span><span class="p">))</span>
+<span class="c1"># 0.142006280126033
+</span><span class="o">-</span><span class="n">log</span><span class="p">(</span><span class="n">var</span><span class="p">(</span><span class="n">y</span><span class="p">))</span> <span class="o">-</span> <span class="n">log</span><span class="p">(</span><span class="n">var</span><span class="p">(</span><span class="n">modelbackw</span><span class="err">$</span><span class="n">residuals</span><span class="p">))</span>
+<span class="c1"># -1.01401349632063 
+</span></code></pre></div></div>
+
+<p>    根据上面的代码，会发现归纳两个变量之间的因果关系似乎还挺简单的，那么这个方法有什么问题呢？</p>
+
+<p>    1. 当变量增多，如果只有一个变量，没有因果关系会存在，如果有两个变量，那么有两种可能的因果关系，如果有三个变量呢？有25种可能的因果关系（有向无环图）。如果有20个呢？答案是无数个，看下图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/9.png" alt="" /></p>
+
+<p>    关于这个问题，有些研究提出了一些算法解决，这里就不细说了：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/10.png" style="zoom:67%;" /></p>
+
+<ol>
+  <li>边越多，拟合出来的效果会越好，似然估计值会越大，但是有些边是无用的。需要一些其他方法来剔除掉多余的边。这里也不展开了。</li>
+</ol>
+
+<p>    另外一个点，就是你需要多少数据来归纳因果关系。这时候，可能就需要计算正确的分布和错误的分布之间的距离，如果它们距离很近，那么很明显，因果关系就比较难归纳。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/11.png" style="zoom:50%;" /></p>
+
+<p>    怎么计算呢？不同情况，方式不一样，下面举例了一种情况，从下面公式可以看出，当噪音强的时候，两种分布就会离的比较近，我们就可能需要更多样本来归纳因果关系：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 发现因果关系3(多变量)/12.png" style="zoom: 67%;" /></p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484077&amp;idx=1&amp;sn=7f7d173d64a4b582837de7e7f808913b&amp;chksm=c067606ff710e9798755848990b2a08df86b488771feee16bc8ab7ea7f78797b315ed016cd54&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系2(restricted structural causal model)</a></strong></p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2]轻墨，极大似然估计与最小化交叉熵损失或者KL散度为什么等价？https://zhuanlan.zhihu.com/p/84764177</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 发现因果关系3(多变量)&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%8F%91%E7%8E%B0%E5%9B%A0%E6%9E%9C%E5%85%B3%E7%B3%BB3(%E5%A4%9A%E5%8F%98%E9%87%8F)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    最近看了点人脸识别算法，发现ArcFace，CosFace，SphereFace的损失函数（Loss Function）设计得非常有意思，且设计理念都是相似的，因此今天就记一篇损失函数的设计。     ArcFace，出自英国帝国理工。文章全名是：ArcFace: Additive Angular Margin Loss for Deep Face Recognition。     这篇文章有公开源代码，B站有作者对论文的讲解，很仔细，网上甚至能搜到翻译好的论文，大家都可以去看。 CosFace，出自腾讯，文章全名是：CosFace: Large Margin Cosine Loss for Deep Face Recognition。          SphereFace，出自美国和中国的三所大学，文章全名是：SphereFace: Deep Hypersphere Embedding for Face Recognition。     文章先介绍Softmax，再介绍Softmax Loss，最后介绍ArcFace，嫌啰嗦可以直接看第三部分。     1. Softmax     ArcFace, CosFace, SphereFace的损失函数都是从Softmax-Loss演化来的，而Softmax-Loss是由Softmax和交叉熵(cross-entropy loss)而来。先看Softmax，这个概念参考[1]解释的非常仔细，这里只做简述，先上公式： 这公式是啥子意思呢？先看一个应用：     假如我们现在有一个分类任务，如果模型足够理想，输入一张猫图，输出[1, 0]，输入一张狗图，输出[0, 1]。通常这种任务，前面会是一个深度卷积神经网络，最后会有一个全连接层，经过这个全连接层会得到图的特征向量(embedding)，我自己喜欢管embedding叫特征向量。上图中最后得到的特征向量是[1.2, 0.3]，再经过softmax： 得到了[0.71, 0.29]，我们可以这样理解最后这个结果，这张图是猫的概率是0.71，是狗的概率是0.29，它们两加起来是1，不管softmax的输入向量为何，输出向量里的值相加一定是1，得到的结果可以理解为图在各个类上的概率分布，向量的长度即类别（class）的数量。Softmax主要用在多分类任务上。    2. Softmax Loss 和 Cross Entropy Loss     交叉熵度量的是两个概率分布的差异。     要理解交叉熵，有很多概念需要理解，一个一个来。     信息量，一个事件发生的概率越大，携带的信息量越小，发生的概率越小，这个事件携带的信息量越大。比如太阳从东边升起，这个事件如果发生了，我们可以从这个事件中获得的信息是几乎没有的。但是，如果哪天太阳从西边升起了，那么我们从这个事件中获得的信息量是极大的，一定发生了什么，或者即将发生什么，才造成了这个事件发生。     假设X是一个离散型随机变量，概率分布函数为：     则定义X = x0的事件为：     若p(x0)为0，也就是事件x0是不可能发生的事件，但是它却发生了，那么这个事件的信息量是无穷大的，I(x0)的值是无穷大的，如果p(x0)为1，也就是事件x0是一定会发生的事件，那么这个事件的发生是不带信息量的，I(x0)的值是0。     信息熵，则是信息量的期望值：     事件的概率不均，信息熵较小，若各个事件发生的概率一样，信息熵较大。 ​ 相对熵(relative entropy)，又称之为KL散度(Kullback-Leibler (KL) divergence)，公式：     相对熵的目标是：计算用P描述目标问题，比Q描述目标问题能获得的信息增量。     如果分布P和分布Q是一样的，那么相对熵是0，如果不一样，相对熵大于0，越大，表示两种分布之间的差距越大。     在机器学习的项目中，通常P表示真实的分布，即需要训练模型达到的分布，Q是现在的模型预测的分布。     交叉熵(Cross entropy)，将相对熵公式变形：     前半部分是信息熵的负值，后半部分则是交叉熵，所以交叉熵的公式是：     因为P的信息熵是一定的，那么其实是可以省略这部分计算的，交叉熵和相对熵的意义是一样的。只是最后计算出的值，区间不一样。     Cross-Entropy Loss 和 Softmax Loss     毫无疑问，交叉熵可以用作损失函数，且比起MSE，MAE，要优秀不少， … using the cross-entropy error function instead of the sum-of-squares for a classification problem leads to faster training as well as improved generalization. — Page 235, Pattern Recognition and Machine Learning, 2006.     结合上面猫狗分类的案例，假如有一张猫图输入，P是[1, 0], Q是[0.71, 0.29]，交叉熵的计算为：     H(P, Q) = – (P(cat) * log(Q(cat)) + P(dog) * log(Q(dog)))     值得注意的是，在很多多分类问题中，不论有多少类，P不论有多少个元素，都只有一个为1，其他都为0，所以交叉熵的计算可以化简为，也就是说如果P(cat)为1，那么交叉熵的结果和Q(dog)，Q(car)，Q(any other)是无关的：     H(P, Q) = –  log(Q(cat))     因此，如果Q(cat)是用Softmax Function计算出来的，那么H(P, Q)计算得到的就是该样本在该模型下的Softmax Loss。     Softmax Loss的完整公式如下：     N是样本数量，n是class的数量，特征向量的长度为d，Wj是W的第j列，和b一起是获得特征向量的全连接层，W是d*n的矩阵，bj的长度是n。log后面则是用Softmax Function计算出的‘Q(cat)’。     因此，其实本来没有什么Softmax Loss的概念，这个公式是在多分类任务中使用Softmax Function+Cross Entropy loss产生的。 ​ 3. SphereFace， CosFace和ArcFace     以上都是前情提要，因为SphereFace, CosFace和ArcFace的损失函数都是由Softmax Loss而来。     首先，令：     再做如下转换：     令：     再令||xi||的值为s，则之前的Softmax Loss可转换为如下表达：     这样转换，其实还是Softmax Loss只是换了个写法，接下来看本文介绍的三个方法分别是怎么定义的损失函数：     SphereFace:     CosFace:     ArcFace:     将上面三个公式融合一下还可以得到一个新的损失函数：     接下来看为什么做上述这些变化，是有意义的。其实这样变换的思路并不新奇，逻辑回归-&gt;SVM，Triplet-Loss的设计都用的是这样的设计理念。     即：         类内聚敛(Intra-class compactness)         类间分离(Inter-class discrepancy)     用大白话说一下就是，训练的时候我们就告诉模型，啊，这两个类呢，你得给我们分出来，而且呢，还得按一定距离分出来，再白话一点就是，不但要分出来，还得分得够开。那么怎么能够让模型把两个类分得够开呢？这里我们简单说一下Triplet Loss，这个损失函数常用于人脸识别。     比方说，你现在有以下一个任务：训练一个模型，认出吴恩达老师。因为人脸的类别多，每个类的数据不多，你采用Pairwise的训练方式，用的损失函数是Triplet Loss，即每组样本有三张图，分别是Anchor Image，Positive Image, 和Negative Image。 &lt;div align=center&gt;&lt;/div&gt;    长成Anchor Image这样的就是吴恩达老师，现在又分别有一张Positive Image，Negative Image，通过训练，希望模型可以缩小Anchor和Positive的距离，增大Anchor和Negative的距离，用更直观的图表现如下： 而训练的时候计算Triplet Loss如下： 上面公式分三部分，第一部分是Anchor和Positve的距离，第二部分是Anchor和Negative的距离，我们希望模型计算出的第一个距离小于第二个距离，但不是小就行了，还得小到一定量才行，公式中的第三部分的偏置值则告诉模型，要小多少，loss才能为零或者小于零。     这个理念搁在角向量里，则可以表达为： 即，Anchor的特征向量和Positve的特征向量的夹角得小于Anchor和Negative的夹角，而且得小m那么大。      假如是一个八分类的问题，a图是Softmax Loss的训练目标，而b图是ArcFace的训练目标，两个之间的不同不言而喻。     也就是说，我们不仅希望模型在角向量里可以将不同类区别开来，还可以按一定距离区别开来。SphereFace和CosFace设计理念也是一样的，至于它们三个的区别，看下图：     很多方法的设计理念是一致的，但变化是无穷的，精益求精。     就好像钢琴就那么一排键盘，却能弹出数不尽的曲子，而且，总会有更令人心动的曲子出现。     喜欢的话，关注，分享，点赞，点在看，赞赏吧。 除了文中的列出的三篇论文，还参考了： [1] Thomas Wood，Softmax Function Definition, DeepAI [2] Jason Brownlee，A Gentle Introduction to Cross-Entropy for Machine Learning，2019 [3] 史丹利复合田，一文搞懂交叉熵在机器学习中的使用，透彻理解交叉熵背后的直觉，CSDN，2018 [4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018 [5] Softmax, Chaos-gravity, 2020 [6] Cross Entropy Loss, Chaos-gravity, 2020 [7] Susmith Reddy, Intuition of Triplet Loss, 2019" />
+<meta property="og:description" content="    最近看了点人脸识别算法，发现ArcFace，CosFace，SphereFace的损失函数（Loss Function）设计得非常有意思，且设计理念都是相似的，因此今天就记一篇损失函数的设计。     ArcFace，出自英国帝国理工。文章全名是：ArcFace: Additive Angular Margin Loss for Deep Face Recognition。     这篇文章有公开源代码，B站有作者对论文的讲解，很仔细，网上甚至能搜到翻译好的论文，大家都可以去看。 CosFace，出自腾讯，文章全名是：CosFace: Large Margin Cosine Loss for Deep Face Recognition。          SphereFace，出自美国和中国的三所大学，文章全名是：SphereFace: Deep Hypersphere Embedding for Face Recognition。     文章先介绍Softmax，再介绍Softmax Loss，最后介绍ArcFace，嫌啰嗦可以直接看第三部分。     1. Softmax     ArcFace, CosFace, SphereFace的损失函数都是从Softmax-Loss演化来的，而Softmax-Loss是由Softmax和交叉熵(cross-entropy loss)而来。先看Softmax，这个概念参考[1]解释的非常仔细，这里只做简述，先上公式： 这公式是啥子意思呢？先看一个应用：     假如我们现在有一个分类任务，如果模型足够理想，输入一张猫图，输出[1, 0]，输入一张狗图，输出[0, 1]。通常这种任务，前面会是一个深度卷积神经网络，最后会有一个全连接层，经过这个全连接层会得到图的特征向量(embedding)，我自己喜欢管embedding叫特征向量。上图中最后得到的特征向量是[1.2, 0.3]，再经过softmax： 得到了[0.71, 0.29]，我们可以这样理解最后这个结果，这张图是猫的概率是0.71，是狗的概率是0.29，它们两加起来是1，不管softmax的输入向量为何，输出向量里的值相加一定是1，得到的结果可以理解为图在各个类上的概率分布，向量的长度即类别（class）的数量。Softmax主要用在多分类任务上。    2. Softmax Loss 和 Cross Entropy Loss     交叉熵度量的是两个概率分布的差异。     要理解交叉熵，有很多概念需要理解，一个一个来。     信息量，一个事件发生的概率越大，携带的信息量越小，发生的概率越小，这个事件携带的信息量越大。比如太阳从东边升起，这个事件如果发生了，我们可以从这个事件中获得的信息是几乎没有的。但是，如果哪天太阳从西边升起了，那么我们从这个事件中获得的信息量是极大的，一定发生了什么，或者即将发生什么，才造成了这个事件发生。     假设X是一个离散型随机变量，概率分布函数为：     则定义X = x0的事件为：     若p(x0)为0，也就是事件x0是不可能发生的事件，但是它却发生了，那么这个事件的信息量是无穷大的，I(x0)的值是无穷大的，如果p(x0)为1，也就是事件x0是一定会发生的事件，那么这个事件的发生是不带信息量的，I(x0)的值是0。     信息熵，则是信息量的期望值：     事件的概率不均，信息熵较小，若各个事件发生的概率一样，信息熵较大。 ​ 相对熵(relative entropy)，又称之为KL散度(Kullback-Leibler (KL) divergence)，公式：     相对熵的目标是：计算用P描述目标问题，比Q描述目标问题能获得的信息增量。     如果分布P和分布Q是一样的，那么相对熵是0，如果不一样，相对熵大于0，越大，表示两种分布之间的差距越大。     在机器学习的项目中，通常P表示真实的分布，即需要训练模型达到的分布，Q是现在的模型预测的分布。     交叉熵(Cross entropy)，将相对熵公式变形：     前半部分是信息熵的负值，后半部分则是交叉熵，所以交叉熵的公式是：     因为P的信息熵是一定的，那么其实是可以省略这部分计算的，交叉熵和相对熵的意义是一样的。只是最后计算出的值，区间不一样。     Cross-Entropy Loss 和 Softmax Loss     毫无疑问，交叉熵可以用作损失函数，且比起MSE，MAE，要优秀不少， … using the cross-entropy error function instead of the sum-of-squares for a classification problem leads to faster training as well as improved generalization. — Page 235, Pattern Recognition and Machine Learning, 2006.     结合上面猫狗分类的案例，假如有一张猫图输入，P是[1, 0], Q是[0.71, 0.29]，交叉熵的计算为：     H(P, Q) = – (P(cat) * log(Q(cat)) + P(dog) * log(Q(dog)))     值得注意的是，在很多多分类问题中，不论有多少类，P不论有多少个元素，都只有一个为1，其他都为0，所以交叉熵的计算可以化简为，也就是说如果P(cat)为1，那么交叉熵的结果和Q(dog)，Q(car)，Q(any other)是无关的：     H(P, Q) = –  log(Q(cat))     因此，如果Q(cat)是用Softmax Function计算出来的，那么H(P, Q)计算得到的就是该样本在该模型下的Softmax Loss。     Softmax Loss的完整公式如下：     N是样本数量，n是class的数量，特征向量的长度为d，Wj是W的第j列，和b一起是获得特征向量的全连接层，W是d*n的矩阵，bj的长度是n。log后面则是用Softmax Function计算出的‘Q(cat)’。     因此，其实本来没有什么Softmax Loss的概念，这个公式是在多分类任务中使用Softmax Function+Cross Entropy loss产生的。 ​ 3. SphereFace， CosFace和ArcFace     以上都是前情提要，因为SphereFace, CosFace和ArcFace的损失函数都是由Softmax Loss而来。     首先，令：     再做如下转换：     令：     再令||xi||的值为s，则之前的Softmax Loss可转换为如下表达：     这样转换，其实还是Softmax Loss只是换了个写法，接下来看本文介绍的三个方法分别是怎么定义的损失函数：     SphereFace:     CosFace:     ArcFace:     将上面三个公式融合一下还可以得到一个新的损失函数：     接下来看为什么做上述这些变化，是有意义的。其实这样变换的思路并不新奇，逻辑回归-&gt;SVM，Triplet-Loss的设计都用的是这样的设计理念。     即：         类内聚敛(Intra-class compactness)         类间分离(Inter-class discrepancy)     用大白话说一下就是，训练的时候我们就告诉模型，啊，这两个类呢，你得给我们分出来，而且呢，还得按一定距离分出来，再白话一点就是，不但要分出来，还得分得够开。那么怎么能够让模型把两个类分得够开呢？这里我们简单说一下Triplet Loss，这个损失函数常用于人脸识别。     比方说，你现在有以下一个任务：训练一个模型，认出吴恩达老师。因为人脸的类别多，每个类的数据不多，你采用Pairwise的训练方式，用的损失函数是Triplet Loss，即每组样本有三张图，分别是Anchor Image，Positive Image, 和Negative Image。 &lt;div align=center&gt;&lt;/div&gt;    长成Anchor Image这样的就是吴恩达老师，现在又分别有一张Positive Image，Negative Image，通过训练，希望模型可以缩小Anchor和Positive的距离，增大Anchor和Negative的距离，用更直观的图表现如下： 而训练的时候计算Triplet Loss如下： 上面公式分三部分，第一部分是Anchor和Positve的距离，第二部分是Anchor和Negative的距离，我们希望模型计算出的第一个距离小于第二个距离，但不是小就行了，还得小到一定量才行，公式中的第三部分的偏置值则告诉模型，要小多少，loss才能为零或者小于零。     这个理念搁在角向量里，则可以表达为： 即，Anchor的特征向量和Positve的特征向量的夹角得小于Anchor和Negative的夹角，而且得小m那么大。      假如是一个八分类的问题，a图是Softmax Loss的训练目标，而b图是ArcFace的训练目标，两个之间的不同不言而喻。     也就是说，我们不仅希望模型在角向量里可以将不同类区别开来，还可以按一定距离区别开来。SphereFace和CosFace设计理念也是一样的，至于它们三个的区别，看下图：     很多方法的设计理念是一致的，但变化是无穷的，精益求精。     就好像钢琴就那么一排键盘，却能弹出数不尽的曲子，而且，总会有更令人心动的曲子出现。     喜欢的话，关注，分享，点赞，点在看，赞赏吧。 除了文中的列出的三篇论文，还参考了： [1] Thomas Wood，Softmax Function Definition, DeepAI [2] Jason Brownlee，A Gentle Introduction to Cross-Entropy for Machine Learning，2019 [3] 史丹利复合田，一文搞懂交叉熵在机器学习中的使用，透彻理解交叉熵背后的直觉，CSDN，2018 [4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018 [5] Softmax, Chaos-gravity, 2020 [6] Cross Entropy Loss, Chaos-gravity, 2020 [7] Susmith Reddy, Intuition of Triplet Loss, 2019" />
+<link rel="canonical" href="http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/" />
+<meta property="og:url" content="http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/ArcFace,CosFace,SphereFace,%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss%20Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/28.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-11-09T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    最近看了点人脸识别算法，发现ArcFace，CosFace，SphereFace的损失函数（Loss Function）设计得非常有意思，且设计理念都是相似的，因此今天就记一篇损失函数的设计。     ArcFace，出自英国帝国理工。文章全名是：ArcFace: Additive Angular Margin Loss for Deep Face Recognition。     这篇文章有公开源代码，B站有作者对论文的讲解，很仔细，网上甚至能搜到翻译好的论文，大家都可以去看。 CosFace，出自腾讯，文章全名是：CosFace: Large Margin Cosine Loss for Deep Face Recognition。          SphereFace，出自美国和中国的三所大学，文章全名是：SphereFace: Deep Hypersphere Embedding for Face Recognition。     文章先介绍Softmax，再介绍Softmax Loss，最后介绍ArcFace，嫌啰嗦可以直接看第三部分。     1. Softmax     ArcFace, CosFace, SphereFace的损失函数都是从Softmax-Loss演化来的，而Softmax-Loss是由Softmax和交叉熵(cross-entropy loss)而来。先看Softmax，这个概念参考[1]解释的非常仔细，这里只做简述，先上公式： 这公式是啥子意思呢？先看一个应用：     假如我们现在有一个分类任务，如果模型足够理想，输入一张猫图，输出[1, 0]，输入一张狗图，输出[0, 1]。通常这种任务，前面会是一个深度卷积神经网络，最后会有一个全连接层，经过这个全连接层会得到图的特征向量(embedding)，我自己喜欢管embedding叫特征向量。上图中最后得到的特征向量是[1.2, 0.3]，再经过softmax： 得到了[0.71, 0.29]，我们可以这样理解最后这个结果，这张图是猫的概率是0.71，是狗的概率是0.29，它们两加起来是1，不管softmax的输入向量为何，输出向量里的值相加一定是1，得到的结果可以理解为图在各个类上的概率分布，向量的长度即类别（class）的数量。Softmax主要用在多分类任务上。    2. Softmax Loss 和 Cross Entropy Loss     交叉熵度量的是两个概率分布的差异。     要理解交叉熵，有很多概念需要理解，一个一个来。     信息量，一个事件发生的概率越大，携带的信息量越小，发生的概率越小，这个事件携带的信息量越大。比如太阳从东边升起，这个事件如果发生了，我们可以从这个事件中获得的信息是几乎没有的。但是，如果哪天太阳从西边升起了，那么我们从这个事件中获得的信息量是极大的，一定发生了什么，或者即将发生什么，才造成了这个事件发生。     假设X是一个离散型随机变量，概率分布函数为：     则定义X = x0的事件为：     若p(x0)为0，也就是事件x0是不可能发生的事件，但是它却发生了，那么这个事件的信息量是无穷大的，I(x0)的值是无穷大的，如果p(x0)为1，也就是事件x0是一定会发生的事件，那么这个事件的发生是不带信息量的，I(x0)的值是0。     信息熵，则是信息量的期望值：     事件的概率不均，信息熵较小，若各个事件发生的概率一样，信息熵较大。 ​ 相对熵(relative entropy)，又称之为KL散度(Kullback-Leibler (KL) divergence)，公式：     相对熵的目标是：计算用P描述目标问题，比Q描述目标问题能获得的信息增量。     如果分布P和分布Q是一样的，那么相对熵是0，如果不一样，相对熵大于0，越大，表示两种分布之间的差距越大。     在机器学习的项目中，通常P表示真实的分布，即需要训练模型达到的分布，Q是现在的模型预测的分布。     交叉熵(Cross entropy)，将相对熵公式变形：     前半部分是信息熵的负值，后半部分则是交叉熵，所以交叉熵的公式是：     因为P的信息熵是一定的，那么其实是可以省略这部分计算的，交叉熵和相对熵的意义是一样的。只是最后计算出的值，区间不一样。     Cross-Entropy Loss 和 Softmax Loss     毫无疑问，交叉熵可以用作损失函数，且比起MSE，MAE，要优秀不少， … using the cross-entropy error function instead of the sum-of-squares for a classification problem leads to faster training as well as improved generalization. — Page 235, Pattern Recognition and Machine Learning, 2006.     结合上面猫狗分类的案例，假如有一张猫图输入，P是[1, 0], Q是[0.71, 0.29]，交叉熵的计算为：     H(P, Q) = – (P(cat) * log(Q(cat)) + P(dog) * log(Q(dog)))     值得注意的是，在很多多分类问题中，不论有多少类，P不论有多少个元素，都只有一个为1，其他都为0，所以交叉熵的计算可以化简为，也就是说如果P(cat)为1，那么交叉熵的结果和Q(dog)，Q(car)，Q(any other)是无关的：     H(P, Q) = –  log(Q(cat))     因此，如果Q(cat)是用Softmax Function计算出来的，那么H(P, Q)计算得到的就是该样本在该模型下的Softmax Loss。     Softmax Loss的完整公式如下：     N是样本数量，n是class的数量，特征向量的长度为d，Wj是W的第j列，和b一起是获得特征向量的全连接层，W是d*n的矩阵，bj的长度是n。log后面则是用Softmax Function计算出的‘Q(cat)’。     因此，其实本来没有什么Softmax Loss的概念，这个公式是在多分类任务中使用Softmax Function+Cross Entropy loss产生的。 ​ 3. SphereFace， CosFace和ArcFace     以上都是前情提要，因为SphereFace, CosFace和ArcFace的损失函数都是由Softmax Loss而来。     首先，令：     再做如下转换：     令：     再令||xi||的值为s，则之前的Softmax Loss可转换为如下表达：     这样转换，其实还是Softmax Loss只是换了个写法，接下来看本文介绍的三个方法分别是怎么定义的损失函数：     SphereFace:     CosFace:     ArcFace:     将上面三个公式融合一下还可以得到一个新的损失函数：     接下来看为什么做上述这些变化，是有意义的。其实这样变换的思路并不新奇，逻辑回归-&gt;SVM，Triplet-Loss的设计都用的是这样的设计理念。     即：         类内聚敛(Intra-class compactness)         类间分离(Inter-class discrepancy)     用大白话说一下就是，训练的时候我们就告诉模型，啊，这两个类呢，你得给我们分出来，而且呢，还得按一定距离分出来，再白话一点就是，不但要分出来，还得分得够开。那么怎么能够让模型把两个类分得够开呢？这里我们简单说一下Triplet Loss，这个损失函数常用于人脸识别。     比方说，你现在有以下一个任务：训练一个模型，认出吴恩达老师。因为人脸的类别多，每个类的数据不多，你采用Pairwise的训练方式，用的损失函数是Triplet Loss，即每组样本有三张图，分别是Anchor Image，Positive Image, 和Negative Image。 &lt;div align=center&gt;&lt;/div&gt;    长成Anchor Image这样的就是吴恩达老师，现在又分别有一张Positive Image，Negative Image，通过训练，希望模型可以缩小Anchor和Positive的距离，增大Anchor和Negative的距离，用更直观的图表现如下： 而训练的时候计算Triplet Loss如下： 上面公式分三部分，第一部分是Anchor和Positve的距离，第二部分是Anchor和Negative的距离，我们希望模型计算出的第一个距离小于第二个距离，但不是小就行了，还得小到一定量才行，公式中的第三部分的偏置值则告诉模型，要小多少，loss才能为零或者小于零。     这个理念搁在角向量里，则可以表达为： 即，Anchor的特征向量和Positve的特征向量的夹角得小于Anchor和Negative的夹角，而且得小m那么大。      假如是一个八分类的问题，a图是Softmax Loss的训练目标，而b图是ArcFace的训练目标，两个之间的不同不言而喻。     也就是说，我们不仅希望模型在角向量里可以将不同类区别开来，还可以按一定距离区别开来。SphereFace和CosFace设计理念也是一样的，至于它们三个的区别，看下图：     很多方法的设计理念是一致的，但变化是无穷的，精益求精。     就好像钢琴就那么一排键盘，却能弹出数不尽的曲子，而且，总会有更令人心动的曲子出现。     喜欢的话，关注，分享，点赞，点在看，赞赏吧。 除了文中的列出的三篇论文，还参考了： [1] Thomas Wood，Softmax Function Definition, DeepAI [2] Jason Brownlee，A Gentle Introduction to Cross-Entropy for Machine Learning，2019 [3] 史丹利复合田，一文搞懂交叉熵在机器学习中的使用，透彻理解交叉熵背后的直觉，CSDN，2018 [4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018 [5] Softmax, Chaos-gravity, 2020 [6] Cross Entropy Loss, Chaos-gravity, 2020 [7] Susmith Reddy, Intuition of Triplet Loss, 2019","url":"http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/","image":"http://localhost:4000/assets/images/ArcFace,CosFace,SphereFace,%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss%20Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/28.png","@type":"BlogPosting","headline":"ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计","dateModified":"2020-11-09T00:00:00+08:00","datePublished":"2020-11-09T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-11-09">09 Nov 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/28.png" alt="ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    最近看了点人脸识别算法，发现ArcFace，CosFace，SphereFace的损失函数（Loss Function）设计得非常有意思，且设计理念都是相似的，因此今天就记一篇损失函数的设计。</p>
+
+<p>    <strong>ArcFace</strong>，出自英国帝国理工。文章全名是：<strong>ArcFace: Additive Angular Margin Loss for Deep Face Recognition</strong>。</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/1.png" alt="" /></p>
+
+<p>    这篇文章有公开源代码，B站有作者对论文的讲解，很仔细，网上甚至能搜到翻译好的论文，大家都可以去看。</p>
+
+<p><strong>CosFace</strong>，出自腾讯，文章全名是：CosFace: Large Margin Cosine Loss for Deep Face Recognition。</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/2.png" alt="" /></p>
+
+<p>    </p>
+
+<p>    <strong>SphereFace</strong>，出自美国和中国的三所大学，文章全名是：SphereFace: Deep Hypersphere Embedding for Face Recognition。</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/3.png" alt="" /></p>
+
+<p>    文章先介绍Softmax，再介绍Softmax Loss，最后介绍ArcFace，嫌啰嗦可以直接看第三部分。</p>
+
+<p>    <strong>1. <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a></strong></p>
+
+<p>    ArcFace, CosFace, SphereFace的损失函数都是从Softmax-Loss演化来的，而Softmax-Loss是由Softmax和交叉熵(cross-entropy loss)而来。先看Softmax，这个概念参考[1]解释的非常仔细，这里只做简述，先上公式：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/4.png" style="zoom: 50%;" /></p>
+
+<p>这公式是啥子意思呢？先看一个应用：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/5.jpeg" style="zoom:80%;" /></p>
+
+<p>    假如我们现在有一个分类任务，如果模型足够理想，输入一张猫图，输出[1, 0]，输入一张狗图，输出[0, 1]。通常这种任务，前面会是一个深度卷积神经网络，最后会有一个全连接层，经过这个全连接层会得到图的特征向量(embedding)，我自己喜欢管embedding叫特征向量。上图中最后得到的特征向量是[1.2, 0.3]，再经过softmax：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/6.png" style="zoom:80%;" /></p>
+
+<p>得到了[0.71, 0.29]，我们可以这样理解最后这个结果，这张图是猫的概率是0.71，是狗的概率是0.29，它们两加起来是1，不管softmax的输入向量为何，输出向量里的值相加一定是1，得到的结果可以理解为图在各个类上的概率分布，向量的长度即类别（class）的数量。Softmax主要用在多分类任务上。</p>
+
+<p>   <strong>2. Softmax Loss</strong> 和 <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect">Cross Entropy Loss</a></p>
+
+<p>    <strong>交叉熵</strong>度量的是两个概率分布的差异。</p>
+
+<p>    要理解交叉熵，有很多概念需要理解，一个一个来。</p>
+
+<p>    <strong>信息量</strong>，一个事件发生的概率越大，携带的信息量越小，发生的概率越小，这个事件携带的信息量越大。比如太阳从东边升起，这个事件如果发生了，我们可以从这个事件中获得的信息是几乎没有的。但是，如果哪天太阳从西边升起了，那么我们从这个事件中获得的信息量是极大的，一定发生了什么，或者即将发生什么，才造成了这个事件发生。</p>
+
+<p>    假设X是一个离散型随机变量，概率分布函数为：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/7.png" style="zoom: 67%;" /></p>
+
+<p>    则定义<strong>X</strong> = <strong>x</strong>0的事件为：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/8.png" style="zoom: 50%;" /></p>
+
+<p>    若<strong>p</strong>(<strong>x</strong>0)为0，也就是事件<strong>x</strong>0是不可能发生的事件，但是它却发生了，那么这个事件的信息量是无穷大的，<strong>I</strong>(<strong>x</strong>0)的值是无穷大的，如果<strong>p</strong>(<strong>x</strong>0)为1，也就是事件<strong>x</strong>0是一定会发生的事件，那么这个事件的发生是不带信息量的，<strong>I</strong>(<strong>x</strong>0)的值是0。</p>
+
+<p>    <strong>信息熵</strong>，则是信息量的期望值：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/9.png" style="zoom:50%;" /></p>
+
+<p>    事件的概率不均，信息熵较小，若各个事件发生的概率一样，信息熵较大。</p>
+
+<p>​	<strong>相对熵</strong>(<strong>relative entropy</strong>)，又称之为KL散度(Kullback-Leibler (KL) divergence)，公式：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/10.png" style="zoom:80%;" /></p>
+
+<p>    相对熵的目标是：计算用<strong>P</strong>描述目标问题，比<strong>Q</strong>描述目标问题能获得的信息增量。</p>
+
+<p>    如果分布<strong>P</strong>和分布<strong>Q</strong>是一样的，那么相对熵是0，如果不一样，相对熵大于0，越大，表示两种分布之间的差距越大。</p>
+
+<p>    在机器学习的项目中，通常<strong>P</strong>表示真实的分布，即需要训练模型达到的分布，<strong>Q</strong>是现在的模型预测的分布。</p>
+
+<p>    <strong>交叉熵</strong>(<strong>Cross entropy</strong>)，将相对熵公式变形：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/11.png" style="zoom:80%;" /></p>
+
+<p>    前半部分是信息熵的负值，后半部分则是交叉熵，所以交叉熵的公式是：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/12.png" style="zoom:80%;" /></p>
+
+<p>    因为<strong>P</strong>的信息熵是一定的，那么其实是可以省略这部分计算的，交叉熵和相对熵的意义是一样的。只是最后计算出的值，区间不一样。</p>
+
+<p>    <strong>Cross-Entropy Loss 和 Softmax Loss</strong></p>
+
+<p>    毫无疑问，交叉熵可以用作损失函数，且比起MSE，MAE，要优秀不少，</p>
+
+<p>… using the cross-entropy error function instead of the sum-of-squares 
+for a classification problem leads to faster training as well as 
+improved generalization. — Page 235, Pattern Recognition and Machine Learning, 2006.</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/13.jpeg" style="zoom:80%;" /></p>
+
+<p>    结合上面猫狗分类的案例，假如有一张猫图输入，<strong>P</strong>是[1, 0], <strong>Q</strong>是[0.71, 0.29]，交叉熵的计算为：</p>
+
+<p>    H(P, Q) = – (P(cat) * log(Q(cat)) + P(dog) * log(Q(dog)))</p>
+
+<p>    值得注意的是，在很多多分类问题中，不论有多少类，P不论有多少个元素，都只有一个为1，其他都为0，所以交叉熵的计算可以化简为，也就是说如果P(cat)为1，那么交叉熵的结果和Q(dog)，Q(car)，Q(any other)是无关的：</p>
+
+<p>    H(P, Q) = –  log(Q(cat))</p>
+
+<p>    因此，如果Q(cat)是用Softmax Function计算出来的，那么H(P, Q)计算得到的就是该样本在该模型下的Softmax Loss。</p>
+
+<p>    <strong>Softmax Loss</strong>的完整公式如下：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/14.png" style="zoom: 50%;" /></p>
+
+<p>    N是样本数量，n是class的数量，特征向量的长度为<strong>d</strong>，<strong>Wj</strong>是<strong>W</strong>的第<strong>j</strong>列，和<strong>b</strong>一起是获得特征向量的全连接层，<strong>W</strong>是<strong>d*n</strong>的矩阵，<strong>bj</strong>的长度是<strong>n</strong>。log后面则是用Softmax Function计算出的‘Q(cat)’。</p>
+
+<p>    因此，其实本来没有什么Softmax Loss的概念，这个公式是在多分类任务中使用Softmax Function+Cross Entropy loss产生的。</p>
+
+<p>​	<strong>3. SphereFace， CosFace和ArcFace</strong></p>
+
+<p>    以上都是前情提要，因为SphereFace, CosFace和ArcFace的损失函数都是由Softmax Loss而来。</p>
+
+<p>    首先，令：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/15.png" style="zoom: 50%;" /></p>
+
+<p>    再做如下转换：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/16.png" style="zoom: 50%;" /></p>
+
+<p>    令：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/17.png" style="zoom: 50%;" /></p>
+
+<p>    再令||<strong>xi</strong>||的值为<strong>s</strong>，则之前的Softmax Loss可转换为如下表达：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/18.png" style="zoom: 67%;" /></p>
+
+<p>    这样转换，其实还是Softmax Loss只是换了个写法，接下来看本文介绍的三个方法分别是怎么定义的损失函数：</p>
+
+<p>    SphereFace:</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/19.png" style="zoom:80%;" /></p>
+
+<p>    CosFace:</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/20.png" style="zoom:80%;" /></p>
+
+<p>    ArcFace:</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/21.png" style="zoom:80%;" /></p>
+
+<p>    将上面三个公式融合一下还可以得到一个新的损失函数：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/22.png" style="zoom:80%;" /></p>
+
+<p>    接下来看为什么做上述这些变化，是有意义的。其实这样变换的思路并不新奇，<strong>逻辑回归-&gt;SVM</strong>，<strong>Triplet-Loss</strong>的设计都用的是这样的设计理念。</p>
+
+<p>    即：</p>
+
+<p>        类内聚敛(Intra-class compactness)</p>
+
+<p>        类间分离(Inter-class discrepancy)</p>
+
+<p>    用大白话说一下就是，训练的时候我们就告诉模型，啊，这两个类呢，你得给我们分出来，而且呢，还得按一定距离分出来，再白话一点就是，不但要分出来，还得分得够开。那么怎么能够让模型把两个类分得够开呢？这里我们简单说一下<strong>Triplet Loss</strong>，这个损失函数常用于人脸识别。</p>
+
+<p>    比方说，你现在有以下一个任务：训练一个模型，认出吴恩达老师。因为人脸的类别多，每个类的数据不多，你采用Pairwise的训练方式，用的损失函数是Triplet Loss，即每组样本有三张图，分别是Anchor Image，Positive Image, 和Negative Image。</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/23.png" />&lt;/div&gt;   </p>
+
+<p>长成Anchor Image这样的就是吴恩达老师，现在又分别有一张Positive Image，Negative Image，通过训练，希望模型可以缩小Anchor和Positive的距离，增大Anchor和Negative的距离，用更直观的图表现如下：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/24.png" alt="" /></p>
+
+<p>而训练的时候计算Triplet Loss如下：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/25.png" style="zoom:80%;" /></p>
+
+<p>上面公式分三部分，第一部分是Anchor和Positve的距离，第二部分是Anchor和Negative的距离，我们希望模型计算出的第一个距离小于第二个距离，但不是小就行了，还得小到一定量才行，公式中的第三部分的偏置值则告诉模型，要小多少，loss才能为零或者小于零。</p>
+
+<p>    这个理念搁在角向量里，则可以表达为：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/26.png" style="zoom:67%;" /></p>
+
+<p>即，Anchor的特征向量和Positve的特征向量的夹角得小于Anchor和Negative的夹角，而且得小m那么大。 </p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/27.png" style="zoom:80%;" /></p>
+
+<p>    假如是一个八分类的问题，a图是Softmax Loss的训练目标，而b图是ArcFace的训练目标，两个之间的不同不言而喻。</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/28.png" style="zoom:80%;" /></p>
+
+<p>    也就是说，我们不仅希望模型在角向量里可以将不同类区别开来，还可以按一定距离区别开来。SphereFace和CosFace设计理念也是一样的，至于它们三个的区别，看下图：</p>
+
+<p><img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/29.png" alt="" /></p>
+
+<p>    很多方法的设计理念是一致的，但变化是无穷的，精益求精。</p>
+
+<p>    就好像钢琴就那么一排键盘，却能弹出数不尽的曲子，而且，总会有更令人心动的曲子出现。</p>
+
+<p>    喜欢的话，关注，分享，点赞，点在看，赞赏吧<img src="../assets/images/ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计/30.png" style="zoom:50%;" />。</p>
+
+<p>除了文中的列出的三篇论文，还参考了：</p>
+
+<p>[1] Thomas Wood，Softmax Function Definition, DeepAI</p>
+
+<p>[2] Jason Brownlee，A Gentle Introduction to Cross-Entropy for Machine Learning，2019</p>
+
+<p>[3] 史丹利复合田，一文搞懂交叉熵在机器学习中的使用，透彻理解交叉熵背后的直觉，CSDN，2018</p>
+
+<p>[4] Daniel Godoy, Understanding binary cross-entropy / log loss: a visual explanation, Towards Data Science, 2018</p>
+
+<p>[5] <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483971&amp;idx=1&amp;sn=41b7cf6139bb0cae6c3ad926bf223147&amp;chksm=c0676081f710e997397f6ee38eda67be9e39ad02ceb27c865059a0c972909a8c7c439fd80b34&amp;scene=21#wechat_redirect">Softmax</a>, Chaos-gravity, 2020</p>
+
+<p>[6] <a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect">Cross Entropy Loss</a>, Chaos-gravity, 2020</p>
+
+<p>[7] Susmith Reddy, Intuition of Triplet Loss, 2019</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=ArcFace，CosFace，SphereFace，三种人脸识别算法的损失函数(Loss Function)的设计&url=http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/ArcFace-CosFace-SphereFace-%E4%B8%89%E7%A7%8D%E4%BA%BA%E8%84%B8%E8%AF%86%E5%88%AB%E7%AE%97%E6%B3%95%E7%9A%84%E6%8D%9F%E5%A4%B1%E5%87%BD%E6%95%B0(Loss-Function)%E7%9A%84%E8%AE%BE%E8%AE%A1/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Loss">Loss</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Face-Recognition">Face Recognition</a>               
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Loss-Function">Loss Function</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

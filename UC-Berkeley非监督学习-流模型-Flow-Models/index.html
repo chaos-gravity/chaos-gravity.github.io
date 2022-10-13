@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>UC Berkeley非监督学习--流模型（Flow Models） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>UC Berkeley非监督学习–流模型（Flow Models） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="UC Berkeley非监督学习–流模型（Flow Models）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 7：自监督学习（Self Supervised Learning） 1. 1-D     先看一维空间。样本都是一个值，生成也只需要生成一个值。      上一篇讲自回归模型，一直在求概率分布函数，这一节我们来求概率密度函数。本质上他们是一回事，只是前者是用来求离散值的概率，后者是用来求连续值的概率。     如果我们要预测的值是个连续值，而不是离散值，那么理论上一般情况下任何一个特定值发生的概率都趋近于0。所以如果是连续值，那么通常求的是在某个区间发生的概率，p(x)是概率密度函数，如上图右边公式求的是x在[a, b]这个区间的概率。概率密度函数一般满足以下条件：     那怎么基于概率密度函数产生极大似然函数：     求解时可以假设概率密度函数服从高斯分布。     但是很可惜，上面那种方法对高维数据，效果很差。     流模型中输出不再是概率密度函数，而是一个潜在变量（latent variables），我还是喜欢理解为特征向量。 再通过改变潜在向量来让计算机创造图片。 那么如何训练模型： 由于p(x|z)是很难求出来的，因为z可以是无穷的，所以只能换个思路： 概率密度函数的特性，全域积分为1，根据这个特性： 上面公式中f 得是可微且可逆的。可逆才可以根据潜在变量进行生成： 极大似然函数则可以转换为： 来看z遵循不同分布的训练结果(这里讨论的z只有一个值，即在一维空间中即可定位)： 比如均匀分布(Uniform)： 比如Beta(5,5): 比如高斯分布： 那除了训练模型，有没有其他方法可以得到x-&gt;z的函数，当x和z都只有一个变量的时候，是可以的。比如下面这个方法Cumulative Density Function (CDF)： 这样的话，z服从均匀分布，这种转换和采样的方式和上一个Lecture中Hostogram采样的方式理论上是一致的，只是CDF用于连续值，Hostogram用于离散值： 可以发现CDF可以把任何分布通过一个可逆可微函数转换成均匀分布，而可逆可微函数的逆函数依然可逆可微，因此均匀分布可以被转换成任意其他的分布。因此CDF可以实现将一个分布通过两次转换转换成任意其他分布的功能。 以上是z是单变量的情况，如果z是一个长度为2的向量呢？长度为n呢？ 1. 2-D     在上个Lecture中我们详细描述了自回归模型的原理，自回归的原理也可以用在流模型上，称之为自回归流模型（Autoregressive Flow）。既然是自回归的模型，那么就如上图，z1，z2依赖的值是不一样的。     看一些实验效果：     上图中右上角的图是x在二维空间的分布情况，注意一下，颜色只是一个分群的效果，不论紫色或者黄色都是x的样本。转换成z，且在二维空间中均匀分布，那么训练后得到z的分布情况则如右下角组图中左边的图所示。黄色和紫色的点没有区别，也都是样本，只是这样可以和x中的样本表达一个对应关系。     这张也是一样理解，任意分布都可以转换为均匀分布。 1. n-D     那么更高维呢？自回归流模型是否还能做到一样的事情。     如果使用流模型，基于的是逆函数的原理来生成，那么x和z的维度需要一致，左边的图片有多少个值，z就也得有多少个值。（注意：这里的维度概念和我们通常理解的矩阵维度，空间维度是不一样的概念）。 Autoregressive Flows (AF)     如果是自回归流模型，先看看是怎么进行生成的：     可以发现和自回归模型是一致的，先由由逆函数通过z1得到x1，再基于z2，x1得到x2，这样一直下去。而训练过程中的似然函数，和自回归模型中的也是一致的： 其中绝对符内的是f 的雅可比矩阵（Jacobian determinant），关于它的计算方式，可以参考[1]。f 必须是可微的，因此像一些不可微的激励函数比如ReLU，是不可以在这类模型中用的。另外，增加模型的深度可以直接将Flows接起来： Inverse Autoregressive Flows** (IAF)**     新的算法IAF，和AF不一样的地方很容易发现，生成的时候，只依赖z了，所以可以一下子就根据z把图片生成出来，而不需要一个像素点一个像素点顺序生成了，但是训练的时候，却需要一个像素点一个像素点把完整的z计算出来。也就是说AF是训练可并行，生成得顺序，而IAF是训练得顺序，生成可并行。 Affine Flows Affine Flows的参数就是一个可以把x-&gt;z的矩阵和一个偏置向量。训练就是求这个矩阵和这个偏置向量的值。 Elementwise Flows 这种方式可以大大减少计算量。 NICE/RealNVP 上面的公式很容易理解，就是把x分两半，前面一半直接给z，后面一半本质上是经过了一个Elementwise Affine Transformation。s和t都可以直接计算出来，s和t应该都是长度为d/2的向量。 因此，计算量大大减少了。 上图是RealNVP的效果，可以发现还是不错的。 那怎么把输入分两半呢： 如上图所示，可以不同位置分，但其实还可以不同通道分，可以不止分一种，可以分很多很多种，一起训练。另外就是RealNVP也会像其他神经网络一样，在一层一层网络推进的时候，减小每个通道的尺寸，增加通道的数量来更好地进行特征提取。如下图所示： 输入是3232c，通过第一层网络后，输出为两个16162c，通过第二层后输出为两个884c，再通过第三层，最后输出为4416c。 由上图可以发现，把图片分两半的方式是很重要的，左边是通过checkerboard去分，右边则是上下左右分，可以发现，右边这样粗暴的分法带来的结果并不如左边精细的来得效果好。 Flow++ = MoL transformation + self-attention in NN bits/dim越低越好 Glow （Invertible 1x1 convolutions + Large-scale training）     Glow是OpenAI的作品，可以生成十分真实的人脸。还是那句话，图像生成，不止GAN可以做到。 Continuous time flows (FFJORD)     允许不受限的架构，且保证了快速的概率计算。 反量化（Dequantization）     如果把概率密度函数应用在离散数据的数据集上，会出现一些问题： 理论上来说，密度值可以无穷大，所以很容易出现上图中间的情况，出现和周边密度值完全脱离的特别大的密度值，这样也可以loss很小，但很明显是不合理的。解决办法之一是把概率密度函数转换成概率分布函数来做这件事情： 但这样很麻烦，简单的是给数据集增加噪音，进行反量化（Dequantization）。 老实说上面公式没看懂，感兴趣的可以找论文看，本质上就是把离散分布转换得连续一点： 还是之前的数据集，经过反量化转换后，就不容易在概率密度函数上产生很突兀的峰值了。 结语：     流模型就到这里了，那么这类模型其实还有很多工作可以做，从上面的内容来看，关于她的工作还是比较少的，她还是有很大潜力可以变得更好，比如更快地生成更好的图片，更快地推理，更快地训练，更好地压缩图片等等。 声明：文中所有图片和原理均来自课程和参考。 参考： [1] Lil’Log, Flow-based Deep Generative Models, 2018" />
+<meta property="og:description" content="    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 7：自监督学习（Self Supervised Learning） 1. 1-D     先看一维空间。样本都是一个值，生成也只需要生成一个值。      上一篇讲自回归模型，一直在求概率分布函数，这一节我们来求概率密度函数。本质上他们是一回事，只是前者是用来求离散值的概率，后者是用来求连续值的概率。     如果我们要预测的值是个连续值，而不是离散值，那么理论上一般情况下任何一个特定值发生的概率都趋近于0。所以如果是连续值，那么通常求的是在某个区间发生的概率，p(x)是概率密度函数，如上图右边公式求的是x在[a, b]这个区间的概率。概率密度函数一般满足以下条件：     那怎么基于概率密度函数产生极大似然函数：     求解时可以假设概率密度函数服从高斯分布。     但是很可惜，上面那种方法对高维数据，效果很差。     流模型中输出不再是概率密度函数，而是一个潜在变量（latent variables），我还是喜欢理解为特征向量。 再通过改变潜在向量来让计算机创造图片。 那么如何训练模型： 由于p(x|z)是很难求出来的，因为z可以是无穷的，所以只能换个思路： 概率密度函数的特性，全域积分为1，根据这个特性： 上面公式中f 得是可微且可逆的。可逆才可以根据潜在变量进行生成： 极大似然函数则可以转换为： 来看z遵循不同分布的训练结果(这里讨论的z只有一个值，即在一维空间中即可定位)： 比如均匀分布(Uniform)： 比如Beta(5,5): 比如高斯分布： 那除了训练模型，有没有其他方法可以得到x-&gt;z的函数，当x和z都只有一个变量的时候，是可以的。比如下面这个方法Cumulative Density Function (CDF)： 这样的话，z服从均匀分布，这种转换和采样的方式和上一个Lecture中Hostogram采样的方式理论上是一致的，只是CDF用于连续值，Hostogram用于离散值： 可以发现CDF可以把任何分布通过一个可逆可微函数转换成均匀分布，而可逆可微函数的逆函数依然可逆可微，因此均匀分布可以被转换成任意其他的分布。因此CDF可以实现将一个分布通过两次转换转换成任意其他分布的功能。 以上是z是单变量的情况，如果z是一个长度为2的向量呢？长度为n呢？ 1. 2-D     在上个Lecture中我们详细描述了自回归模型的原理，自回归的原理也可以用在流模型上，称之为自回归流模型（Autoregressive Flow）。既然是自回归的模型，那么就如上图，z1，z2依赖的值是不一样的。     看一些实验效果：     上图中右上角的图是x在二维空间的分布情况，注意一下，颜色只是一个分群的效果，不论紫色或者黄色都是x的样本。转换成z，且在二维空间中均匀分布，那么训练后得到z的分布情况则如右下角组图中左边的图所示。黄色和紫色的点没有区别，也都是样本，只是这样可以和x中的样本表达一个对应关系。     这张也是一样理解，任意分布都可以转换为均匀分布。 1. n-D     那么更高维呢？自回归流模型是否还能做到一样的事情。     如果使用流模型，基于的是逆函数的原理来生成，那么x和z的维度需要一致，左边的图片有多少个值，z就也得有多少个值。（注意：这里的维度概念和我们通常理解的矩阵维度，空间维度是不一样的概念）。 Autoregressive Flows (AF)     如果是自回归流模型，先看看是怎么进行生成的：     可以发现和自回归模型是一致的，先由由逆函数通过z1得到x1，再基于z2，x1得到x2，这样一直下去。而训练过程中的似然函数，和自回归模型中的也是一致的： 其中绝对符内的是f 的雅可比矩阵（Jacobian determinant），关于它的计算方式，可以参考[1]。f 必须是可微的，因此像一些不可微的激励函数比如ReLU，是不可以在这类模型中用的。另外，增加模型的深度可以直接将Flows接起来： Inverse Autoregressive Flows** (IAF)**     新的算法IAF，和AF不一样的地方很容易发现，生成的时候，只依赖z了，所以可以一下子就根据z把图片生成出来，而不需要一个像素点一个像素点顺序生成了，但是训练的时候，却需要一个像素点一个像素点把完整的z计算出来。也就是说AF是训练可并行，生成得顺序，而IAF是训练得顺序，生成可并行。 Affine Flows Affine Flows的参数就是一个可以把x-&gt;z的矩阵和一个偏置向量。训练就是求这个矩阵和这个偏置向量的值。 Elementwise Flows 这种方式可以大大减少计算量。 NICE/RealNVP 上面的公式很容易理解，就是把x分两半，前面一半直接给z，后面一半本质上是经过了一个Elementwise Affine Transformation。s和t都可以直接计算出来，s和t应该都是长度为d/2的向量。 因此，计算量大大减少了。 上图是RealNVP的效果，可以发现还是不错的。 那怎么把输入分两半呢： 如上图所示，可以不同位置分，但其实还可以不同通道分，可以不止分一种，可以分很多很多种，一起训练。另外就是RealNVP也会像其他神经网络一样，在一层一层网络推进的时候，减小每个通道的尺寸，增加通道的数量来更好地进行特征提取。如下图所示： 输入是3232c，通过第一层网络后，输出为两个16162c，通过第二层后输出为两个884c，再通过第三层，最后输出为4416c。 由上图可以发现，把图片分两半的方式是很重要的，左边是通过checkerboard去分，右边则是上下左右分，可以发现，右边这样粗暴的分法带来的结果并不如左边精细的来得效果好。 Flow++ = MoL transformation + self-attention in NN bits/dim越低越好 Glow （Invertible 1x1 convolutions + Large-scale training）     Glow是OpenAI的作品，可以生成十分真实的人脸。还是那句话，图像生成，不止GAN可以做到。 Continuous time flows (FFJORD)     允许不受限的架构，且保证了快速的概率计算。 反量化（Dequantization）     如果把概率密度函数应用在离散数据的数据集上，会出现一些问题： 理论上来说，密度值可以无穷大，所以很容易出现上图中间的情况，出现和周边密度值完全脱离的特别大的密度值，这样也可以loss很小，但很明显是不合理的。解决办法之一是把概率密度函数转换成概率分布函数来做这件事情： 但这样很麻烦，简单的是给数据集增加噪音，进行反量化（Dequantization）。 老实说上面公式没看懂，感兴趣的可以找论文看，本质上就是把离散分布转换得连续一点： 还是之前的数据集，经过反量化转换后，就不容易在概率密度函数上产生很突兀的峰值了。 结语：     流模型就到这里了，那么这类模型其实还有很多工作可以做，从上面的内容来看，关于她的工作还是比较少的，她还是有很大潜力可以变得更好，比如更快地生成更好的图片，更快地推理，更快地训练，更好地压缩图片等等。 声明：文中所有图片和原理均来自课程和参考。 参考： [1] Lil’Log, Flow-based Deep Generative Models, 2018" />
+<link rel="canonical" href="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/" />
+<meta property="og:url" content="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E6%B5%81%E6%A8%A1%E5%9E%8B(Flow%20Models)/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-03-21T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。     这个课程总共十二讲，官方链接： https://sites.google.com/view/berkeley-cs294-158-sp20/home     目前已整理过：         Lecture 1：UC Berkeley非监督学习–介绍         Lecture 2：UC Berkeley非监督学习–自回归模型         Lecture 7：自监督学习（Self Supervised Learning） 1. 1-D     先看一维空间。样本都是一个值，生成也只需要生成一个值。      上一篇讲自回归模型，一直在求概率分布函数，这一节我们来求概率密度函数。本质上他们是一回事，只是前者是用来求离散值的概率，后者是用来求连续值的概率。     如果我们要预测的值是个连续值，而不是离散值，那么理论上一般情况下任何一个特定值发生的概率都趋近于0。所以如果是连续值，那么通常求的是在某个区间发生的概率，p(x)是概率密度函数，如上图右边公式求的是x在[a, b]这个区间的概率。概率密度函数一般满足以下条件：     那怎么基于概率密度函数产生极大似然函数：     求解时可以假设概率密度函数服从高斯分布。     但是很可惜，上面那种方法对高维数据，效果很差。     流模型中输出不再是概率密度函数，而是一个潜在变量（latent variables），我还是喜欢理解为特征向量。 再通过改变潜在向量来让计算机创造图片。 那么如何训练模型： 由于p(x|z)是很难求出来的，因为z可以是无穷的，所以只能换个思路： 概率密度函数的特性，全域积分为1，根据这个特性： 上面公式中f 得是可微且可逆的。可逆才可以根据潜在变量进行生成： 极大似然函数则可以转换为： 来看z遵循不同分布的训练结果(这里讨论的z只有一个值，即在一维空间中即可定位)： 比如均匀分布(Uniform)： 比如Beta(5,5): 比如高斯分布： 那除了训练模型，有没有其他方法可以得到x-&gt;z的函数，当x和z都只有一个变量的时候，是可以的。比如下面这个方法Cumulative Density Function (CDF)： 这样的话，z服从均匀分布，这种转换和采样的方式和上一个Lecture中Hostogram采样的方式理论上是一致的，只是CDF用于连续值，Hostogram用于离散值： 可以发现CDF可以把任何分布通过一个可逆可微函数转换成均匀分布，而可逆可微函数的逆函数依然可逆可微，因此均匀分布可以被转换成任意其他的分布。因此CDF可以实现将一个分布通过两次转换转换成任意其他分布的功能。 以上是z是单变量的情况，如果z是一个长度为2的向量呢？长度为n呢？ 1. 2-D     在上个Lecture中我们详细描述了自回归模型的原理，自回归的原理也可以用在流模型上，称之为自回归流模型（Autoregressive Flow）。既然是自回归的模型，那么就如上图，z1，z2依赖的值是不一样的。     看一些实验效果：     上图中右上角的图是x在二维空间的分布情况，注意一下，颜色只是一个分群的效果，不论紫色或者黄色都是x的样本。转换成z，且在二维空间中均匀分布，那么训练后得到z的分布情况则如右下角组图中左边的图所示。黄色和紫色的点没有区别，也都是样本，只是这样可以和x中的样本表达一个对应关系。     这张也是一样理解，任意分布都可以转换为均匀分布。 1. n-D     那么更高维呢？自回归流模型是否还能做到一样的事情。     如果使用流模型，基于的是逆函数的原理来生成，那么x和z的维度需要一致，左边的图片有多少个值，z就也得有多少个值。（注意：这里的维度概念和我们通常理解的矩阵维度，空间维度是不一样的概念）。 Autoregressive Flows (AF)     如果是自回归流模型，先看看是怎么进行生成的：     可以发现和自回归模型是一致的，先由由逆函数通过z1得到x1，再基于z2，x1得到x2，这样一直下去。而训练过程中的似然函数，和自回归模型中的也是一致的： 其中绝对符内的是f 的雅可比矩阵（Jacobian determinant），关于它的计算方式，可以参考[1]。f 必须是可微的，因此像一些不可微的激励函数比如ReLU，是不可以在这类模型中用的。另外，增加模型的深度可以直接将Flows接起来： Inverse Autoregressive Flows** (IAF)**     新的算法IAF，和AF不一样的地方很容易发现，生成的时候，只依赖z了，所以可以一下子就根据z把图片生成出来，而不需要一个像素点一个像素点顺序生成了，但是训练的时候，却需要一个像素点一个像素点把完整的z计算出来。也就是说AF是训练可并行，生成得顺序，而IAF是训练得顺序，生成可并行。 Affine Flows Affine Flows的参数就是一个可以把x-&gt;z的矩阵和一个偏置向量。训练就是求这个矩阵和这个偏置向量的值。 Elementwise Flows 这种方式可以大大减少计算量。 NICE/RealNVP 上面的公式很容易理解，就是把x分两半，前面一半直接给z，后面一半本质上是经过了一个Elementwise Affine Transformation。s和t都可以直接计算出来，s和t应该都是长度为d/2的向量。 因此，计算量大大减少了。 上图是RealNVP的效果，可以发现还是不错的。 那怎么把输入分两半呢： 如上图所示，可以不同位置分，但其实还可以不同通道分，可以不止分一种，可以分很多很多种，一起训练。另外就是RealNVP也会像其他神经网络一样，在一层一层网络推进的时候，减小每个通道的尺寸，增加通道的数量来更好地进行特征提取。如下图所示： 输入是3232c，通过第一层网络后，输出为两个16162c，通过第二层后输出为两个884c，再通过第三层，最后输出为4416c。 由上图可以发现，把图片分两半的方式是很重要的，左边是通过checkerboard去分，右边则是上下左右分，可以发现，右边这样粗暴的分法带来的结果并不如左边精细的来得效果好。 Flow++ = MoL transformation + self-attention in NN bits/dim越低越好 Glow （Invertible 1x1 convolutions + Large-scale training）     Glow是OpenAI的作品，可以生成十分真实的人脸。还是那句话，图像生成，不止GAN可以做到。 Continuous time flows (FFJORD)     允许不受限的架构，且保证了快速的概率计算。 反量化（Dequantization）     如果把概率密度函数应用在离散数据的数据集上，会出现一些问题： 理论上来说，密度值可以无穷大，所以很容易出现上图中间的情况，出现和周边密度值完全脱离的特别大的密度值，这样也可以loss很小，但很明显是不合理的。解决办法之一是把概率密度函数转换成概率分布函数来做这件事情： 但这样很麻烦，简单的是给数据集增加噪音，进行反量化（Dequantization）。 老实说上面公式没看懂，感兴趣的可以找论文看，本质上就是把离散分布转换得连续一点： 还是之前的数据集，经过反量化转换后，就不容易在概率密度函数上产生很突兀的峰值了。 结语：     流模型就到这里了，那么这类模型其实还有很多工作可以做，从上面的内容来看，关于她的工作还是比较少的，她还是有很大潜力可以变得更好，比如更快地生成更好的图片，更快地推理，更快地训练，更好地压缩图片等等。 声明：文中所有图片和原理均来自课程和参考。 参考： [1] Lil’Log, Flow-based Deep Generative Models, 2018","url":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/","image":"http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E6%B5%81%E6%A8%A1%E5%9E%8B(Flow%20Models)/1.png","@type":"BlogPosting","headline":"UC Berkeley非监督学习–流模型（Flow Models）","dateModified":"2022-03-21T00:00:00+08:00","datePublished":"2022-03-21T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">UC Berkeley非监督学习--流模型（Flow Models）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-03-21">21 Mar 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲<strong>Flow Models，流模型</strong>。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="" /></p>
+
+<p>    这个课程总共十二讲，官方链接：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://sites.google.com/view/berkeley-cs294-158-sp20/home
+</code></pre></div></div>
+
+<p>    目前已整理过：</p>
+
+<p>        Lecture 1：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484985&amp;idx=1&amp;sn=87564039ce87c9618bbd7fd68cb83339&amp;chksm=c06764fbf710eded7815eeeec344ab1b1807534664d18973ca9a3d566d8b7f1d37d62e2f2e8c&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–介绍</a></p>
+
+<p>        Lecture 2：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247485197&amp;idx=1&amp;sn=7c51b8ec0198f627d562fbf0dc0ddb1c&amp;chksm=c06765cff710ecd97a813a6550272be127ac5ea844764a08b2d33646c84e539fc45f212dfe0a&amp;scene=21#wechat_redirect">UC Berkeley非监督学习–自回归模型</a></p>
+
+<p>        Lecture 7：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484457&amp;idx=1&amp;sn=745a486cd18e1f8b0e7e6c80c325a4ef&amp;chksm=c06766ebf710effd996dc3ba4fa7c6cf8827fef00f09fce3d439c7e951c0e8b1ff987b8b0326&amp;scene=21#wechat_redirect">自监督学习（Self Supervised Learning）</a></p>
+
+<p><strong>1. 1-D</strong></p>
+
+<p>    先看一维空间。样本都是一个值，生成也只需要生成一个值。 </p>
+
+<p>    上一篇讲自回归模型，一直在求概率分布函数，这一节我们来求概率密度函数。本质上他们是一回事，只是前者是用来求离散值的概率，后者是用来求连续值的概率。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/2.png" style="zoom: 67%;" /></p>
+
+<p>    如果我们要预测的值是个连续值，而不是离散值，那么理论上一般情况下任何一个特定值发生的概率都趋近于0。所以如果是连续值，那么通常求的是在某个区间发生的概率，p(x)是概率密度函数，如上图右边公式求的是x在[a, b]这个区间的概率。概率密度函数一般满足以下条件：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/3.png" style="zoom: 50%;" /></p>
+
+<p>    那怎么基于概率密度函数产生极大似然函数：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/4.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/5.png" style="zoom:67%;" /></p>
+
+<p>    求解时可以假设概率密度函数服从高斯分布。</p>
+
+<p>    但是很可惜，上面那种方法对高维数据，效果很差。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/6.png" style="zoom: 50%;" /></p>
+
+<p>    流模型中输出不再是概率密度函数，而是一个<strong>潜在变量</strong>（<strong>latent variables</strong>），我还是喜欢理解为特征向量。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/7.png" style="zoom: 50%;" /></p>
+
+<p>再通过改变潜在向量来让计算机创造图片。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/8.png" style="zoom:50%;" /></p>
+
+<p>那么如何训练模型：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/9.png" style="zoom: 33%;" /></p>
+
+<p>由于p(x|z)是很难求出来的，因为z可以是无穷的，所以只能换个思路：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/10.png" style="zoom: 67%;" /></p>
+
+<p>概率密度函数的特性，全域积分为1，根据这个特性：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/11.png" style="zoom: 25%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/12.png" style="zoom:33%;" /></p>
+
+<p>上面公式中<strong>f </strong>得是可微且可逆的。可逆才可以根据潜在变量进行生成：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/13.png" style="zoom:25%;" /></p>
+
+<p>极大似然函数则可以转换为：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/14.png" style="zoom: 67%;" /></p>
+
+<p>来看z遵循不同分布的训练结果(这里讨论的z只有一个值，即在一维空间中即可定位)：</p>
+
+<p>比如均匀分布(Uniform)：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/15.png" alt="" /></p>
+
+<p>比如Beta(5,5):</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/16.png" alt="" /></p>
+
+<p>比如高斯分布：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/17.png" alt="" /></p>
+
+<p>那除了训练模型，有没有其他方法可以得到x-&gt;z的函数，当x和z都只有一个变量的时候，是可以的。比如下面这个方法<strong>Cumulative Density Functio</strong><strong>n (CDF)：</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/18.png" style="zoom:80%;" /></p>
+
+<p>这样的话，z服从均匀分布，这种转换和采样的方式和上一个Lecture中Hostogram采样的方式理论上是一致的，只是CDF用于连续值，Hostogram用于离散值：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/19.png" style="zoom: 80%;" /></p>
+
+<p>可以发现CDF可以把任何分布通过一个可逆可微函数转换成均匀分布，而可逆可微函数的逆函数依然可逆可微，因此均匀分布可以被转换成任意其他的分布。因此CDF可以实现将一个分布通过两次转换转换成任意其他分布的功能。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/20.png" style="zoom: 50%;" /></p>
+
+<p>以上是z是单变量的情况，如果z是一个长度为2的向量呢？长度为n呢？</p>
+
+<p><strong>1. 2-D</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/21.png" style="zoom: 25%;" /></p>
+
+<p>    在上个Lecture中我们详细描述了自回归模型的原理，自回归的原理也可以用在流模型上，称之为<strong>自回归流模型</strong>（<strong>Autoregressive Flow</strong>）。既然是自回归的模型，那么就如上图，z1，z2依赖的值是不一样的。</p>
+
+<p>    看一些实验效果：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/22.png" style="zoom: 67%;" /></p>
+
+<p>    上图中右上角的图是x在二维空间的分布情况，注意一下，颜色只是一个分群的效果，不论紫色或者黄色都是x的样本。转换成z，且在二维空间中均匀分布，那么训练后得到z的分布情况则如右下角组图中左边的图所示。黄色和紫色的点没有区别，也都是样本，只是这样可以和x中的样本表达一个对应关系。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/23.png" style="zoom:67%;" /></p>
+
+<p>    这张也是一样理解，任意分布都可以转换为均匀分布。</p>
+
+<p><strong>1. n-D</strong></p>
+
+<p>    那么更高维呢？自回归流模型是否还能做到一样的事情。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/24.png" style="zoom:80%;" /></p>
+
+<p>    如果使用流模型，基于的是逆函数的原理来生成，那么x和z的维度需要一致，左边的图片有多少个值，z就也得有多少个值。（注意：这里的维度概念和我们通常理解的矩阵维度，空间维度是不一样的概念）。</p>
+
+<p><strong>Autoregressive Flows (AF)</strong></p>
+
+<p>    如果是自回归流模型，先看看是怎么进行生成的：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/25.jpeg" style="zoom: 50%;" /></p>
+
+<p>    可以发现和自回归模型是一致的，先由由逆函数通过z1得到x1，再基于z2，x1得到x2，这样一直下去。而训练过程中的似然函数，和自回归模型中的也是一致的：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/26.png" style="zoom: 33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/27.png" style="zoom: 67%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/28.png" style="zoom: 33%;" /></p>
+
+<p>其中绝对符内的是<strong>f </strong>的<strong>雅可比矩阵（Jacobian determinant），</strong>关于它的计算方式，可以参考[1]。<strong>f </strong>必须是可微的，因此像一些不可微的激励函数比如ReLU，是不可以在这类模型中用的。另外，增加模型的深度可以直接将Flows接起来：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/29.png" style="zoom: 50%;" /></p>
+
+<p><strong>Inverse Autoregressive Flows</strong>** (IAF)**</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/30.png" style="zoom: 67%;" /></p>
+
+<p>    新的算法IAF，和AF不一样的地方很容易发现，生成的时候，只依赖z了，所以可以一下子就根据z把图片生成出来，而不需要一个像素点一个像素点顺序生成了，但是训练的时候，却需要一个像素点一个像素点把完整的z计算出来。也就是说AF是训练可并行，生成得顺序，而IAF是训练得顺序，生成可并行。</p>
+
+<p><strong>Affine Flows</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/31.png" style="zoom:67%;" /></p>
+
+<p>Affine Flows的参数就是一个可以把x-&gt;z的矩阵和一个偏置向量。训练就是求这个矩阵和这个偏置向量的值。</p>
+
+<p><strong>Elementwise Flows</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/32.png" style="zoom: 50%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/33.png" style="zoom: 50%;" /></p>
+
+<p>这种方式可以大大减少计算量。</p>
+
+<p><strong>NICE/RealNVP</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/34.png" style="zoom:50%;" /></p>
+
+<p>上面的公式很容易理解，就是把x分两半，前面一半直接给z，后面一半本质上是经过了一个Elementwise Affine Transformation。s和t都可以直接计算出来，s和t应该都是长度为d/2的向量。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/35.jpeg" style="zoom:50%;" /></p>
+
+<p>因此，计算量大大减少了。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/36.png" style="zoom:33%;" /></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/37.png" style="zoom:80%;" /></p>
+
+<p>上图是RealNVP的效果，可以发现还是不错的。</p>
+
+<p>那怎么把输入分两半呢：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/38.png" style="zoom:50%;" /></p>
+
+<p>如上图所示，可以不同位置分，但其实还可以不同通道分，可以不止分一种，可以分很多很多种，一起训练。另外就是RealNVP也会像其他神经网络一样，在一层一层网络推进的时候，减小每个通道的尺寸，增加通道的数量来更好地进行特征提取。如下图所示：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/39.png" style="zoom: 67%;" /></p>
+
+<p>输入是32<em>32</em>c，通过第一层网络后，输出为两个16<em>16</em>2c，通过第二层后输出为两个8<em>8</em>4c，再通过第三层，最后输出为4<em>4</em>16c。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/40.png" style="zoom:67%;" /></p>
+
+<p>由上图可以发现，把图片分两半的方式是很重要的，左边是通过checkerboard去分，右边则是上下左右分，可以发现，右边这样粗暴的分法带来的结果并不如左边精细的来得效果好。</p>
+
+<p><strong>Flow++ = MoL transformation + self-attention in NN</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/41.png" style="zoom:67%;" /></p>
+
+<p>bits/dim越低越好</p>
+
+<p><strong>Glow （Invertible 1x1 convolutions + Large-scale training）</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/42.png" style="zoom:67%;" /></p>
+
+<p>    Glow是OpenAI的作品，可以生成十分真实的人脸。还是那句话，图像生成，不止GAN可以做到。</p>
+
+<p><strong>Continuous time flows (FFJORD)</strong></p>
+
+<p>    允许不受限的架构，且保证了快速的概率计算。</p>
+
+<p><strong>反量化</strong><strong>（Dequantization）</strong></p>
+
+<p>    如果把概率密度函数应用在离散数据的数据集上，会出现一些问题：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/43.png" alt="" /></p>
+
+<p>理论上来说，密度值可以无穷大，所以很容易出现上图中间的情况，出现和周边密度值完全脱离的特别大的密度值，这样也可以loss很小，但很明显是不合理的。解决办法之一是把概率密度函数转换成概率分布函数来做这件事情：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/44.png" style="zoom: 50%;" /></p>
+
+<p>但这样很麻烦，简单的是给数据集增加噪音，进行<strong>反量化</strong><strong>（Dequantization）</strong>。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/45.png" style="zoom:67%;" /></p>
+
+<p>老实说上面公式没看懂，感兴趣的可以找论文看，本质上就是把离散分布转换得连续一点：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--流模型（Flow Models）/46.png" alt="" /></p>
+
+<p>还是之前的数据集，经过反量化转换后，就不容易在概率密度函数上产生很突兀的峰值了。</p>
+
+<p><strong>结语：</strong></p>
+
+<p>    流模型就到这里了，那么这类模型其实还有很多工作可以做，从上面的内容来看，关于她的工作还是比较少的，她还是有很大潜力可以变得更好，比如更快地生成更好的图片，更快地推理，更快地训练，更好地压缩图片等等。</p>
+
+<p><strong>声明：文中所有图片和原理均来自课程和参考。</strong></p>
+
+<p>参考：</p>
+
+<p>[1] Lil’Log, Flow-based Deep Generative Models, 2018</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=UC Berkeley非监督学习--流模型（Flow Models）&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Generative-Model">Generative Model</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Unsupervised-Learning">Unsupervised Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#UC-Berkeley-CS294-158">UC Berkeley CS294-158</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--自回归模型/1.png" alt="UC Berkeley非监督学习--自回归模型"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E5%9B%9E%E5%BD%92%E6%A8%A1%E5%9E%8B/">UC Berkeley非监督学习--自回归模型</a>
+                
+            </h2>
+            <h4 class="card-text">    想系统学习一下生成网络，开个新坑，翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第二讲Autoregressive Models，自回归模型。
+
+
+
+    这个课程总共十二讲，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">09 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

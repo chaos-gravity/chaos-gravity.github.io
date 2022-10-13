@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>如何抓取一个微信公众号的所有文章（Python）上篇 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>如何抓取一个微信公众号的所有文章（Python）上篇 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="如何抓取一个微信公众号的所有文章（Python）上篇" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="声明：基本步骤和核心方法均参考[1]，未做诸多更改，但是细节上可能因为微信自己做了更新，爬取细节很不同，另外就是加入了一些文本处理的操作。 1. 注册微信公众号 -&gt; 新建图文消息 -&gt; 超链接  -&gt; 右键下拉菜单点击“检查” -&gt; 检查页面中最上面选“Network” -&gt; 在左边的搜索公众号文章搜索自己想要的公众号，并选中 -&gt; 观察右边的检查页面，会发现下方列表中新增了一个以“appmsg”开头的项目，点击这个“appmsg”开头的项目，然后在检查页面的右方选择“Headers”。”Headers” 下面有个”General”，”General”里面有个”Request URL“ ： https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&amp;amp;search_field=null&amp;amp;begin=0&amp;amp;count=5&amp;amp;query=&amp;amp;type=101_1&amp;amp;free_publish_type=1&amp;amp;sub_action=list_ex&amp;amp;token=221080036&amp;amp;lang=zh_CN&amp;amp;f=json&amp;amp;ajax=1 2. 解析”Request URL“: 该链接分三部分： https://mp.weixin.qq.com/cgi-bin/appmsg 请求的基础部分 ?action=list 常用于动态网站，实现不同的参数值而生成不同的页面或者返回不同的结果 &amp;search_field=null&amp;begin=0&amp;count=5&amp;query=&amp;type=101_1&amp;free_publish_type=1&amp;sub_action=list_ex&amp;token=221080036&amp;lang=zh_CN&amp;f=json&amp;ajax=1 设置各种参数 3. 获取Cookie和User-Agent 直接用Python的Requests库访问该url，并不能正常获得结果。原因在于利用网页版微信公众号后台插入超链接时，是登录状态，而用python直接访问时是未登录状态。因此，需要手动获取访问时的Cookie和User-Agent,在用Python的Requests库进行访问时将其传入headers参数。这里将公众号标识符fakeid以及token参数保存在了一个yaml文件中，方便爬取时加载。这些都可以在右边的检查页面中搜到： fakeid: Mzg5... token: 22... user-agent: Mozilla/5.0 ... cookie: ua_id=9gk3jF5RLFPEru... 用yaml包读取参数 import yaml with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:     file_data = file.read() config = yaml.safe_load(file_data)  headers = {     &quot;Cookie&quot;: config[&#39;cookie&#39;],     &quot;User-Agent&quot;: config[&#39;user-agent&#39;]  } 4. 设置请求参数，生成url 对照自己找到的Request URL改下面的参数： # 请求参数 url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot; begin = &quot;0&quot; params = {     &quot;sub&quot;: &quot;list&quot;,     &quot;search_field&quot;:&quot;null&quot;,     &quot;sub_action&quot;: &quot;list_ex&quot;,      &quot;begin&quot;: begin,     &quot;free_publish_type&quot;: &quot;1&quot;,     &quot;count&quot;: &quot;5&quot;,     &quot;fakeid&quot;: config[&#39;fakeid&#39;],     &quot;type&quot;: &quot;101_1&quot;,     &quot;token&quot;: config[&#39;token&#39;],     &quot;lang&quot;: &quot;zh_CN&quot;,     &quot;f&quot;: &quot;json&quot;,     &quot;ajax&quot;: &quot;1&quot; } 5. 抓取文章题目，作者，链接及其他有用信息并保存成csv文件 这部分需要一行一行代码校验，防止微信公众号改了规则，下面代码和参考[1]就很不同了，而不同的主要原因来自于细节上的更改。 i = 0 column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot; article_list_path = &quot;article_list.csv&quot; with open(article_list_path, &quot;a&quot;) as f:     f.write(column_name + &#39;\n&#39;) while True:     begin = i * 5     params[&quot;begin&quot;] = str(begin)     # 随机暂停几秒，避免过快的请求导致过快的被查到     time.sleep(random.randint(1,10))     resp = requests.get(url, headers=headers, params = params, verify=False)     # 微信流量控制, 退出     if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:         print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))         time.sleep(3600)         continue              if i == &quot;0&quot;:         total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]         print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)          publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]     # 如果返回的内容中为空则结束     if len(publish_list) == 0:         print(&quot;all ariticle parsed&quot;)         break          for publish in publish_list:         publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]         info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \                 str(publish[&#39;title&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))         with open(article_list_path, &quot;a&quot;) as f:             f.write(info+&#39;\n&#39;)         print(&quot;\n&quot;.join(info.split(&quot;,&quot;)))         print(&quot;\n\n---------------------------------------------------------------------------------\n&quot;)     # 翻页     i += 1 6. 完整代码get_wechart_article_list.py： 注意：因为内容是保存成csv档，所以如果标题和内容简介中有逗好，都替换成了分号。 import yaml import time import random import requests def get_headers(config):     headers = {         &quot;Cookie&quot;: config[&#39;cookie&#39;],         &quot;User-Agent&quot;: config[&#39;user-agent&#39;]     }     return headers def get_params(config):     url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot;     begin = &quot;0&quot;     params = {         &quot;sub&quot;: &quot;list&quot;,         &quot;search_field&quot;:&quot;null&quot;,         &quot;sub_action&quot;: &quot;list_ex&quot;,          &quot;begin&quot;: begin,         &quot;free_publish_type&quot;: &quot;1&quot;,         &quot;count&quot;: &quot;5&quot;,         &quot;fakeid&quot;: config[&#39;fakeid&#39;],         &quot;type&quot;: &quot;101_1&quot;,         &quot;token&quot;: config[&#39;token&#39;],         &quot;lang&quot;: &quot;zh_CN&quot;,         &quot;f&quot;: &quot;json&quot;,         &quot;ajax&quot;: &quot;1&quot;     }     return params def get_article_list(headers, params):     i = 0     column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot;     article_list_path = &quot;article_list.csv&quot;     with open(article_list_path, &quot;a&quot;) as f:         f.write(column_name + &#39;\n&#39;)     while True:         begin = i * 5         params[&quot;begin&quot;] = str(begin)         # 随机暂停几秒，避免过快的请求导致过快的被查到         time.sleep(random.randint(1,10))         resp = requests.get(url, headers=headers, params = params, verify=False)         # 微信流量控制, 退出         if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:             print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))             time.sleep(3600)             continue                  if i == &quot;0&quot;:             total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]             print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)              publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]         # 如果返回的内容中为空则结束         if len(publish_list) == 0:             print(&quot;all ariticle parsed&quot;)             break              for publish in publish_list:             publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]             info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \                 str(publish[&#39;title&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))             with open(article_list_path, &quot;a&quot;) as f:                 f.write(info+&#39;\n&#39;)             print(&quot;\n&quot;.join(info.split(&quot;,&quot;)))             print(&quot;\n\n---------------------------------------------------------------------------------\n&quot;)         # 翻页         i += 1 def main():     with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:         file_data = file.read()     config = yaml.safe_load(file_data)      headers = get_headers(config)     params = get_params(config)     get_article_list(headers, params) if __name__ == &#39;__main__&#39;:     main() 这篇抓链接，下篇抓文章。 参考链接： https://zhuanlan.zhihu.com/p/379062852" />
+<meta property="og:description" content="声明：基本步骤和核心方法均参考[1]，未做诸多更改，但是细节上可能因为微信自己做了更新，爬取细节很不同，另外就是加入了一些文本处理的操作。 1. 注册微信公众号 -&gt; 新建图文消息 -&gt; 超链接  -&gt; 右键下拉菜单点击“检查” -&gt; 检查页面中最上面选“Network” -&gt; 在左边的搜索公众号文章搜索自己想要的公众号，并选中 -&gt; 观察右边的检查页面，会发现下方列表中新增了一个以“appmsg”开头的项目，点击这个“appmsg”开头的项目，然后在检查页面的右方选择“Headers”。”Headers” 下面有个”General”，”General”里面有个”Request URL“ ： https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&amp;amp;search_field=null&amp;amp;begin=0&amp;amp;count=5&amp;amp;query=&amp;amp;type=101_1&amp;amp;free_publish_type=1&amp;amp;sub_action=list_ex&amp;amp;token=221080036&amp;amp;lang=zh_CN&amp;amp;f=json&amp;amp;ajax=1 2. 解析”Request URL“: 该链接分三部分： https://mp.weixin.qq.com/cgi-bin/appmsg 请求的基础部分 ?action=list 常用于动态网站，实现不同的参数值而生成不同的页面或者返回不同的结果 &amp;search_field=null&amp;begin=0&amp;count=5&amp;query=&amp;type=101_1&amp;free_publish_type=1&amp;sub_action=list_ex&amp;token=221080036&amp;lang=zh_CN&amp;f=json&amp;ajax=1 设置各种参数 3. 获取Cookie和User-Agent 直接用Python的Requests库访问该url，并不能正常获得结果。原因在于利用网页版微信公众号后台插入超链接时，是登录状态，而用python直接访问时是未登录状态。因此，需要手动获取访问时的Cookie和User-Agent,在用Python的Requests库进行访问时将其传入headers参数。这里将公众号标识符fakeid以及token参数保存在了一个yaml文件中，方便爬取时加载。这些都可以在右边的检查页面中搜到： fakeid: Mzg5... token: 22... user-agent: Mozilla/5.0 ... cookie: ua_id=9gk3jF5RLFPEru... 用yaml包读取参数 import yaml with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:     file_data = file.read() config = yaml.safe_load(file_data)  headers = {     &quot;Cookie&quot;: config[&#39;cookie&#39;],     &quot;User-Agent&quot;: config[&#39;user-agent&#39;]  } 4. 设置请求参数，生成url 对照自己找到的Request URL改下面的参数： # 请求参数 url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot; begin = &quot;0&quot; params = {     &quot;sub&quot;: &quot;list&quot;,     &quot;search_field&quot;:&quot;null&quot;,     &quot;sub_action&quot;: &quot;list_ex&quot;,      &quot;begin&quot;: begin,     &quot;free_publish_type&quot;: &quot;1&quot;,     &quot;count&quot;: &quot;5&quot;,     &quot;fakeid&quot;: config[&#39;fakeid&#39;],     &quot;type&quot;: &quot;101_1&quot;,     &quot;token&quot;: config[&#39;token&#39;],     &quot;lang&quot;: &quot;zh_CN&quot;,     &quot;f&quot;: &quot;json&quot;,     &quot;ajax&quot;: &quot;1&quot; } 5. 抓取文章题目，作者，链接及其他有用信息并保存成csv文件 这部分需要一行一行代码校验，防止微信公众号改了规则，下面代码和参考[1]就很不同了，而不同的主要原因来自于细节上的更改。 i = 0 column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot; article_list_path = &quot;article_list.csv&quot; with open(article_list_path, &quot;a&quot;) as f:     f.write(column_name + &#39;\n&#39;) while True:     begin = i * 5     params[&quot;begin&quot;] = str(begin)     # 随机暂停几秒，避免过快的请求导致过快的被查到     time.sleep(random.randint(1,10))     resp = requests.get(url, headers=headers, params = params, verify=False)     # 微信流量控制, 退出     if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:         print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))         time.sleep(3600)         continue              if i == &quot;0&quot;:         total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]         print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)          publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]     # 如果返回的内容中为空则结束     if len(publish_list) == 0:         print(&quot;all ariticle parsed&quot;)         break          for publish in publish_list:         publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]         info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \                 str(publish[&#39;title&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))         with open(article_list_path, &quot;a&quot;) as f:             f.write(info+&#39;\n&#39;)         print(&quot;\n&quot;.join(info.split(&quot;,&quot;)))         print(&quot;\n\n---------------------------------------------------------------------------------\n&quot;)     # 翻页     i += 1 6. 完整代码get_wechart_article_list.py： 注意：因为内容是保存成csv档，所以如果标题和内容简介中有逗好，都替换成了分号。 import yaml import time import random import requests def get_headers(config):     headers = {         &quot;Cookie&quot;: config[&#39;cookie&#39;],         &quot;User-Agent&quot;: config[&#39;user-agent&#39;]     }     return headers def get_params(config):     url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot;     begin = &quot;0&quot;     params = {         &quot;sub&quot;: &quot;list&quot;,         &quot;search_field&quot;:&quot;null&quot;,         &quot;sub_action&quot;: &quot;list_ex&quot;,          &quot;begin&quot;: begin,         &quot;free_publish_type&quot;: &quot;1&quot;,         &quot;count&quot;: &quot;5&quot;,         &quot;fakeid&quot;: config[&#39;fakeid&#39;],         &quot;type&quot;: &quot;101_1&quot;,         &quot;token&quot;: config[&#39;token&#39;],         &quot;lang&quot;: &quot;zh_CN&quot;,         &quot;f&quot;: &quot;json&quot;,         &quot;ajax&quot;: &quot;1&quot;     }     return params def get_article_list(headers, params):     i = 0     column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot;     article_list_path = &quot;article_list.csv&quot;     with open(article_list_path, &quot;a&quot;) as f:         f.write(column_name + &#39;\n&#39;)     while True:         begin = i * 5         params[&quot;begin&quot;] = str(begin)         # 随机暂停几秒，避免过快的请求导致过快的被查到         time.sleep(random.randint(1,10))         resp = requests.get(url, headers=headers, params = params, verify=False)         # 微信流量控制, 退出         if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:             print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))             time.sleep(3600)             continue                  if i == &quot;0&quot;:             total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]             print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)              publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]         # 如果返回的内容中为空则结束         if len(publish_list) == 0:             print(&quot;all ariticle parsed&quot;)             break              for publish in publish_list:             publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]             info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \                 str(publish[&#39;title&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))             with open(article_list_path, &quot;a&quot;) as f:                 f.write(info+&#39;\n&#39;)             print(&quot;\n&quot;.join(info.split(&quot;,&quot;)))             print(&quot;\n\n---------------------------------------------------------------------------------\n&quot;)         # 翻页         i += 1 def main():     with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:         file_data = file.read()     config = yaml.safe_load(file_data)      headers = get_headers(config)     params = get_params(config)     get_article_list(headers, params) if __name__ == &#39;__main__&#39;:     main() 这篇抓链接，下篇抓文章。 参考链接： https://zhuanlan.zhihu.com/p/379062852" />
+<link rel="canonical" href="http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/" />
+<meta property="og:url" content="http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0(Python)%E4%B8%8A%E7%AF%87/0.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2022-07-28T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"声明：基本步骤和核心方法均参考[1]，未做诸多更改，但是细节上可能因为微信自己做了更新，爬取细节很不同，另外就是加入了一些文本处理的操作。 1. 注册微信公众号 -&gt; 新建图文消息 -&gt; 超链接  -&gt; 右键下拉菜单点击“检查” -&gt; 检查页面中最上面选“Network” -&gt; 在左边的搜索公众号文章搜索自己想要的公众号，并选中 -&gt; 观察右边的检查页面，会发现下方列表中新增了一个以“appmsg”开头的项目，点击这个“appmsg”开头的项目，然后在检查页面的右方选择“Headers”。”Headers” 下面有个”General”，”General”里面有个”Request URL“ ： https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&amp;amp;search_field=null&amp;amp;begin=0&amp;amp;count=5&amp;amp;query=&amp;amp;type=101_1&amp;amp;free_publish_type=1&amp;amp;sub_action=list_ex&amp;amp;token=221080036&amp;amp;lang=zh_CN&amp;amp;f=json&amp;amp;ajax=1 2. 解析”Request URL“: 该链接分三部分： https://mp.weixin.qq.com/cgi-bin/appmsg 请求的基础部分 ?action=list 常用于动态网站，实现不同的参数值而生成不同的页面或者返回不同的结果 &amp;search_field=null&amp;begin=0&amp;count=5&amp;query=&amp;type=101_1&amp;free_publish_type=1&amp;sub_action=list_ex&amp;token=221080036&amp;lang=zh_CN&amp;f=json&amp;ajax=1 设置各种参数 3. 获取Cookie和User-Agent 直接用Python的Requests库访问该url，并不能正常获得结果。原因在于利用网页版微信公众号后台插入超链接时，是登录状态，而用python直接访问时是未登录状态。因此，需要手动获取访问时的Cookie和User-Agent,在用Python的Requests库进行访问时将其传入headers参数。这里将公众号标识符fakeid以及token参数保存在了一个yaml文件中，方便爬取时加载。这些都可以在右边的检查页面中搜到： fakeid: Mzg5... token: 22... user-agent: Mozilla/5.0 ... cookie: ua_id=9gk3jF5RLFPEru... 用yaml包读取参数 import yaml with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:     file_data = file.read() config = yaml.safe_load(file_data)  headers = {     &quot;Cookie&quot;: config[&#39;cookie&#39;],     &quot;User-Agent&quot;: config[&#39;user-agent&#39;]  } 4. 设置请求参数，生成url 对照自己找到的Request URL改下面的参数： # 请求参数 url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot; begin = &quot;0&quot; params = {     &quot;sub&quot;: &quot;list&quot;,     &quot;search_field&quot;:&quot;null&quot;,     &quot;sub_action&quot;: &quot;list_ex&quot;,      &quot;begin&quot;: begin,     &quot;free_publish_type&quot;: &quot;1&quot;,     &quot;count&quot;: &quot;5&quot;,     &quot;fakeid&quot;: config[&#39;fakeid&#39;],     &quot;type&quot;: &quot;101_1&quot;,     &quot;token&quot;: config[&#39;token&#39;],     &quot;lang&quot;: &quot;zh_CN&quot;,     &quot;f&quot;: &quot;json&quot;,     &quot;ajax&quot;: &quot;1&quot; } 5. 抓取文章题目，作者，链接及其他有用信息并保存成csv文件 这部分需要一行一行代码校验，防止微信公众号改了规则，下面代码和参考[1]就很不同了，而不同的主要原因来自于细节上的更改。 i = 0 column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot; article_list_path = &quot;article_list.csv&quot; with open(article_list_path, &quot;a&quot;) as f:     f.write(column_name + &#39;\\n&#39;) while True:     begin = i * 5     params[&quot;begin&quot;] = str(begin)     # 随机暂停几秒，避免过快的请求导致过快的被查到     time.sleep(random.randint(1,10))     resp = requests.get(url, headers=headers, params = params, verify=False)     # 微信流量控制, 退出     if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:         print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))         time.sleep(3600)         continue              if i == &quot;0&quot;:         total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]         print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)          publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]     # 如果返回的内容中为空则结束     if len(publish_list) == 0:         print(&quot;all ariticle parsed&quot;)         break          for publish in publish_list:         publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]         info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \\                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \\                 str(publish[&#39;title&#39;].replace(&quot;\\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \\                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \\                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))         with open(article_list_path, &quot;a&quot;) as f:             f.write(info+&#39;\\n&#39;)         print(&quot;\\n&quot;.join(info.split(&quot;,&quot;)))         print(&quot;\\n\\n---------------------------------------------------------------------------------\\n&quot;)     # 翻页     i += 1 6. 完整代码get_wechart_article_list.py： 注意：因为内容是保存成csv档，所以如果标题和内容简介中有逗好，都替换成了分号。 import yaml import time import random import requests def get_headers(config):     headers = {         &quot;Cookie&quot;: config[&#39;cookie&#39;],         &quot;User-Agent&quot;: config[&#39;user-agent&#39;]     }     return headers def get_params(config):     url = &quot;https://mp.weixin.qq.com/cgi-bin/appmsgpublish&quot;     begin = &quot;0&quot;     params = {         &quot;sub&quot;: &quot;list&quot;,         &quot;search_field&quot;:&quot;null&quot;,         &quot;sub_action&quot;: &quot;list_ex&quot;,          &quot;begin&quot;: begin,         &quot;free_publish_type&quot;: &quot;1&quot;,         &quot;count&quot;: &quot;5&quot;,         &quot;fakeid&quot;: config[&#39;fakeid&#39;],         &quot;type&quot;: &quot;101_1&quot;,         &quot;token&quot;: config[&#39;token&#39;],         &quot;lang&quot;: &quot;zh_CN&quot;,         &quot;f&quot;: &quot;json&quot;,         &quot;ajax&quot;: &quot;1&quot;     }     return params def get_article_list(headers, params):     i = 0     column_name = &quot;aid,appmsgid,author_name,title,cover_img,digest,link,create_time&quot;     article_list_path = &quot;article_list.csv&quot;     with open(article_list_path, &quot;a&quot;) as f:         f.write(column_name + &#39;\\n&#39;)     while True:         begin = i * 5         params[&quot;begin&quot;] = str(begin)         # 随机暂停几秒，避免过快的请求导致过快的被查到         time.sleep(random.randint(1,10))         resp = requests.get(url, headers=headers, params = params, verify=False)         # 微信流量控制, 退出         if resp.json()[&#39;base_resp&#39;][&#39;ret&#39;] == 200013:             print(&quot;frequencey control, stop at {}&quot;.format(str(begin)))             time.sleep(3600)             continue                  if i == &quot;0&quot;:             total_count = eval(resp.json()[&#39;publish_page&#39;])[&#39;total_count&#39;]             print(&quot;We have &quot;+str(tatal_count) + &quot; articles.&quot;)              publish_list = eval(resp.json()[&#39;publish_page&#39;])[&#39;publish_list&#39;]         # 如果返回的内容中为空则结束         if len(publish_list) == 0:             print(&quot;all ariticle parsed&quot;)             break              for publish in publish_list:             publish = eval(publish[&#39;publish_info&#39;].replace(&quot;true&quot;,&quot;True&quot;).replace(&quot;false&quot;,&quot;False&quot;))[&#39;appmsgex&#39;][0]             info = &#39;&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;,&quot;{}&quot;&#39;.format(str(publish[&quot;aid&quot;]), \\                 str(publish[&#39;appmsgid&#39;]), str(publish[&#39;author_name&#39;]), \\                 str(publish[&#39;title&#39;].replace(&quot;\\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \\                 str(publish[&#39;cover&#39;]), str(publish[&#39;digest&#39;].replace(&quot;\\n&quot;,&quot;&quot;).replace(&quot;,&quot;,&quot;;&quot;)), \\                 str(publish[&#39;link&#39;]), str(publish[&#39;create_time&#39;]))             with open(article_list_path, &quot;a&quot;) as f:                 f.write(info+&#39;\\n&#39;)             print(&quot;\\n&quot;.join(info.split(&quot;,&quot;)))             print(&quot;\\n\\n---------------------------------------------------------------------------------\\n&quot;)         # 翻页         i += 1 def main():     with open(&quot;chaos-gravity.yaml&quot;, &quot;r&quot;) as file:         file_data = file.read()     config = yaml.safe_load(file_data)      headers = get_headers(config)     params = get_params(config)     get_article_list(headers, params) if __name__ == &#39;__main__&#39;:     main() 这篇抓链接，下篇抓文章。 参考链接： https://zhuanlan.zhihu.com/p/379062852","url":"http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/","image":"http://localhost:4000/assets/images/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0(Python)%E4%B8%8A%E7%AF%87/0.png","@type":"BlogPosting","headline":"如何抓取一个微信公众号的所有文章（Python）上篇","dateModified":"2022-07-28T00:00:00+08:00","datePublished":"2022-07-28T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">如何抓取一个微信公众号的所有文章（Python）上篇</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2022-07-28">28 Jul 2022</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/如何抓取一个微信公众号的所有文章（Python）上篇/0.png" alt="如何抓取一个微信公众号的所有文章（Python）上篇">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>声明：基本步骤和核心方法均参考[1]，未做诸多更改，但是细节上可能因为微信自己做了更新，爬取细节很不同，另外就是加入了一些文本处理的操作。</p>
+
+<h4 id="1-注册微信公众号---新建图文消息---超链接---右键下拉菜单点击检查---检查页面中最上面选network---在左边的搜索公众号文章搜索自己想要的公众号并选中---观察右边的检查页面会发现下方列表中新增了一个以appmsg开头的项目点击这个appmsg开头的项目然后在检查页面的右方选择headersheaders-下面有个generalgeneral里面有个request-url-">1. 注册微信公众号 -&gt; 新建图文消息 -&gt; 超链接  -&gt; 右键下拉菜单点击“检查” -&gt; 检查页面中最上面选“Network” -&gt; 在左边的搜索公众号文章搜索自己想要的公众号，并选中 -&gt; 观察右边的检查页面，会发现下方列表中新增了一个以“appmsg”开头的项目，点击这个“appmsg”开头的项目，然后在检查页面的右方选择“Headers”。”Headers” 下面有个”General”，”General”里面有个”Request URL“ ：</h4>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://mp.weixin.qq.com/cgi-bin/appmsgpublish?sub=list&amp;amp;search_field=null&amp;amp;begin=0&amp;amp;count=5&amp;amp;query=&amp;amp;type=101_1&amp;amp;free_publish_type=1&amp;amp;sub_action=list_ex&amp;amp;token=221080036&amp;amp;lang=zh_CN&amp;amp;f=json&amp;amp;ajax=1
+</code></pre></div></div>
+
+<h4 id="2-解析request-url">2. 解析”Request URL“:</h4>
+
+<p>该链接分三部分：</p>
+<ol>
+  <li>https://mp.weixin.qq.com/cgi-bin/appmsg 请求的基础部分</li>
+  <li>?action=list 常用于动态网站，实现不同的参数值而生成不同的页面或者返回不同的结果</li>
+  <li>&amp;search_field=null&amp;begin=0&amp;count=5&amp;query=&amp;type=101_1&amp;free_publish_type=1&amp;sub_action=list_ex&amp;token=221080036&amp;lang=zh_CN&amp;f=json&amp;ajax=1 设置各种参数</li>
+</ol>
+
+<h4 id="3-获取cookie和user-agent">3. 获取Cookie和User-Agent</h4>
+
+<p>直接用Python的Requests库访问该url，并不能正常获得结果。原因在于利用网页版微信公众号后台插入超链接时，是登录状态，而用python直接访问时是未登录状态。因此，需要手动获取访问时的<code class="language-plaintext highlighter-rouge">Cookie</code>和<code class="language-plaintext highlighter-rouge">User-Agent</code>,在用Python的Requests库进行访问时将其传入<code class="language-plaintext highlighter-rouge">headers</code>参数。这里将公众号标识符<code class="language-plaintext highlighter-rouge">fakeid</code>以及<code class="language-plaintext highlighter-rouge">token</code>参数保存在了一个yaml文件中，方便爬取时加载。这些都可以在右边的检查页面中搜到：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>fakeid: Mzg5...
+token: 22...
+user-agent: Mozilla/5.0 ...
+cookie: ua_id=9gk3jF5RLFPEru...
+</code></pre></div></div>
+
+<p>用yaml包读取参数</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span><span class="err"> </span><span class="n">yaml</span>
+<span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="s">"chaos-gravity.yaml"</span><span class="p">,</span><span class="err"> </span><span class="s">"r"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="nb">file</span><span class="p">:</span>
+<span class="err">    </span><span class="n">file_data</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">file</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+<span class="n">config</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">yaml</span><span class="p">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">file_data</span><span class="p">)</span><span class="err"> </span>
+
+<span class="n">headers</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">{</span>
+<span class="err">    </span><span class="s">"Cookie"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'cookie'</span><span class="p">],</span>
+<span class="err">    </span><span class="s">"User-Agent"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'user-agent'</span><span class="p">]</span><span class="err"> </span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="4-设置请求参数生成url">4. 设置请求参数，生成url</h4>
+
+<p>对照自己找到的<code class="language-plaintext highlighter-rouge">Request URL</code>改下面的参数：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># 请求参数
+</span><span class="n">url</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"https://mp.weixin.qq.com/cgi-bin/appmsgpublish"</span>
+<span class="n">begin</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"0"</span>
+<span class="n">params</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">{</span>
+<span class="err">    </span><span class="s">"sub"</span><span class="p">:</span><span class="err"> </span><span class="s">"list"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"search_field"</span><span class="p">:</span><span class="s">"null"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"sub_action"</span><span class="p">:</span><span class="err"> </span><span class="s">"list_ex"</span><span class="p">,</span><span class="err"> </span>
+<span class="err">    </span><span class="s">"begin"</span><span class="p">:</span><span class="err"> </span><span class="n">begin</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"free_publish_type"</span><span class="p">:</span><span class="err"> </span><span class="s">"1"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"count"</span><span class="p">:</span><span class="err"> </span><span class="s">"5"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"fakeid"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'fakeid'</span><span class="p">],</span>
+<span class="err">    </span><span class="s">"type"</span><span class="p">:</span><span class="err"> </span><span class="s">"101_1"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"token"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'token'</span><span class="p">],</span>
+<span class="err">    </span><span class="s">"lang"</span><span class="p">:</span><span class="err"> </span><span class="s">"zh_CN"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"f"</span><span class="p">:</span><span class="err"> </span><span class="s">"json"</span><span class="p">,</span>
+<span class="err">    </span><span class="s">"ajax"</span><span class="p">:</span><span class="err"> </span><span class="s">"1"</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="5-抓取文章题目作者链接及其他有用信息并保存成csv文件">5. 抓取文章题目，作者，链接及其他有用信息并保存成csv文件</h4>
+
+<p>这部分需要一行一行代码校验，防止微信公众号改了规则，下面代码和参考[1]就很不同了，而不同的主要原因来自于细节上的更改。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">i</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="mi">0</span>
+<span class="n">column_name</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"aid,appmsgid,author_name,title,cover_img,digest,link,create_time"</span>
+<span class="n">article_list_path</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"article_list.csv"</span>
+<span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="n">article_list_path</span><span class="p">,</span><span class="err"> </span><span class="s">"a"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">f</span><span class="p">:</span>
+<span class="err">    </span><span class="n">f</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">column_name</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">)</span>
+<span class="k">while</span><span class="err"> </span><span class="bp">True</span><span class="p">:</span>
+<span class="err">    </span><span class="n">begin</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">i</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="mi">5</span>
+<span class="err">    </span><span class="n">params</span><span class="p">[</span><span class="s">"begin"</span><span class="p">]</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># 随机暂停几秒，避免过快的请求导致过快的被查到
+</span><span class="err">    </span><span class="n">time</span><span class="p">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">10</span><span class="p">))</span>
+<span class="err">    </span><span class="n">resp</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="err"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="err"> </span><span class="n">params</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">params</span><span class="p">,</span><span class="err"> </span><span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="err">    </span><span class="c1"># 微信流量控制, 退出
+</span><span class="err">    </span><span class="k">if</span><span class="err"> </span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'base_resp'</span><span class="p">][</span><span class="s">'ret'</span><span class="p">]</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">200013</span><span class="p">:</span>
+<span class="err">        </span><span class="k">print</span><span class="p">(</span><span class="s">"frequencey control, stop at {}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">begin</span><span class="p">)))</span>
+<span class="err">        </span><span class="n">time</span><span class="p">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3600</span><span class="p">)</span>
+<span class="err">        </span><span class="k">continue</span>
+<span class="err">        </span>
+<span class="err">    </span><span class="k">if</span><span class="err"> </span><span class="n">i</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="s">"0"</span><span class="p">:</span>
+<span class="err">        </span><span class="n">total_count</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'publish_page'</span><span class="p">])[</span><span class="s">'total_count'</span><span class="p">]</span>
+<span class="err">        </span><span class="k">print</span><span class="p">(</span><span class="s">"We have "</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">tatal_count</span><span class="p">)</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="s">" articles."</span><span class="p">)</span>
+<span class="err">    </span>
+<span class="err">    </span><span class="n">publish_list</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'publish_page'</span><span class="p">])[</span><span class="s">'publish_list'</span><span class="p">]</span>
+<span class="err">    </span><span class="c1"># 如果返回的内容中为空则结束
+</span><span class="err">    </span><span class="k">if</span><span class="err"> </span><span class="nb">len</span><span class="p">(</span><span class="n">publish_list</span><span class="p">)</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">0</span><span class="p">:</span>
+<span class="err">        </span><span class="k">print</span><span class="p">(</span><span class="s">"all ariticle parsed"</span><span class="p">)</span>
+<span class="err">        </span><span class="k">break</span>
+<span class="err">    </span>
+<span class="err">    </span><span class="k">for</span><span class="err"> </span><span class="n">publish</span><span class="err"> </span><span class="ow">in</span><span class="err"> </span><span class="n">publish_list</span><span class="p">:</span>
+<span class="err">        </span><span class="n">publish</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'publish_info'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"true"</span><span class="p">,</span><span class="s">"True"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"false"</span><span class="p">,</span><span class="s">"False"</span><span class="p">))[</span><span class="s">'appmsgex'</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="err">        </span><span class="n">info</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'"{}","{}","{}","{}","{}","{}","{}","{}"'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">"aid"</span><span class="p">]),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'appmsgid'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'author_name'</span><span class="p">]),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'title'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="s">""</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">","</span><span class="p">,</span><span class="s">";"</span><span class="p">)),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'cover'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'digest'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="s">""</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">","</span><span class="p">,</span><span class="s">";"</span><span class="p">)),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'link'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'create_time'</span><span class="p">]))</span>
+<span class="err">        </span><span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="n">article_list_path</span><span class="p">,</span><span class="err"> </span><span class="s">"a"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">f</span><span class="p">:</span>
+<span class="err">            </span><span class="n">f</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">info</span><span class="o">+</span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">)</span>
+<span class="err">        </span><span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">info</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="s">","</span><span class="p">)))</span>
+<span class="err">        </span><span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n\n</span><span class="s">---------------------------------------------------------------------------------</span><span class="se">\n</span><span class="s">"</span><span class="p">)</span>
+
+<span class="err">    </span><span class="c1"># 翻页
+</span><span class="err">    </span><span class="n">i</span><span class="err"> </span><span class="o">+=</span><span class="err"> </span><span class="mi">1</span>
+</code></pre></div></div>
+
+<h4 id="6-完整代码get_wechart_article_listpy">6. 完整代码get_wechart_article_list.py：</h4>
+
+<p>注意：因为内容是保存成csv档，所以如果标题和内容简介中有逗好，都替换成了分号。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span><span class="err"> </span><span class="n">yaml</span>
+<span class="k">import</span><span class="err"> </span><span class="n">time</span>
+<span class="k">import</span><span class="err"> </span><span class="n">random</span>
+<span class="k">import</span><span class="err"> </span><span class="n">requests</span>
+<span class="n">def</span><span class="err"> </span><span class="n">get_headers</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+<span class="err">    </span><span class="n">headers</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">{</span>
+<span class="err">        </span><span class="s">"Cookie"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'cookie'</span><span class="p">],</span>
+<span class="err">        </span><span class="s">"User-Agent"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'user-agent'</span><span class="p">]</span>
+<span class="err">    </span><span class="p">}</span>
+<span class="err">    </span><span class="k">return</span><span class="err"> </span><span class="n">headers</span>
+<span class="n">def</span><span class="err"> </span><span class="n">get_params</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+<span class="err">    </span><span class="n">url</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"https://mp.weixin.qq.com/cgi-bin/appmsgpublish"</span>
+<span class="err">    </span><span class="n">begin</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"0"</span>
+<span class="err">    </span><span class="n">params</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="p">{</span>
+<span class="err">        </span><span class="s">"sub"</span><span class="p">:</span><span class="err"> </span><span class="s">"list"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"search_field"</span><span class="p">:</span><span class="s">"null"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"sub_action"</span><span class="p">:</span><span class="err"> </span><span class="s">"list_ex"</span><span class="p">,</span><span class="err"> </span>
+<span class="err">        </span><span class="s">"begin"</span><span class="p">:</span><span class="err"> </span><span class="n">begin</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"free_publish_type"</span><span class="p">:</span><span class="err"> </span><span class="s">"1"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"count"</span><span class="p">:</span><span class="err"> </span><span class="s">"5"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"fakeid"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'fakeid'</span><span class="p">],</span>
+<span class="err">        </span><span class="s">"type"</span><span class="p">:</span><span class="err"> </span><span class="s">"101_1"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"token"</span><span class="p">:</span><span class="err"> </span><span class="n">config</span><span class="p">[</span><span class="s">'token'</span><span class="p">],</span>
+<span class="err">        </span><span class="s">"lang"</span><span class="p">:</span><span class="err"> </span><span class="s">"zh_CN"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"f"</span><span class="p">:</span><span class="err"> </span><span class="s">"json"</span><span class="p">,</span>
+<span class="err">        </span><span class="s">"ajax"</span><span class="p">:</span><span class="err"> </span><span class="s">"1"</span>
+<span class="err">    </span><span class="p">}</span>
+<span class="err">    </span><span class="k">return</span><span class="err"> </span><span class="n">params</span>
+<span class="n">def</span><span class="err"> </span><span class="n">get_article_list</span><span class="p">(</span><span class="n">headers</span><span class="p">,</span><span class="err"> </span><span class="n">params</span><span class="p">):</span>
+<span class="err">    </span><span class="n">i</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="mi">0</span>
+<span class="err">    </span><span class="n">column_name</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"aid,appmsgid,author_name,title,cover_img,digest,link,create_time"</span>
+<span class="err">    </span><span class="n">article_list_path</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">"article_list.csv"</span>
+<span class="err">    </span><span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="n">article_list_path</span><span class="p">,</span><span class="err"> </span><span class="s">"a"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">f</span><span class="p">:</span>
+<span class="err">        </span><span class="n">f</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">column_name</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">)</span>
+<span class="err">    </span><span class="k">while</span><span class="err"> </span><span class="bp">True</span><span class="p">:</span>
+<span class="err">        </span><span class="n">begin</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">i</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="mi">5</span>
+<span class="err">        </span><span class="n">params</span><span class="p">[</span><span class="s">"begin"</span><span class="p">]</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">begin</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># 随机暂停几秒，避免过快的请求导致过快的被查到
+</span><span class="err">        </span><span class="n">time</span><span class="p">.</span><span class="n">sleep</span><span class="p">(</span><span class="n">random</span><span class="p">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">10</span><span class="p">))</span>
+<span class="err">        </span><span class="n">resp</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">requests</span><span class="p">.</span><span class="n">get</span><span class="p">(</span><span class="n">url</span><span class="p">,</span><span class="err"> </span><span class="n">headers</span><span class="o">=</span><span class="n">headers</span><span class="p">,</span><span class="err"> </span><span class="n">params</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">params</span><span class="p">,</span><span class="err"> </span><span class="n">verify</span><span class="o">=</span><span class="bp">False</span><span class="p">)</span>
+<span class="err">        </span><span class="c1"># 微信流量控制, 退出
+</span><span class="err">        </span><span class="k">if</span><span class="err"> </span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'base_resp'</span><span class="p">][</span><span class="s">'ret'</span><span class="p">]</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">200013</span><span class="p">:</span>
+<span class="err">            </span><span class="k">print</span><span class="p">(</span><span class="s">"frequencey control, stop at {}"</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">begin</span><span class="p">)))</span>
+<span class="err">            </span><span class="n">time</span><span class="p">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">3600</span><span class="p">)</span>
+<span class="err">            </span><span class="k">continue</span>
+<span class="err">        </span>
+<span class="err">        </span><span class="k">if</span><span class="err"> </span><span class="n">i</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="s">"0"</span><span class="p">:</span>
+<span class="err">            </span><span class="n">total_count</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'publish_page'</span><span class="p">])[</span><span class="s">'total_count'</span><span class="p">]</span>
+<span class="err">            </span><span class="k">print</span><span class="p">(</span><span class="s">"We have "</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">tatal_count</span><span class="p">)</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="s">" articles."</span><span class="p">)</span>
+<span class="err">    </span>
+<span class="err">        </span><span class="n">publish_list</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">resp</span><span class="p">.</span><span class="n">json</span><span class="p">()[</span><span class="s">'publish_page'</span><span class="p">])[</span><span class="s">'publish_list'</span><span class="p">]</span>
+<span class="err">        </span><span class="c1"># 如果返回的内容中为空则结束
+</span><span class="err">        </span><span class="k">if</span><span class="err"> </span><span class="nb">len</span><span class="p">(</span><span class="n">publish_list</span><span class="p">)</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">0</span><span class="p">:</span>
+<span class="err">            </span><span class="k">print</span><span class="p">(</span><span class="s">"all ariticle parsed"</span><span class="p">)</span>
+<span class="err">            </span><span class="k">break</span>
+<span class="err">    </span>
+<span class="err">        </span><span class="k">for</span><span class="err"> </span><span class="n">publish</span><span class="err"> </span><span class="ow">in</span><span class="err"> </span><span class="n">publish_list</span><span class="p">:</span>
+<span class="err">            </span><span class="n">publish</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">eval</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'publish_info'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"true"</span><span class="p">,</span><span class="s">"True"</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">"false"</span><span class="p">,</span><span class="s">"False"</span><span class="p">))[</span><span class="s">'appmsgex'</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span>
+<span class="err">            </span><span class="n">info</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="s">'"{}","{}","{}","{}","{}","{}","{}","{}"'</span><span class="p">.</span><span class="nb">format</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">"aid"</span><span class="p">]),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'appmsgid'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'author_name'</span><span class="p">]),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'title'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="s">""</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">","</span><span class="p">,</span><span class="s">";"</span><span class="p">)),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'cover'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'digest'</span><span class="p">].</span><span class="n">replace</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span><span class="s">""</span><span class="p">).</span><span class="n">replace</span><span class="p">(</span><span class="s">","</span><span class="p">,</span><span class="s">";"</span><span class="p">)),</span><span class="err"> </span>\
+<span class="err">                </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'link'</span><span class="p">]),</span><span class="err"> </span><span class="nb">str</span><span class="p">(</span><span class="n">publish</span><span class="p">[</span><span class="s">'create_time'</span><span class="p">]))</span>
+<span class="err">            </span><span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="n">article_list_path</span><span class="p">,</span><span class="err"> </span><span class="s">"a"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="n">f</span><span class="p">:</span>
+<span class="err">                </span><span class="n">f</span><span class="p">.</span><span class="n">write</span><span class="p">(</span><span class="n">info</span><span class="o">+</span><span class="s">'</span><span class="se">\n</span><span class="s">'</span><span class="p">)</span>
+<span class="err">            </span><span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">.</span><span class="n">join</span><span class="p">(</span><span class="n">info</span><span class="p">.</span><span class="n">split</span><span class="p">(</span><span class="s">","</span><span class="p">)))</span>
+<span class="err">            </span><span class="k">print</span><span class="p">(</span><span class="s">"</span><span class="se">\n\n</span><span class="s">---------------------------------------------------------------------------------</span><span class="se">\n</span><span class="s">"</span><span class="p">)</span>
+
+<span class="err">        </span><span class="c1"># 翻页
+</span><span class="err">        </span><span class="n">i</span><span class="err"> </span><span class="o">+=</span><span class="err"> </span><span class="mi">1</span>
+<span class="n">def</span><span class="err"> </span><span class="n">main</span><span class="p">():</span>
+<span class="err">    </span><span class="k">with</span><span class="err"> </span><span class="nb">open</span><span class="p">(</span><span class="s">"chaos-gravity.yaml"</span><span class="p">,</span><span class="err"> </span><span class="s">"r"</span><span class="p">)</span><span class="err"> </span><span class="k">as</span><span class="err"> </span><span class="nb">file</span><span class="p">:</span>
+<span class="err">        </span><span class="n">file_data</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="nb">file</span><span class="p">.</span><span class="n">read</span><span class="p">()</span>
+<span class="err">    </span><span class="n">config</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">yaml</span><span class="p">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">file_data</span><span class="p">)</span><span class="err"> </span>
+<span class="err">    </span><span class="n">headers</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">get_headers</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="err">    </span><span class="n">params</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">get_params</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+<span class="err">    </span><span class="n">get_article_list</span><span class="p">(</span><span class="n">headers</span><span class="p">,</span><span class="err"> </span><span class="n">params</span><span class="p">)</span>
+<span class="k">if</span><span class="err"> </span><span class="n">__name__</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="s">'__main__'</span><span class="p">:</span>
+<span class="err">    </span><span class="n">main</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>这篇抓链接，下篇抓文章。</p>
+
+<p>参考链接：</p>
+<ol>
+  <li>https://zhuanlan.zhihu.com/p/379062852</li>
+</ol>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=如何抓取一个微信公众号的所有文章（Python）上篇&url=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8A%E7%AF%87/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Tools">Tools</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Crawler">Crawler</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/如何抓取一个微信公众号的所有文章（Python）上篇/0.png" alt="如何抓取一个微信公众号的所有文章（Python）下篇"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E5%A6%82%E4%BD%95%E6%8A%93%E5%8F%96%E4%B8%80%E4%B8%AA%E5%BE%AE%E4%BF%A1%E5%85%AC%E4%BC%97%E5%8F%B7%E7%9A%84%E6%89%80%E6%9C%89%E6%96%87%E7%AB%A0-Python-%E4%B8%8B%E7%AF%87/">如何抓取一个微信公众号的所有文章（Python）下篇</a>
+                
+            </h2>
+            <h4 class="card-text">声明：基本步骤和核心方法均参考[1]，[2]，细节有大不同，这篇着重于如何将抓取到的文章用markdown的格式保存下来。
+
+1. 上篇中已经抓到了公众号的所有文章的题目和链接，下篇直接读入：
+
+im</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">11 Oct 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

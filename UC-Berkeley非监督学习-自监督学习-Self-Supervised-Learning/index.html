@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>自监督学习（Self Supervised Learning） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>自监督学习（Self Supervised Learning） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="自监督学习（Self Supervised Learning）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    今天来说一说自监督学习，根据Yann LeCun的报告，这是一类可以预测未来，回溯过去，补缺查漏的算法，是不是很有吸引力。     首先我们来了解一下这位科学家 Yann LeCun，看人先看脸，上图：      实打实的牛人，博士期间，发明了反向传播算法的原型，在贝尔实验室的时候发明了卷积神经网络。     监督学习和强化学习的有效性就不重复了，说一下局限性，监督学习需要大量标注好的数据，成本是巨大的。强化学习目前需要和世界进行大量的互动，但是研究者发现，婴儿并不是这么学习的，婴儿在初期只能通过观察学习，而单单通过观察，便可以构建很多基础能力。         上图是一个婴儿的月份和他的能力的对照，可以发现，七八个月后他才能抓爬，而在这之前他已经掌握了一系列复杂的能力。     那如果机器只依靠观察来学习呢？AlphaStar在学习如何打星际争霸这个游戏的时候，只是观察，也就是说输入只有游戏的视频数据，模型用了至少200年的数据达到了攻克99.8%活跃玩家的成绩。     为什么机器需要这么多数据，但人类却不需要？         这个，额，人类自己也不是很清楚。         那么，今天就让我们一起来看看，也许会让我们更接近答案，更接近强人工智能的一类算法，自监督学习（Self Supervised Learning）。     什么是自监督学习，来看看Yann LeCun的描述吧：     是一种可以通过数据的一部分来预测其他部分的方法，这当中包括，预测未来，回溯过去，补缺查漏，补齐空间等等。         Yann LeCun对自监督学习的定位是这样的：     如果把机器学习能获取的信息比喻成一块蛋糕，那么强化学习相当于是这个蛋糕上的樱桃，监督学习相当于这个蛋糕里的冰块，自监督学习相当于这个蛋糕的主体。这是很高的评价和期望了。     接下来看一些自监督学习的案例：     1. 去噪     在这个案例中，输入是有噪声的图片，经过一个编码器，将图片转化成存储了这张图片有用信息的特征向量，再通过一个解码器，即可得到除去噪声后的结果。     这样一个应用除了去噪的功能外，图中间的特征向量，可以用来完成其他任务，比如判断图片里面有没有小狗之类的。而去噪这样的一个过程，比起直接将原图编码解码，能得到更好的特征向量，即特征向量中的信息能更好地表达原图的有用信息。     2. 补缺     一张图，抠掉中间区域，让模型预测抠掉的部分。     和去噪网络的区别是，特征向量分了两种出来，一个是编码特征向量，一个是解码特征向量，这样设计的理由应该是考虑到要预测的图片和输入的图片信息是不一致的。     在这个应用中，损失函数的选择对结果的影响很大，下图是不同损失函数产生的结果：     最后Joint Loss应该是L2 Loss和Adversarial Loss组合产生的Loss，具体可能要去参考Pathak et al在2016年发表的论文。     3. 着色     得到一张黑白图片，计算机可以给它自动上色吗？     4. 拼图      这有点像让机器人学习玩人类的拼图游戏，把一张图片切割成9份，然后打乱了输入模型，让模型输出这9张小图在原图中的位置。     5. 旋转判断     判断一张图是否是旋转过的图片，以及旋转了多少度。           6. 视频着色     给一张彩色帧，然后根据这个彩色帧，给一整个视频上色。     以上都是一些图像相关的自监督学习，接下来说一些自然语言处理相关的自监督学习。     1. Word2Vec     图像处理里，很多自监督学习是把图片转成向量，在自然语言处理里，则是将词转换成向量，比较典型的CBOW和Skip Gram，都是利用词的位置关系来进行训练。这里举个例子（这里只做了概念性的一些解释）：     比如 “我爱你。”这句话，CBOW是给出“我”和“你”，让模型预测“爱”这个字，而Skip Gram和CBOW是镜像对照的，给你一个“爱”字，希望模型能预测出“我”和“你”。我们可以思考，为什么这种方式，能得到每个词的大意（用向量的方式表达了出来）。这样训练后，每个词都可以用一个向量来表示，比如，“爱”的最后的向量是[0.9, 0.7, 0.5]，“恨”的向量是[0.1，0.7，0.5]，有了这个计算机才能做计算，比如计算“爱”和“恨”的距离，[0.8, 0, 0]，计算机才会知道，“爱”和“恨”，哪里相同，哪里不同。     再比如下面这幅图，左边是国家，右边是每个国家对应的首都，可以发现各个国家和自己首都之间的距离是差不多的。          接下来介绍三个比较新，且在机器视觉领域带来了比较大突破的自监督学习的算法，分别是CPC，MoCo，和SimCLR，其中CPC和MoCo都有v2版本，且都可以跨领域应用起来。     1. CPC (Contrastive Predictive Coding)     现在有一段语音，给了前半段，怎么预测后半段？     CPC在训练的时候，会把用来预测的语音段和希望预测出来的语音段用同样的编码器编码，分别得到特征向量，再在训练过程中通过调整编码器，使得两边得到的特征向量最大可能的一致。可以理解为，训练一个编码器，它能提取当下信息中可以用来预测未来的信息。     训练的时候会有正样本和负样本，真正的未来是正样本，其他片段都是负样本，负样本可以来自于同一段语音，也可以来自不同语音，这可以根据下层任务来做调整，训练的基本目标就是拉近与正样本的距离，拉大和负样本的距离。     CPC可以有很多变形，比如结合时间序列模型来预测，再比如可以根据未来预测过去等等。     而CPC在分辨说话人等下层任务的表现上，只比监督学习差了一点点。          接下来看CPC在视觉领域的做法，其实就是把时间这个维度换成了空间。        切割图片，按50%的重叠，切割出来的效果如下图：     切完了，用encoder将每个分块都转换成特征向量，再由上三层的特征向量去预测下三层。     CPC同样可以用于自然语言处理和强化学习，这里就不细说了。     CPC后来又做了改进，有了CPC v2，CPC v2的效能就很好了，下图中，红线是只用监督学习的效能，蓝线是先用CPC v2，再用监督学习的效能，可以发现，当你只有少量标注数据的时候，CPC v2可以为你的分类器的效能带来非常大的提升。     2. MoCo (Momentum Contrast)      MoCo和CPC在网络架构上的最大不同是，MoCo用了一个Momentum encoder，即编码比较项的时候，用的是不同的编码器，且在训练过程中，这个编码器是根据编码query项的编码器调整的。调整方式如下图所示：     另外，还增加了一个记忆区，存储负样本的编码，这样可以让query和更多的负样本进行对比，不用受batch size的限制，这部分由下面代码可以看出。     3. SimCLR     Sim是Simple的意思，这个架构就比较简单了，去掉了query的概念，一个样本分别做不同的随机改变，经过编码器编码得到特征向量，再通过网络得到用来对比的特征向量，目标就是要让出自同一个样本的对比向量尽量一致。     这里值得一提的是，SimCLR的效果比MoCo要好，但MoCo的团队很快就给出了回应，改进了MoCo，于是有了MoCo v2，效果又超过了SimCLR，看来大家都是倔强的王者。         今天就到这里啦，觉得有用，就帮小的点个在看再走吧，大吉大利，恭喜发财！ 注：所有图片，公式，理论，论点都来自参考文献，本文仅是整理笔记。 另：很多知识点理解可能不到位或者有偏差错漏，还请指正，讨论，谅解。 参考： [1] Yann LeCun, Self Supervised Learning, ICLR, 2020 [2] Thalles Silva, Self-Supervised Learning and the Quest for Reducing Labeled Data in Deep Learning, toward data science, 2020 [3] Lecture 7 Self-Supervised Learning，UC Berkeley Spring 2020 CS294-158，Deep Unsupervised Learning" />
+<meta property="og:description" content="    今天来说一说自监督学习，根据Yann LeCun的报告，这是一类可以预测未来，回溯过去，补缺查漏的算法，是不是很有吸引力。     首先我们来了解一下这位科学家 Yann LeCun，看人先看脸，上图：      实打实的牛人，博士期间，发明了反向传播算法的原型，在贝尔实验室的时候发明了卷积神经网络。     监督学习和强化学习的有效性就不重复了，说一下局限性，监督学习需要大量标注好的数据，成本是巨大的。强化学习目前需要和世界进行大量的互动，但是研究者发现，婴儿并不是这么学习的，婴儿在初期只能通过观察学习，而单单通过观察，便可以构建很多基础能力。         上图是一个婴儿的月份和他的能力的对照，可以发现，七八个月后他才能抓爬，而在这之前他已经掌握了一系列复杂的能力。     那如果机器只依靠观察来学习呢？AlphaStar在学习如何打星际争霸这个游戏的时候，只是观察，也就是说输入只有游戏的视频数据，模型用了至少200年的数据达到了攻克99.8%活跃玩家的成绩。     为什么机器需要这么多数据，但人类却不需要？         这个，额，人类自己也不是很清楚。         那么，今天就让我们一起来看看，也许会让我们更接近答案，更接近强人工智能的一类算法，自监督学习（Self Supervised Learning）。     什么是自监督学习，来看看Yann LeCun的描述吧：     是一种可以通过数据的一部分来预测其他部分的方法，这当中包括，预测未来，回溯过去，补缺查漏，补齐空间等等。         Yann LeCun对自监督学习的定位是这样的：     如果把机器学习能获取的信息比喻成一块蛋糕，那么强化学习相当于是这个蛋糕上的樱桃，监督学习相当于这个蛋糕里的冰块，自监督学习相当于这个蛋糕的主体。这是很高的评价和期望了。     接下来看一些自监督学习的案例：     1. 去噪     在这个案例中，输入是有噪声的图片，经过一个编码器，将图片转化成存储了这张图片有用信息的特征向量，再通过一个解码器，即可得到除去噪声后的结果。     这样一个应用除了去噪的功能外，图中间的特征向量，可以用来完成其他任务，比如判断图片里面有没有小狗之类的。而去噪这样的一个过程，比起直接将原图编码解码，能得到更好的特征向量，即特征向量中的信息能更好地表达原图的有用信息。     2. 补缺     一张图，抠掉中间区域，让模型预测抠掉的部分。     和去噪网络的区别是，特征向量分了两种出来，一个是编码特征向量，一个是解码特征向量，这样设计的理由应该是考虑到要预测的图片和输入的图片信息是不一致的。     在这个应用中，损失函数的选择对结果的影响很大，下图是不同损失函数产生的结果：     最后Joint Loss应该是L2 Loss和Adversarial Loss组合产生的Loss，具体可能要去参考Pathak et al在2016年发表的论文。     3. 着色     得到一张黑白图片，计算机可以给它自动上色吗？     4. 拼图      这有点像让机器人学习玩人类的拼图游戏，把一张图片切割成9份，然后打乱了输入模型，让模型输出这9张小图在原图中的位置。     5. 旋转判断     判断一张图是否是旋转过的图片，以及旋转了多少度。           6. 视频着色     给一张彩色帧，然后根据这个彩色帧，给一整个视频上色。     以上都是一些图像相关的自监督学习，接下来说一些自然语言处理相关的自监督学习。     1. Word2Vec     图像处理里，很多自监督学习是把图片转成向量，在自然语言处理里，则是将词转换成向量，比较典型的CBOW和Skip Gram，都是利用词的位置关系来进行训练。这里举个例子（这里只做了概念性的一些解释）：     比如 “我爱你。”这句话，CBOW是给出“我”和“你”，让模型预测“爱”这个字，而Skip Gram和CBOW是镜像对照的，给你一个“爱”字，希望模型能预测出“我”和“你”。我们可以思考，为什么这种方式，能得到每个词的大意（用向量的方式表达了出来）。这样训练后，每个词都可以用一个向量来表示，比如，“爱”的最后的向量是[0.9, 0.7, 0.5]，“恨”的向量是[0.1，0.7，0.5]，有了这个计算机才能做计算，比如计算“爱”和“恨”的距离，[0.8, 0, 0]，计算机才会知道，“爱”和“恨”，哪里相同，哪里不同。     再比如下面这幅图，左边是国家，右边是每个国家对应的首都，可以发现各个国家和自己首都之间的距离是差不多的。          接下来介绍三个比较新，且在机器视觉领域带来了比较大突破的自监督学习的算法，分别是CPC，MoCo，和SimCLR，其中CPC和MoCo都有v2版本，且都可以跨领域应用起来。     1. CPC (Contrastive Predictive Coding)     现在有一段语音，给了前半段，怎么预测后半段？     CPC在训练的时候，会把用来预测的语音段和希望预测出来的语音段用同样的编码器编码，分别得到特征向量，再在训练过程中通过调整编码器，使得两边得到的特征向量最大可能的一致。可以理解为，训练一个编码器，它能提取当下信息中可以用来预测未来的信息。     训练的时候会有正样本和负样本，真正的未来是正样本，其他片段都是负样本，负样本可以来自于同一段语音，也可以来自不同语音，这可以根据下层任务来做调整，训练的基本目标就是拉近与正样本的距离，拉大和负样本的距离。     CPC可以有很多变形，比如结合时间序列模型来预测，再比如可以根据未来预测过去等等。     而CPC在分辨说话人等下层任务的表现上，只比监督学习差了一点点。          接下来看CPC在视觉领域的做法，其实就是把时间这个维度换成了空间。        切割图片，按50%的重叠，切割出来的效果如下图：     切完了，用encoder将每个分块都转换成特征向量，再由上三层的特征向量去预测下三层。     CPC同样可以用于自然语言处理和强化学习，这里就不细说了。     CPC后来又做了改进，有了CPC v2，CPC v2的效能就很好了，下图中，红线是只用监督学习的效能，蓝线是先用CPC v2，再用监督学习的效能，可以发现，当你只有少量标注数据的时候，CPC v2可以为你的分类器的效能带来非常大的提升。     2. MoCo (Momentum Contrast)      MoCo和CPC在网络架构上的最大不同是，MoCo用了一个Momentum encoder，即编码比较项的时候，用的是不同的编码器，且在训练过程中，这个编码器是根据编码query项的编码器调整的。调整方式如下图所示：     另外，还增加了一个记忆区，存储负样本的编码，这样可以让query和更多的负样本进行对比，不用受batch size的限制，这部分由下面代码可以看出。     3. SimCLR     Sim是Simple的意思，这个架构就比较简单了，去掉了query的概念，一个样本分别做不同的随机改变，经过编码器编码得到特征向量，再通过网络得到用来对比的特征向量，目标就是要让出自同一个样本的对比向量尽量一致。     这里值得一提的是，SimCLR的效果比MoCo要好，但MoCo的团队很快就给出了回应，改进了MoCo，于是有了MoCo v2，效果又超过了SimCLR，看来大家都是倔强的王者。         今天就到这里啦，觉得有用，就帮小的点个在看再走吧，大吉大利，恭喜发财！ 注：所有图片，公式，理论，论点都来自参考文献，本文仅是整理笔记。 另：很多知识点理解可能不到位或者有偏差错漏，还请指正，讨论，谅解。 参考： [1] Yann LeCun, Self Supervised Learning, ICLR, 2020 [2] Thalles Silva, Self-Supervised Learning and the Quest for Reducing Labeled Data in Deep Learning, toward data science, 2020 [3] Lecture 7 Self-Supervised Learning，UC Berkeley Spring 2020 CS294-158，Deep Unsupervised Learning" />
+<link rel="canonical" href="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/" />
+<meta property="og:url" content="http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0(Self%20Supervised%20Learning)/3.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-05-15T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    今天来说一说自监督学习，根据Yann LeCun的报告，这是一类可以预测未来，回溯过去，补缺查漏的算法，是不是很有吸引力。     首先我们来了解一下这位科学家 Yann LeCun，看人先看脸，上图：      实打实的牛人，博士期间，发明了反向传播算法的原型，在贝尔实验室的时候发明了卷积神经网络。     监督学习和强化学习的有效性就不重复了，说一下局限性，监督学习需要大量标注好的数据，成本是巨大的。强化学习目前需要和世界进行大量的互动，但是研究者发现，婴儿并不是这么学习的，婴儿在初期只能通过观察学习，而单单通过观察，便可以构建很多基础能力。         上图是一个婴儿的月份和他的能力的对照，可以发现，七八个月后他才能抓爬，而在这之前他已经掌握了一系列复杂的能力。     那如果机器只依靠观察来学习呢？AlphaStar在学习如何打星际争霸这个游戏的时候，只是观察，也就是说输入只有游戏的视频数据，模型用了至少200年的数据达到了攻克99.8%活跃玩家的成绩。     为什么机器需要这么多数据，但人类却不需要？         这个，额，人类自己也不是很清楚。         那么，今天就让我们一起来看看，也许会让我们更接近答案，更接近强人工智能的一类算法，自监督学习（Self Supervised Learning）。     什么是自监督学习，来看看Yann LeCun的描述吧：     是一种可以通过数据的一部分来预测其他部分的方法，这当中包括，预测未来，回溯过去，补缺查漏，补齐空间等等。         Yann LeCun对自监督学习的定位是这样的：     如果把机器学习能获取的信息比喻成一块蛋糕，那么强化学习相当于是这个蛋糕上的樱桃，监督学习相当于这个蛋糕里的冰块，自监督学习相当于这个蛋糕的主体。这是很高的评价和期望了。     接下来看一些自监督学习的案例：     1. 去噪     在这个案例中，输入是有噪声的图片，经过一个编码器，将图片转化成存储了这张图片有用信息的特征向量，再通过一个解码器，即可得到除去噪声后的结果。     这样一个应用除了去噪的功能外，图中间的特征向量，可以用来完成其他任务，比如判断图片里面有没有小狗之类的。而去噪这样的一个过程，比起直接将原图编码解码，能得到更好的特征向量，即特征向量中的信息能更好地表达原图的有用信息。     2. 补缺     一张图，抠掉中间区域，让模型预测抠掉的部分。     和去噪网络的区别是，特征向量分了两种出来，一个是编码特征向量，一个是解码特征向量，这样设计的理由应该是考虑到要预测的图片和输入的图片信息是不一致的。     在这个应用中，损失函数的选择对结果的影响很大，下图是不同损失函数产生的结果：     最后Joint Loss应该是L2 Loss和Adversarial Loss组合产生的Loss，具体可能要去参考Pathak et al在2016年发表的论文。     3. 着色     得到一张黑白图片，计算机可以给它自动上色吗？     4. 拼图      这有点像让机器人学习玩人类的拼图游戏，把一张图片切割成9份，然后打乱了输入模型，让模型输出这9张小图在原图中的位置。     5. 旋转判断     判断一张图是否是旋转过的图片，以及旋转了多少度。           6. 视频着色     给一张彩色帧，然后根据这个彩色帧，给一整个视频上色。     以上都是一些图像相关的自监督学习，接下来说一些自然语言处理相关的自监督学习。     1. Word2Vec     图像处理里，很多自监督学习是把图片转成向量，在自然语言处理里，则是将词转换成向量，比较典型的CBOW和Skip Gram，都是利用词的位置关系来进行训练。这里举个例子（这里只做了概念性的一些解释）：     比如 “我爱你。”这句话，CBOW是给出“我”和“你”，让模型预测“爱”这个字，而Skip Gram和CBOW是镜像对照的，给你一个“爱”字，希望模型能预测出“我”和“你”。我们可以思考，为什么这种方式，能得到每个词的大意（用向量的方式表达了出来）。这样训练后，每个词都可以用一个向量来表示，比如，“爱”的最后的向量是[0.9, 0.7, 0.5]，“恨”的向量是[0.1，0.7，0.5]，有了这个计算机才能做计算，比如计算“爱”和“恨”的距离，[0.8, 0, 0]，计算机才会知道，“爱”和“恨”，哪里相同，哪里不同。     再比如下面这幅图，左边是国家，右边是每个国家对应的首都，可以发现各个国家和自己首都之间的距离是差不多的。          接下来介绍三个比较新，且在机器视觉领域带来了比较大突破的自监督学习的算法，分别是CPC，MoCo，和SimCLR，其中CPC和MoCo都有v2版本，且都可以跨领域应用起来。     1. CPC (Contrastive Predictive Coding)     现在有一段语音，给了前半段，怎么预测后半段？     CPC在训练的时候，会把用来预测的语音段和希望预测出来的语音段用同样的编码器编码，分别得到特征向量，再在训练过程中通过调整编码器，使得两边得到的特征向量最大可能的一致。可以理解为，训练一个编码器，它能提取当下信息中可以用来预测未来的信息。     训练的时候会有正样本和负样本，真正的未来是正样本，其他片段都是负样本，负样本可以来自于同一段语音，也可以来自不同语音，这可以根据下层任务来做调整，训练的基本目标就是拉近与正样本的距离，拉大和负样本的距离。     CPC可以有很多变形，比如结合时间序列模型来预测，再比如可以根据未来预测过去等等。     而CPC在分辨说话人等下层任务的表现上，只比监督学习差了一点点。          接下来看CPC在视觉领域的做法，其实就是把时间这个维度换成了空间。        切割图片，按50%的重叠，切割出来的效果如下图：     切完了，用encoder将每个分块都转换成特征向量，再由上三层的特征向量去预测下三层。     CPC同样可以用于自然语言处理和强化学习，这里就不细说了。     CPC后来又做了改进，有了CPC v2，CPC v2的效能就很好了，下图中，红线是只用监督学习的效能，蓝线是先用CPC v2，再用监督学习的效能，可以发现，当你只有少量标注数据的时候，CPC v2可以为你的分类器的效能带来非常大的提升。     2. MoCo (Momentum Contrast)      MoCo和CPC在网络架构上的最大不同是，MoCo用了一个Momentum encoder，即编码比较项的时候，用的是不同的编码器，且在训练过程中，这个编码器是根据编码query项的编码器调整的。调整方式如下图所示：     另外，还增加了一个记忆区，存储负样本的编码，这样可以让query和更多的负样本进行对比，不用受batch size的限制，这部分由下面代码可以看出。     3. SimCLR     Sim是Simple的意思，这个架构就比较简单了，去掉了query的概念，一个样本分别做不同的随机改变，经过编码器编码得到特征向量，再通过网络得到用来对比的特征向量，目标就是要让出自同一个样本的对比向量尽量一致。     这里值得一提的是，SimCLR的效果比MoCo要好，但MoCo的团队很快就给出了回应，改进了MoCo，于是有了MoCo v2，效果又超过了SimCLR，看来大家都是倔强的王者。         今天就到这里啦，觉得有用，就帮小的点个在看再走吧，大吉大利，恭喜发财！ 注：所有图片，公式，理论，论点都来自参考文献，本文仅是整理笔记。 另：很多知识点理解可能不到位或者有偏差错漏，还请指正，讨论，谅解。 参考： [1] Yann LeCun, Self Supervised Learning, ICLR, 2020 [2] Thalles Silva, Self-Supervised Learning and the Quest for Reducing Labeled Data in Deep Learning, toward data science, 2020 [3] Lecture 7 Self-Supervised Learning，UC Berkeley Spring 2020 CS294-158，Deep Unsupervised Learning","url":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/","image":"http://localhost:4000/assets/images/UC%20Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0--%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0(Self%20Supervised%20Learning)/3.png","@type":"BlogPosting","headline":"自监督学习（Self Supervised Learning）","dateModified":"2021-05-15T00:00:00+08:00","datePublished":"2021-05-15T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">自监督学习（Self Supervised Learning）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-05-15">15 May 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/3.png" alt="自监督学习（Self Supervised Learning）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    今天来说一说自监督学习，根据Yann LeCun的报告，这是一类可以预测未来，回溯过去，补缺查漏的算法，是不是很有吸引力<img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/1.png" style="zoom:50%;" />。</p>
+
+<p>    首先我们来了解一下这位科学家 Yann LeCun，看人先看脸<img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/2.png" style="zoom:50%;" />，上图： </p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/3.png" style="zoom:80%;" /></p>
+
+<p>    实打实的牛人，博士期间，发明了反向传播算法的原型，在贝尔实验室的时候发明了卷积神经网络。</p>
+
+<p>    监督学习和强化学习的有效性就不重复了，说一下局限性，监督学习需要大量标注好的数据，成本是巨大的。强化学习目前需要和世界进行大量的互动，但是研究者发现，婴儿并不是这么学习的，婴儿在初期只能通过观察学习，而单单通过观察，便可以构建很多基础能力。    </p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/4.png" style="zoom:80%;" /></p>
+
+<p>    上图是一个婴儿的月份和他的能力的对照，可以发现，七八个月后他才能抓爬，而在这之前他已经掌握了一系列复杂的能力。</p>
+
+<p>    那如果机器只依靠观察来学习呢？AlphaStar在学习如何打星际争霸这个游戏的时候，只是观察，也就是说输入只有游戏的视频数据，模型用了至少200年的数据达到了攻克99.8%活跃玩家的成绩。</p>
+
+<p>    为什么机器需要这么多数据，但人类却不需要？</p>
+
+<p>        <strong>这个，额，人类自己也不是很清楚。</strong>    </p>
+
+<p>    那么，今天就让我们一起来看看，也许会让我们更接近答案，更接近强人工智能的一类算法，<strong>自监督学习</strong>（<strong>Self Supervised Learning</strong>）。</p>
+
+<p>    什么是自监督学习，来看看Yann LeCun的描述吧：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/5.png" style="zoom: 67%;" /></p>
+
+<p>    是一种可以通过数据的一部分来预测其他部分的方法，这当中包括，预测未来，回溯过去，补缺查漏，补齐空间等等。    </p>
+
+<p>    Yann LeCun对自监督学习的定位是这样的：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/6.png" style="zoom:67%;" /></p>
+
+<p>    如果把机器学习能获取的信息比喻成一块蛋糕，那么强化学习相当于是这个蛋糕上的樱桃，监督学习相当于这个蛋糕里的冰块，自监督学习相当于这个蛋糕的主体。这是很高的评价和期望了。</p>
+
+<p>    接下来看一些自监督学习的案例：</p>
+
+<p>    <strong>1. 去噪</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/7.png" style="zoom:67%;" /></p>
+
+<p>    在这个案例中，输入是有噪声的图片，经过一个编码器，将图片转化成存储了这张图片有用信息的特征向量，再通过一个解码器，即可得到除去噪声后的结果。</p>
+
+<p>    这样一个应用除了去噪的功能外，图中间的特征向量，可以用来完成其他任务，比如判断图片里面有没有小狗之类的。而去噪这样的一个过程，比起直接将原图编码解码，能得到更好的特征向量，即特征向量中的信息能更好地表达原图的有用信息。</p>
+
+<p>    <strong>2. 补缺</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/8.png" style="zoom:67%;" /></p>
+
+<p>    一张图，抠掉中间区域，让模型预测抠掉的部分。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/9.png" style="zoom:80%;" /></p>
+
+<p>    和去噪网络的区别是，特征向量分了两种出来，一个是编码特征向量，一个是解码特征向量，这样设计的理由应该是考虑到要预测的图片和输入的图片信息是不一致的。</p>
+
+<p>    在这个应用中，损失函数的选择对结果的影响很大，下图是不同损失函数产生的结果：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/10.png" style="zoom:80%;" /></p>
+
+<p>    最后Joint Loss应该是L2 Loss和Adversarial Loss组合产生的Loss，具体可能要去参考Pathak et al在2016年发表的论文。</p>
+
+<p>    <strong>3. 着色</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/11.png" style="zoom: 67%;" /></p>
+
+<p>    得到一张黑白图片，计算机可以给它自动上色吗？</p>
+
+<p>    <strong>4. 拼图</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/12.png" /></p>
+
+<p>     这有点像让机器人学习玩人类的拼图游戏，把一张图片切割成9份，然后打乱了输入模型，让模型输出这9张小图在原图中的位置。</p>
+
+<p>    <strong>5. 旋转判断</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/13.png" alt="" /></p>
+
+<p>    判断一张图是否是旋转过的图片，以及旋转了多少度。
+     </p>
+
+<p>    <strong>6. 视频着色</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/14.png" style="zoom:80%;" /></p>
+
+<p>    给一张彩色帧，然后根据这个彩色帧，给一整个视频上色。</p>
+
+<p>    以上都是一些图像相关的自监督学习，接下来说一些自然语言处理相关的自监督学习。</p>
+
+<p>    <strong>1. Word2Vec</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/15.png" /></p>
+
+<p>    图像处理里，很多自监督学习是把图片转成向量，在自然语言处理里，则是将词转换成向量，比较典型的CBOW和Skip Gram，都是利用词的位置关系来进行训练。这里举个例子（这里只做了概念性的一些解释）：</p>
+
+<p>    比如 “我爱你。”这句话，CBOW是给出“我”和“你”，让模型预测“爱”这个字，而Skip Gram和CBOW是镜像对照的，给你一个“爱”字，希望模型能预测出“我”和“你”。我们可以思考，为什么这种方式，能得到每个词的大意（用向量的方式表达了出来）。这样训练后，每个词都可以用一个向量来表示，比如，“爱”的最后的向量是[0.9, 0.7, 0.5]，“恨”的向量是[0.1，0.7，0.5]，有了这个计算机才能做计算，比如计算“爱”和“恨”的距离，[0.8, 0, 0]，计算机才会知道，“爱”和“恨”，哪里相同，哪里不同。</p>
+
+<p>    再比如下面这幅图，左边是国家，右边是每个国家对应的首都，可以发现各个国家和自己首都之间的距离是差不多的。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/16.png" style="zoom:80%;" /></p>
+
+<p>    </p>
+
+<p>    接下来介绍三个比较新，且在机器视觉领域带来了比较大突破的自监督学习的算法，分别是CPC，MoCo，和SimCLR，其中CPC和MoCo都有v2版本，且都可以跨领域应用起来。</p>
+
+<p>    <strong>1. CPC (Contrastive Predictive Coding)</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/17.png" style="zoom:80%;" /></p>
+
+<p>    现在有一段语音，给了前半段，怎么预测后半段？</p>
+
+<p>    CPC在训练的时候，会把用来预测的语音段和希望预测出来的语音段用同样的编码器编码，分别得到特征向量，再在训练过程中通过调整编码器，使得两边得到的特征向量最大可能的一致。可以理解为，训练一个编码器，它能提取当下信息中可以用来预测未来的信息。</p>
+
+<p>    训练的时候会有正样本和负样本，真正的未来是正样本，其他片段都是负样本，负样本可以来自于同一段语音，也可以来自不同语音，这可以根据下层任务来做调整，训练的基本目标就是拉近与正样本的距离，拉大和负样本的距离。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/18.png" style="zoom:80%;" /></p>
+
+<p>    CPC可以有很多变形，比如结合时间序列模型来预测，再比如可以根据未来预测过去等等。</p>
+
+<p>    而CPC在分辨说话人等下层任务的表现上，只比监督学习差了一点点。
+    </p>
+
+<p>    接下来看CPC在视觉领域的做法，其实就是把时间这个维度换成了空间。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/19.png" style="zoom:80%;" /></p>
+
+<p>       切割图片，按50%的重叠，切割出来的效果如下图：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/20.png" style="zoom:67%;" /></p>
+
+<p>    切完了，用encoder将每个分块都转换成特征向量，再由上三层的特征向量去预测下三层。</p>
+
+<p>    CPC同样可以用于自然语言处理和强化学习，这里就不细说了。</p>
+
+<p>    CPC后来又做了改进，有了CPC v2，CPC v2的效能就很好了，下图中，红线是只用监督学习的效能，蓝线是先用CPC v2，再用监督学习的效能，可以发现，当你只有少量标注数据的时候，CPC v2可以为你的分类器的效能带来非常大的提升。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/21.png" style="zoom: 50%;" /></p>
+
+<p>    <strong>2. MoCo (Momentum Contrast) </strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/22.png" style="zoom:50%;" /></p>
+
+<p>    MoCo和CPC在网络架构上的最大不同是，MoCo用了一个Momentum encoder，即编码比较项的时候，用的是不同的编码器，且在训练过程中，这个编码器是根据编码query项的编码器调整的。调整方式如下图所示：</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/23.jpeg" alt="" /></p>
+
+<p>    另外，还增加了一个记忆区，存储负样本的编码，这样可以让query和更多的负样本进行对比，不用受batch size的限制，这部分由下面代码可以看出。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/24.png" style="zoom:67%;" /></p>
+
+<p>    <strong>3. SimCLR</strong></p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/25.png" style="zoom: 50%;" /></p>
+
+<p>    Sim是Simple的意思，这个架构就比较简单了，去掉了query的概念，一个样本分别做不同的随机改变，经过编码器编码得到特征向量，再通过网络得到用来对比的特征向量，目标就是要让出自同一个样本的对比向量尽量一致。</p>
+
+<p><img src="../assets/images/UC Berkeley非监督学习--自监督学习（Self Supervised Learning）/26.png" style="zoom:67%;" /></p>
+
+<p>    这里值得一提的是，SimCLR的效果比MoCo要好，但MoCo的团队很快就给出了回应，改进了MoCo，于是有了MoCo v2，效果又超过了SimCLR，看来大家都是倔强的王者。    </p>
+
+<p>    今天就到这里啦，觉得有用，就帮小的点个在看再走吧，大吉大利，恭喜发财！</p>
+
+<p>注：所有图片，公式，理论，论点都来自参考文献，本文仅是整理笔记。</p>
+
+<p>另：很多知识点理解可能不到位或者有偏差错漏，还请指正，讨论，谅解。</p>
+
+<p>参考：</p>
+
+<p>[1] Yann LeCun, Self Supervised Learning, ICLR, 2020</p>
+
+<p>[2] Thalles Silva, Self-Supervised Learning and the Quest for Reducing Labeled Data in Deep Learning, toward data science, 2020</p>
+
+<p>[3] Lecture 7 Self-Supervised Learning，UC Berkeley Spring 2020 CS294-158，Deep Unsupervised Learning</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=自监督学习（Self Supervised Learning）&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E8%87%AA%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Self-Supervised-Learning/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Self-supervised-Learning">Self-supervised Learning</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Unsupervised-Learning">Unsupervised Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#UC-Berkeley-CS294-158">UC Berkeley CS294-158</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

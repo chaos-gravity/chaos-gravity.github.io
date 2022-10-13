@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 如何评估因果模型？     如何评估你的因果归纳模型？这个问题转换一下可以是如何比较两个因果关系图，再数学一点，就是如何定义两个图的距离。     这和因果关系要应用的场景，领域，以及该因果关系的特质都有关系，实际上是一个非常复杂又多变的问题。     下面讨论两种可以应用于一般场景的方法：     1. Structural Hamming Distance (SHD)     PDAG指的是部分有向无环图，即不一定所有边都是有向的。P指的是由p个变量的所有有向无环图构成的图域。那么任意两个图的SHD是指两个图不一致的边的数量。#在这里是数量的意思。任意两个变量之间的边有三种：i和j之间没有任何关联，i-&gt;j，和j-&gt;i。     比如下面三张图：     就有：     2. Structural Intervention Distance (SID)     这个概念有点难理解，首先得理解分布的马可夫性，这里只列一下定义，详细可以参考MIT因果迷你课笔记 —— 发现因果关系1，分布的马可夫性有三种定义方式：     这是基于D-separation，d-connection的定义，要理解可能要详细看一下D-separation的概念。为什么用Markov呢，Markov形容d-separation为，已知的当下分开了过去和未来，让未来不再依赖过去。     我们认为分布P基于图G是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj|S。这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。      另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。          干预分布(intervention distribution)     当分布具有马可夫性时，下面这个公式表现的是对Xi的值进行干预后的概率分布函数，do表示干预这个动作：     那么干预对单个结点的影响又如何表达：     如果Y是X的父节点，那么干预X对Y不会造成任何影响，而如果Y不是X的父节点，那么干预X之后，Y的分布则会因X的值还有X的父节点调整。     举个例子，在图b中，干预y2的值，会对y3造成什么影响呢？y3不是y2的父节点，计算如下：     根据推导可知，在a图和b图中，干预y2对y3的影响是一致的。而如果你仔细计算每一个干预分布会发现，图G和图H1所有的干预分布都是一致的，但是图G和H2的干预分布有8个不一致：     显而易见，SID统计的是两个图干预分布不一致的个数。     SID完整的定义如下：     首先定义了correctly and falsely inferred intervention distributions，干预分布的一致性和不一致。再根据falsely inferred intervention distributions的定义定义了SID。     为什么设计SID这么一个度量标准，这和因果推断的这个课题本身的特质是有关系的，有些因果错了并不会对整体推断带来大的影响，但有些会，如果有具体的场景，可能又要结合具体的场景设计评估方式，详细可以参考[2]。另外定义SID的方式有很多种，还有一种基于valid adjustment set的方式： 下面定义了判断valid adjustment sets的方式：     用valid adjustment sets定义SID的概念如下：     DE对照PA，指的是子节点。     下面做了一些实验，设定结点的数量，随机生成一些有向无环图组，计算它们的SHD和SID值，可以发现，图和图之间的SHD和SID值区别是很大的，也就是说SHD和SID是完全不同的评量标准。       下面两幅图，分别用SID和SHD评估了一些因果推断的方法，可以发现，有些在SHD标准下优于随机推断的方式，在SID标准下和随机推断相比，毫无优势。     觉得有帮助到你的话，右下角帮忙点个“在看”哇。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Buhlmann, Structural Intervention Distance for Evaluating Causal Graphs, Neural Computation, 2015" />
+<meta property="og:description" content="系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 如何评估因果模型？     如何评估你的因果归纳模型？这个问题转换一下可以是如何比较两个因果关系图，再数学一点，就是如何定义两个图的距离。     这和因果关系要应用的场景，领域，以及该因果关系的特质都有关系，实际上是一个非常复杂又多变的问题。     下面讨论两种可以应用于一般场景的方法：     1. Structural Hamming Distance (SHD)     PDAG指的是部分有向无环图，即不一定所有边都是有向的。P指的是由p个变量的所有有向无环图构成的图域。那么任意两个图的SHD是指两个图不一致的边的数量。#在这里是数量的意思。任意两个变量之间的边有三种：i和j之间没有任何关联，i-&gt;j，和j-&gt;i。     比如下面三张图：     就有：     2. Structural Intervention Distance (SID)     这个概念有点难理解，首先得理解分布的马可夫性，这里只列一下定义，详细可以参考MIT因果迷你课笔记 —— 发现因果关系1，分布的马可夫性有三种定义方式：     这是基于D-separation，d-connection的定义，要理解可能要详细看一下D-separation的概念。为什么用Markov呢，Markov形容d-separation为，已知的当下分开了过去和未来，让未来不再依赖过去。     我们认为分布P基于图G是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj|S。这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。      另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。          干预分布(intervention distribution)     当分布具有马可夫性时，下面这个公式表现的是对Xi的值进行干预后的概率分布函数，do表示干预这个动作：     那么干预对单个结点的影响又如何表达：     如果Y是X的父节点，那么干预X对Y不会造成任何影响，而如果Y不是X的父节点，那么干预X之后，Y的分布则会因X的值还有X的父节点调整。     举个例子，在图b中，干预y2的值，会对y3造成什么影响呢？y3不是y2的父节点，计算如下：     根据推导可知，在a图和b图中，干预y2对y3的影响是一致的。而如果你仔细计算每一个干预分布会发现，图G和图H1所有的干预分布都是一致的，但是图G和H2的干预分布有8个不一致：     显而易见，SID统计的是两个图干预分布不一致的个数。     SID完整的定义如下：     首先定义了correctly and falsely inferred intervention distributions，干预分布的一致性和不一致。再根据falsely inferred intervention distributions的定义定义了SID。     为什么设计SID这么一个度量标准，这和因果推断的这个课题本身的特质是有关系的，有些因果错了并不会对整体推断带来大的影响，但有些会，如果有具体的场景，可能又要结合具体的场景设计评估方式，详细可以参考[2]。另外定义SID的方式有很多种，还有一种基于valid adjustment set的方式： 下面定义了判断valid adjustment sets的方式：     用valid adjustment sets定义SID的概念如下：     DE对照PA，指的是子节点。     下面做了一些实验，设定结点的数量，随机生成一些有向无环图组，计算它们的SHD和SID值，可以发现，图和图之间的SHD和SID值区别是很大的，也就是说SHD和SID是完全不同的评量标准。       下面两幅图，分别用SID和SHD评估了一些因果推断的方法，可以发现，有些在SHD标准下优于随机推断的方式，在SID标准下和随机推断相比，毫无优势。     觉得有帮助到你的话，右下角帮忙点个“在看”哇。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Buhlmann, Structural Intervention Distance for Evaluating Causal Graphs, Neural Computation, 2015" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F(SHD%E5%92%8CSID)/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-02-07T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 如何评估因果模型？     如何评估你的因果归纳模型？这个问题转换一下可以是如何比较两个因果关系图，再数学一点，就是如何定义两个图的距离。     这和因果关系要应用的场景，领域，以及该因果关系的特质都有关系，实际上是一个非常复杂又多变的问题。     下面讨论两种可以应用于一般场景的方法：     1. Structural Hamming Distance (SHD)     PDAG指的是部分有向无环图，即不一定所有边都是有向的。P指的是由p个变量的所有有向无环图构成的图域。那么任意两个图的SHD是指两个图不一致的边的数量。#在这里是数量的意思。任意两个变量之间的边有三种：i和j之间没有任何关联，i-&gt;j，和j-&gt;i。     比如下面三张图：     就有：     2. Structural Intervention Distance (SID)     这个概念有点难理解，首先得理解分布的马可夫性，这里只列一下定义，详细可以参考MIT因果迷你课笔记 —— 发现因果关系1，分布的马可夫性有三种定义方式：     这是基于D-separation，d-connection的定义，要理解可能要详细看一下D-separation的概念。为什么用Markov呢，Markov形容d-separation为，已知的当下分开了过去和未来，让未来不再依赖过去。     我们认为分布P基于图G是Markov的，如果Xi和Xj在图G中被S d-separated能推导出Xi⊥Xj|S。这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。      另外，马可夫状态还有其他两种定义方式：     其中Y是一组变量的集合，PA(X)指X的所有的父变量的集合，ND(X)指除了X变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：     这几种定义方式是等价的。          干预分布(intervention distribution)     当分布具有马可夫性时，下面这个公式表现的是对Xi的值进行干预后的概率分布函数，do表示干预这个动作：     那么干预对单个结点的影响又如何表达：     如果Y是X的父节点，那么干预X对Y不会造成任何影响，而如果Y不是X的父节点，那么干预X之后，Y的分布则会因X的值还有X的父节点调整。     举个例子，在图b中，干预y2的值，会对y3造成什么影响呢？y3不是y2的父节点，计算如下：     根据推导可知，在a图和b图中，干预y2对y3的影响是一致的。而如果你仔细计算每一个干预分布会发现，图G和图H1所有的干预分布都是一致的，但是图G和H2的干预分布有8个不一致：     显而易见，SID统计的是两个图干预分布不一致的个数。     SID完整的定义如下：     首先定义了correctly and falsely inferred intervention distributions，干预分布的一致性和不一致。再根据falsely inferred intervention distributions的定义定义了SID。     为什么设计SID这么一个度量标准，这和因果推断的这个课题本身的特质是有关系的，有些因果错了并不会对整体推断带来大的影响，但有些会，如果有具体的场景，可能又要结合具体的场景设计评估方式，详细可以参考[2]。另外定义SID的方式有很多种，还有一种基于valid adjustment set的方式： 下面定义了判断valid adjustment sets的方式：     用valid adjustment sets定义SID的概念如下：     DE对照PA，指的是子节点。     下面做了一些实验，设定结点的数量，随机生成一些有向无环图组，计算它们的SHD和SID值，可以发现，图和图之间的SHD和SID值区别是很大的，也就是说SHD和SID是完全不同的评量标准。       下面两幅图，分别用SID和SHD评估了一些因果推断的方法，可以发现，有些在SHD标准下优于随机推断的方式，在SID标准下和随机推断相比，毫无优势。     觉得有帮助到你的话，右下角帮忙点个“在看”哇。 系列首篇：MIT因果迷你课笔记 —— 相关和因果 上篇：MIT因果迷你课笔记 —— 发现因果关系3(多变量) 记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。 声明：所有图片均来自参考，没有原创图片，公式和定理。 参考： [1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Jonas Peters, Peter Buhlmann, Structural Intervention Distance for Evaluating Causal Graphs, Neural Computation, 2015","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F(SHD%E5%92%8CSID)/2.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）","dateModified":"2021-02-07T00:00:00+08:00","datePublished":"2021-02-07T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-02-07">07 Feb 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/2.png" alt="MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484222&amp;idx=1&amp;sn=c5ce5e073ff5b649950a2ced2c07745f&amp;chksm=c06761fcf710e8ea87feb6b0f9f9c858c0a215bbcbc7c44aeec1f9cfda442ec5d2939b2f4ebc&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系3(多变量)</a></strong></p>
+
+<p><strong style="font-size: 20px;">
+</strong></p>
+
+<p><strong>如何评估因果模型？</strong></p>
+
+<p>    如何评估你的因果归纳模型？这个问题转换一下可以是如何比较两个因果关系图，再数学一点，就是如何定义两个图的距离。</p>
+
+<p>    这和因果关系要应用的场景，领域，以及该因果关系的特质都有关系，实际上是一个非常复杂又多变的问题。</p>
+
+<p>    下面讨论两种可以应用于一般场景的方法：</p>
+
+<p>    <strong>1. Structural Hamming Distance (SHD)
+</strong></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/1.png" style="zoom:80%;" /></p>
+
+<p>    PDAG指的是部分有向无环图，即不一定所有边都是有向的。P指的是由p个变量的所有有向无环图构成的图域。那么任意两个图的SHD是指两个图不一致的边的数量。#在这里是数量的意思。任意两个变量之间的边有三种：i和j之间没有任何关联，i-&gt;j，和j-&gt;i。</p>
+
+<p>    比如下面三张图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/2.png" style="zoom:80%;" /></p>
+
+<p>    就有：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/3.png" style="zoom:80%;" /></p>
+
+<p>    <strong>2. Structural Intervention Distance (SID)</strong></p>
+
+<p>    这个概念有点难理解，首先得理解分布的马可夫性，这里只列一下定义，详细可以参考<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483979&amp;idx=1&amp;sn=8f2c863833e69ec786a4720c59274d88&amp;chksm=c0676089f710e99f1ee0f105bee567b87c4dbc6ed5a20ed5566fa2ae3b1a1a6423be100f346c&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系1</a>，分布的马可夫性有三种定义方式：</p>
+
+<p>    这是基于<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483768&amp;idx=1&amp;sn=0c644dc2a813a31142ce36cf4d128742&amp;chksm=c06763baf710eaac618abb98d70fb4de1a621d8cfad25783fdb58ea970c1de1a3bf9700008f1&amp;scene=21#wechat_redirect">D-separation，d-connection</a>的定义，要理解可能要详细看一下D-separation的概念。为什么用Markov呢，<strong>Markov形容d-separation为，已知的当下分开了过去和未来，让未来不再依赖过去。</strong></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/4.png" style="zoom: 67%;" /></p>
+
+<p>    我们认为分布<strong>P</strong>基于图<strong>G</strong>是Markov的，如果<strong>Xi</strong>和<strong>Xj</strong>在图<strong>G</strong>中被<strong>S</strong> d-separated能推导出<strong>Xi</strong>⊥<strong>Xj</strong>|<strong>S</strong>。这里我们用⊥代替图中的独立符号，因为图中的独立符号在这里打不出来。</p>
+
+<p>     另外，马可夫状态还有其他两种定义方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/5.png" style="zoom:50%;" /></p>
+
+<p>    其中Y是一组变量的集合，PA(<strong>X</strong>)指<strong>X</strong>的所有的父变量的集合，ND(<strong>X</strong>)指除了<strong>X</strong>变量和其后裔变量之外的所有变量的集合。下面这种是基于分解的定义方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/6.png" style="zoom:50%;" /></p>
+
+<p>    这几种定义方式是等价的。</p>
+
+<p>    </p>
+
+<p>    <strong>干预分布(intervention distribution)</strong></p>
+
+<p>    当分布具有马可夫性时，下面这个公式表现的是对Xi的值进行干预后的概率分布函数，do表示干预这个动作：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/7.png" style="zoom:80%;" /></p>
+
+<p>    那么干预对单个结点的影响又如何表达：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/8.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/9.png" style="zoom: 80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/10.png" style="zoom: 80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/11.png" style="zoom:80%;" /></p>
+
+<p>    如果Y是X的父节点，那么干预X对Y不会造成任何影响，而如果Y不是X的父节点，那么干预X之后，Y的分布则会因X的值还有X的父节点调整。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/12.png" style="zoom:80%;" /></p>
+
+<p>    举个例子，在图b中，干预y2的值，会对y3造成什么影响呢？y3不是y2的父节点，计算如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/13.png" style="zoom:80%;" /></p>
+
+<p>    根据推导可知，在a图和b图中，干预y2对y3的影响是一致的。而如果你仔细计算每一个干预分布会发现，图G和图H1所有的干预分布都是一致的，但是图G和H2的干预分布有8个不一致：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/14.png" style="zoom:80%;" /></p>
+
+<p>    显而易见，SID统计的是两个图干预分布不一致的个数。</p>
+
+<p>    SID完整的定义如下：</p>
+
+<p>    首先定义了correctly and falsely inferred intervention distributions，干预分布的一致性和不一致。再根据falsely inferred intervention distributions的定义定义了SID。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/15.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/16.png" style="zoom:80%;" /></p>
+
+<p>    为什么设计SID这么一个度量标准，这和因果推断的这个课题本身的特质是有关系的，有些因果错了并不会对整体推断带来大的影响，但有些会，如果有具体的场景，可能又要结合具体的场景设计评估方式，详细可以参考[2]。另外定义SID的方式有很多种，还有一种基于valid adjustment set的方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/17.png" style="zoom:80%;" /></p>
+
+<p>下面定义了判断valid adjustment sets的方式：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/18.png" style="zoom:80%;" /></p>
+
+<p>    用valid adjustment sets定义SID的概念如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/19.png" style="zoom:80%;" /></p>
+
+<p>    DE对照PA，指的是子节点。</p>
+
+<p>    下面做了一些实验，设定结点的数量，随机生成一些有向无环图组，计算它们的SHD和SID值，可以发现，图和图之间的SHD和SID值区别是很大的，也就是说SHD和SID是完全不同的评量标准。  </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/20.png" style="zoom: 67%;" /></p>
+
+<p>    下面两幅图，分别用SID和SHD评估了一些因果推断的方法，可以发现，有些在SHD标准下优于随机推断的方式，在SID标准下和随机推断相比，毫无优势。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/21.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）/22.png" style="zoom:80%;" /></p>
+
+<p>    觉得有帮助到你的话，右下角帮忙点个“在看”哇。</p>
+
+<p><strong>系列首篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect"><strong>MIT因果迷你课笔记 —— 相关和因果</strong></a></p>
+
+<p><strong>上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484222&amp;idx=1&amp;sn=c5ce5e073ff5b649950a2ced2c07745f&amp;chksm=c06761fcf710e8ea87feb6b0f9f9c858c0a215bbcbc7c44aeec1f9cfda442ec5d2939b2f4ebc&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 发现因果关系3(多变量)</a></strong></p>
+
+<p>记：公式上上下下有不匹配的地方，因为截自不同的参考文献，所以写法会有出入，打公式太累了，我放过了自己。</p>
+
+<p>声明：所有图片均来自参考，没有原创图片，公式和定理。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini-course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Jonas Peters, Peter Buhlmann, Structural Intervention Distance for Evaluating Causal Graphs, Neural Computation, 2015</p>
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 因果归纳模型的评估方式（SHD和SID）&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B%E7%9A%84%E8%AF%84%E4%BC%B0%E6%96%B9%E5%BC%8F-SHD%E5%92%8CSID/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

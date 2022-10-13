@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>MIT因果迷你课笔记 —— 因果语言和因果推理 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>MIT因果迷你课笔记 —— 因果语言和因果推理 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="MIT因果迷你课笔记 —— 因果语言和因果推理" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="一、分布和因果图     例1. 海拔和温度     假设，海拔和温度的分布及因果关系是已知的，且如下图所示：     海拔和温度存在因果关系，平均每上升100米，温度下降0.6摄氏度。上图中左图是海拔和温度的分布情况，右边是因果图。Nx，Ny为独立同分布，假设它们都服从期望值为0，标准差为1的标准正太分布。X，Y服从二维正太分布如上图所示。     如何对这个系统进行干预呢？直接确定X的值即可。                 当确定了X的值后，Y的分布也会产生变化，Y服从均为为-16，标准差为1的正太分布。     也可以对Y进行干预，使Y服从均值为2，标准差为2的正太分布：     那么X和Y之间的因果关系就被破坏了，因为要改变Y的分布，比如你装了一台超级大的空调，使得Y服从了这样的分布，那么海拔的变化便不再有影响力。海拔和温度之间的因果关系就不存在了。海拔和温度就变成了两个独立的变量，X，Y的联合分布也变成了上图所示。     可观察到的所有变量X1，…，Xd的分布式集，我们称之为P，即下图左边的所有公式。     当我们要对系统进行干预时，即改变某些变量的值或者和其他变量的关系，如把X1的值固定在0上，分布式集则变为Pdo(X1:=0)，变量之间的因果关系也会产生相应的变化。 ​ Pdo的下标do表示的是干预的这个动作。下图中将X4这个变量的值通过干预使之固定为13。为什么要加一个do的下标来表示干预呢，因为直接写成P(X4:=13)，很容易被误理解为P(.|X4=13)，即X4=13时系统的状况。Pdo(X4:=13)与P(.|X4=13)完全是两码事。    例2. 肾结石     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论。     假设我们现在只知道肾结石治疗的因果图，不知道每个变量的分布情况。肾结石治愈率受治疗方案和结石大小影响，而结石大小又对治疗方案的选择有直接的影响。     我们想知道的是，治疗方案A和治疗方案B的治愈率分别是多少，那么它们在这个场景中则不能简单地用P( R =1 | T =A )和P( R =1 | T =B)去表示治疗方案A和B的治愈率。而应该用Pdo(T:=A)(R=1)和Pdo(T:=B)(R=1)来表示，因为我们想知道的是，如果我们不管结石大或小，选择治疗方案A或B能获得的治愈率，如下图：     现有一些样本统计结果：     Pdo(T:=A)(R=1)的值的计算如下：     说几个比较重要的点，Pdo(T:=A)(S = s, T = A) = Pdo(T:=A)(S = s)，是因为有了do(T:=A)这个干预后，S和T相互独立。Pdo(T:=A)(S = s) = P(S = s)，因在因果关系中S不受治疗方案和治愈率的影响。Pdo(T:=A)(R=1|S = s, T = A) = P(R=1|S = s, T = A)的道理也是一样，这样的干预并没有改变R和S还有T之间的因果关系。最后得到的Pdo(T:=A)(R=1)不等于P(R=1|T=A)，因此，当我们想进行主动干预的时候，比如主动选择治疗方案的时候，因果推理就十分有必要了。     将上面的现象一般化，即可得到下面有效调整集(valid adjustment set)的定义，对于上一例，结石大小就属于(T，R)的有效调整集。     为什么需要定义一个有效调整集？在探索X，Y之间的因果关系时，需要计算Pdo(X:=x)(y)，而去场景中干预X做实验，有时候是不现实的。比如，假设一个人去了医院发现了肾结石，但医院检查结石大小的机器恰好坏了，他得在A，B方案中选择一个，因此他得知道A，B方案的治愈率，那个时候再去干预X做实验来获得X和Y之间的因果关系显然是不现实的，他拥有的只有过往的一些统计数据，还有统计变量之间的因果关系。那么是哪些变量使得这些统计数据不能直接用来表示X和Y的因果关系？如何去掉这些变量造成的影响，通过对已有数据的计算来得到X对Y的影响？     符合上述条件的即为有效调整集，那么怎么样快速有效的找到有效调整集，下面给出了一个方法，但注意这个方法不能找出所有的有效调整集。     结合下面这张因果结构图理解一下有效调整集的概念。     X&lt;-A-&gt;K-&gt;Y被定义为“backdoor path”，上面因果图中，人们其实并不关心其他的因果关系，他们只关心X和Y的因果关系，就像肾结石那例，我们并不关心医生依照结石大小会对方案做出的选择，我们只想知道每种治疗方案的治愈率。因此我们想知道的是X-&gt;D-&gt;Y这条关系，X对Y有什么样的影响。对于A对X造成的影响，我们不关心，因此，X&lt;-A-&gt;K-&gt;Y这种同时影响着X和Y的因果关系链被称之为“backdoor path”。     上图因果关系中的有效调整集都有哪些呢？这里举三个有效调整集，{A，C}，{K}，{F，C，K}，这三个并不是全部的有效调整集。{A，C}这组有效调整集即X的父结点的集合，为什么取X的不包含Y的父节点的集合能得到有效调整集呢？因为有效调整集必须能够切断所有的“backdoor path”。在这一例中，能够切断“backdoor path”的结点是A和K，而其他结点都是可有可无的，比如C或F在不在有效调整集中，都不会影响调整集的有效性。     那么为什么要切断所有“backdoor path”呢？当我们对X进行干预的时候，A对X的影响就被切断了，A只对Y产生影响。do(X:=x)这个动作改变了因果关系，舍掉了A对X能产生的影响，所以计算中也应该排除A对X产生的影响。值得注意的是，虽然A才是关键的影响着X的结点，但是统计计算的时候受A影响又影响着Y的K也可以作为有效调整集的必要点，因为它的状况可以反馈A的状况，如果A不易被观察到，观察K也可以得到正确结果。     另外，D，G，H都不应该出现在有效调整集当中。D，G会直接或者间接地切断X和Y的关联，H则会暴露Y。     例3. 烟草和肺癌     再回到烟草和肺癌这个经典案例：     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论，在1950年的时候有这样一篇文章发表，详细分析了吸烟和肝癌之间的相关性，现在我们知道，相关不一定构成因果，可能是由潜在的原因同时导致了吸烟和肝癌。     而这篇文章的优秀之处在于，结合了各种可能的潜在原因，比如将各种压力，性别，地域等因素列为观察的变量。即增加不同的调整集，发现吸烟和肝癌总是强相关，即，找不到有效调整集可以改变吸烟和肝癌之间的相关性。既然吸烟有害身体健康，那么政府就想让烟草公司纳税，烟草公司为了避税，把这个潜在原因归到了基因上，即某种基因导致了一个人既喜欢吸烟，又容易患肝癌，我们今天来看当然是非常荒诞的，但是当时科技还不怎么发达，人们对基因的认知也很有限，就这样被烟草公司忽悠了。这里Jonas Peters推荐了一本书《Merchants of Doubt》，不能尽信科学家，他们也会被利益驱动去做一些违背道德的事情，商人和政客就更不用说了。     例4. 坏血病和柠檬     在1747年的五月，James Lind在一艘行驶在海上的船上，对患有坏血病的12名船员做了一个随机化实验，将十二名船员随机分成六组，配给不同的食物，得到的结果是，每天获得柠檬的病人，病情明显好转。他可能意识到调整饮食可以治愈这种病，但是又不知道如何调整，才能治愈这种病。因此他设计了一个随机化实验，这种实验方式后来被广泛应用于医疗领域。     随机化实验的价值在于，因果关系是复杂的，但如果你把船员随机分组，然后再配给食物，那么食物配给就不受任何因素影响了，即切断了因果图中所有到food这个结点的父结点，那么观察到的food和recovery之间的因果关系就不需要有效调整集来调整了，得到的相关性就是它们之间的因果关系。     接下来是一些小概念，如果这两个模型有相同的概率{概率和干预}分布，我们称两个模型概率上{干预上}对等。在干预时，随机化干预能得到正确的因果关系。     下面用四种方式定义了认定X是Y的因需要符合的条件。(i)中X和Y中间的符号是dependence的意思，去掉斜杠是independence。     思考：如果X和Y之间存在因果关系，那么X和Y之间因果关系的强度又该怎么定义和计算？     也许是： &lt;div align=center&gt;&lt;/div&gt;     工具变量(Instrumental Variables)     我们依然是想计算X，Y之间的因果关系，以及它们之间的系数，但是由于H不好观察，X不好控制，我们没有办法通过控制X来得到它和Y之间的关系，这个时候如果有个变量I，它独立于X，H，Y这个系统，那么就可以通过控制它得到X和Y之间的关系。这种变量被称之为工具变量。     反事实(Counterfactuals)     《生活大爆炸》第四季里有一段关于反事实的游，感兴趣的搜索着看一下。     关于反事实，上一节有提过，这个概念对照的是人类反思和想象的能力，这个能力非常重要，是让我们有洞察力的关键，不过也有很多副作用。     对应到SCM，可以做如下定义：     通俗地说，反事实就是对SCM中分布公式中的随机部分做定义，从而改变因果关系。举个例子：     如上图，假设一种病，是否治疗服从NT随机分布，如果治疗，治愈率为99%，如果不治疗，治愈率为1%。如今，Tom也得了这种病，而他恰好就是一个特例，如果他治疗，治愈率是0，如果他不治疗，反而会好。但这只有发生后才明确知道，因此，在Tom接受治疗，死亡后，我们说如果Tom不治疗，那么他反而会痊愈，这就是反事实。          接下来总结一下这个部分：     1. 因果关系不是什么时候都有必要研究，很多时候我们只需要知道相关性，比如你想让机器人把猫认出来，相关性即可，你想要机器人把猫画出来，可能会需要因果关系。因果关系通常是，我们想对环境进行干预，并想知道干预后的结果，才有必要去了解的。     2. 当我们有了因果图和变量的分布公式后，我们就能推演出干预后变量分布的变化。反事实也是如此。     下面这个研究很有趣，想知道死神走多快吗？可能是0.82m/s，要走的比他快哦，被赶上就完蛋了。 此篇上一节为：MIT因果迷你课笔记 —— 相关和因果 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018 [3] 我是啤酒，MIT因果迷你课笔记 —— 相关和因果，2020" />
+<meta property="og:description" content="一、分布和因果图     例1. 海拔和温度     假设，海拔和温度的分布及因果关系是已知的，且如下图所示：     海拔和温度存在因果关系，平均每上升100米，温度下降0.6摄氏度。上图中左图是海拔和温度的分布情况，右边是因果图。Nx，Ny为独立同分布，假设它们都服从期望值为0，标准差为1的标准正太分布。X，Y服从二维正太分布如上图所示。     如何对这个系统进行干预呢？直接确定X的值即可。                 当确定了X的值后，Y的分布也会产生变化，Y服从均为为-16，标准差为1的正太分布。     也可以对Y进行干预，使Y服从均值为2，标准差为2的正太分布：     那么X和Y之间的因果关系就被破坏了，因为要改变Y的分布，比如你装了一台超级大的空调，使得Y服从了这样的分布，那么海拔的变化便不再有影响力。海拔和温度之间的因果关系就不存在了。海拔和温度就变成了两个独立的变量，X，Y的联合分布也变成了上图所示。     可观察到的所有变量X1，…，Xd的分布式集，我们称之为P，即下图左边的所有公式。     当我们要对系统进行干预时，即改变某些变量的值或者和其他变量的关系，如把X1的值固定在0上，分布式集则变为Pdo(X1:=0)，变量之间的因果关系也会产生相应的变化。 ​ Pdo的下标do表示的是干预的这个动作。下图中将X4这个变量的值通过干预使之固定为13。为什么要加一个do的下标来表示干预呢，因为直接写成P(X4:=13)，很容易被误理解为P(.|X4=13)，即X4=13时系统的状况。Pdo(X4:=13)与P(.|X4=13)完全是两码事。    例2. 肾结石     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论。     假设我们现在只知道肾结石治疗的因果图，不知道每个变量的分布情况。肾结石治愈率受治疗方案和结石大小影响，而结石大小又对治疗方案的选择有直接的影响。     我们想知道的是，治疗方案A和治疗方案B的治愈率分别是多少，那么它们在这个场景中则不能简单地用P( R =1 | T =A )和P( R =1 | T =B)去表示治疗方案A和B的治愈率。而应该用Pdo(T:=A)(R=1)和Pdo(T:=B)(R=1)来表示，因为我们想知道的是，如果我们不管结石大或小，选择治疗方案A或B能获得的治愈率，如下图：     现有一些样本统计结果：     Pdo(T:=A)(R=1)的值的计算如下：     说几个比较重要的点，Pdo(T:=A)(S = s, T = A) = Pdo(T:=A)(S = s)，是因为有了do(T:=A)这个干预后，S和T相互独立。Pdo(T:=A)(S = s) = P(S = s)，因在因果关系中S不受治疗方案和治愈率的影响。Pdo(T:=A)(R=1|S = s, T = A) = P(R=1|S = s, T = A)的道理也是一样，这样的干预并没有改变R和S还有T之间的因果关系。最后得到的Pdo(T:=A)(R=1)不等于P(R=1|T=A)，因此，当我们想进行主动干预的时候，比如主动选择治疗方案的时候，因果推理就十分有必要了。     将上面的现象一般化，即可得到下面有效调整集(valid adjustment set)的定义，对于上一例，结石大小就属于(T，R)的有效调整集。     为什么需要定义一个有效调整集？在探索X，Y之间的因果关系时，需要计算Pdo(X:=x)(y)，而去场景中干预X做实验，有时候是不现实的。比如，假设一个人去了医院发现了肾结石，但医院检查结石大小的机器恰好坏了，他得在A，B方案中选择一个，因此他得知道A，B方案的治愈率，那个时候再去干预X做实验来获得X和Y之间的因果关系显然是不现实的，他拥有的只有过往的一些统计数据，还有统计变量之间的因果关系。那么是哪些变量使得这些统计数据不能直接用来表示X和Y的因果关系？如何去掉这些变量造成的影响，通过对已有数据的计算来得到X对Y的影响？     符合上述条件的即为有效调整集，那么怎么样快速有效的找到有效调整集，下面给出了一个方法，但注意这个方法不能找出所有的有效调整集。     结合下面这张因果结构图理解一下有效调整集的概念。     X&lt;-A-&gt;K-&gt;Y被定义为“backdoor path”，上面因果图中，人们其实并不关心其他的因果关系，他们只关心X和Y的因果关系，就像肾结石那例，我们并不关心医生依照结石大小会对方案做出的选择，我们只想知道每种治疗方案的治愈率。因此我们想知道的是X-&gt;D-&gt;Y这条关系，X对Y有什么样的影响。对于A对X造成的影响，我们不关心，因此，X&lt;-A-&gt;K-&gt;Y这种同时影响着X和Y的因果关系链被称之为“backdoor path”。     上图因果关系中的有效调整集都有哪些呢？这里举三个有效调整集，{A，C}，{K}，{F，C，K}，这三个并不是全部的有效调整集。{A，C}这组有效调整集即X的父结点的集合，为什么取X的不包含Y的父节点的集合能得到有效调整集呢？因为有效调整集必须能够切断所有的“backdoor path”。在这一例中，能够切断“backdoor path”的结点是A和K，而其他结点都是可有可无的，比如C或F在不在有效调整集中，都不会影响调整集的有效性。     那么为什么要切断所有“backdoor path”呢？当我们对X进行干预的时候，A对X的影响就被切断了，A只对Y产生影响。do(X:=x)这个动作改变了因果关系，舍掉了A对X能产生的影响，所以计算中也应该排除A对X产生的影响。值得注意的是，虽然A才是关键的影响着X的结点，但是统计计算的时候受A影响又影响着Y的K也可以作为有效调整集的必要点，因为它的状况可以反馈A的状况，如果A不易被观察到，观察K也可以得到正确结果。     另外，D，G，H都不应该出现在有效调整集当中。D，G会直接或者间接地切断X和Y的关联，H则会暴露Y。     例3. 烟草和肺癌     再回到烟草和肺癌这个经典案例：     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论，在1950年的时候有这样一篇文章发表，详细分析了吸烟和肝癌之间的相关性，现在我们知道，相关不一定构成因果，可能是由潜在的原因同时导致了吸烟和肝癌。     而这篇文章的优秀之处在于，结合了各种可能的潜在原因，比如将各种压力，性别，地域等因素列为观察的变量。即增加不同的调整集，发现吸烟和肝癌总是强相关，即，找不到有效调整集可以改变吸烟和肝癌之间的相关性。既然吸烟有害身体健康，那么政府就想让烟草公司纳税，烟草公司为了避税，把这个潜在原因归到了基因上，即某种基因导致了一个人既喜欢吸烟，又容易患肝癌，我们今天来看当然是非常荒诞的，但是当时科技还不怎么发达，人们对基因的认知也很有限，就这样被烟草公司忽悠了。这里Jonas Peters推荐了一本书《Merchants of Doubt》，不能尽信科学家，他们也会被利益驱动去做一些违背道德的事情，商人和政客就更不用说了。     例4. 坏血病和柠檬     在1747年的五月，James Lind在一艘行驶在海上的船上，对患有坏血病的12名船员做了一个随机化实验，将十二名船员随机分成六组，配给不同的食物，得到的结果是，每天获得柠檬的病人，病情明显好转。他可能意识到调整饮食可以治愈这种病，但是又不知道如何调整，才能治愈这种病。因此他设计了一个随机化实验，这种实验方式后来被广泛应用于医疗领域。     随机化实验的价值在于，因果关系是复杂的，但如果你把船员随机分组，然后再配给食物，那么食物配给就不受任何因素影响了，即切断了因果图中所有到food这个结点的父结点，那么观察到的food和recovery之间的因果关系就不需要有效调整集来调整了，得到的相关性就是它们之间的因果关系。     接下来是一些小概念，如果这两个模型有相同的概率{概率和干预}分布，我们称两个模型概率上{干预上}对等。在干预时，随机化干预能得到正确的因果关系。     下面用四种方式定义了认定X是Y的因需要符合的条件。(i)中X和Y中间的符号是dependence的意思，去掉斜杠是independence。     思考：如果X和Y之间存在因果关系，那么X和Y之间因果关系的强度又该怎么定义和计算？     也许是： &lt;div align=center&gt;&lt;/div&gt;     工具变量(Instrumental Variables)     我们依然是想计算X，Y之间的因果关系，以及它们之间的系数，但是由于H不好观察，X不好控制，我们没有办法通过控制X来得到它和Y之间的关系，这个时候如果有个变量I，它独立于X，H，Y这个系统，那么就可以通过控制它得到X和Y之间的关系。这种变量被称之为工具变量。     反事实(Counterfactuals)     《生活大爆炸》第四季里有一段关于反事实的游，感兴趣的搜索着看一下。     关于反事实，上一节有提过，这个概念对照的是人类反思和想象的能力，这个能力非常重要，是让我们有洞察力的关键，不过也有很多副作用。     对应到SCM，可以做如下定义：     通俗地说，反事实就是对SCM中分布公式中的随机部分做定义，从而改变因果关系。举个例子：     如上图，假设一种病，是否治疗服从NT随机分布，如果治疗，治愈率为99%，如果不治疗，治愈率为1%。如今，Tom也得了这种病，而他恰好就是一个特例，如果他治疗，治愈率是0，如果他不治疗，反而会好。但这只有发生后才明确知道，因此，在Tom接受治疗，死亡后，我们说如果Tom不治疗，那么他反而会痊愈，这就是反事实。          接下来总结一下这个部分：     1. 因果关系不是什么时候都有必要研究，很多时候我们只需要知道相关性，比如你想让机器人把猫认出来，相关性即可，你想要机器人把猫画出来，可能会需要因果关系。因果关系通常是，我们想对环境进行干预，并想知道干预后的结果，才有必要去了解的。     2. 当我们有了因果图和变量的分布公式后，我们就能推演出干预后变量分布的变化。反事实也是如此。     下面这个研究很有趣，想知道死神走多快吗？可能是0.82m/s，要走的比他快哦，被赶上就完蛋了。 此篇上一节为：MIT因果迷你课笔记 —— 相关和因果 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018 [3] 我是啤酒，MIT因果迷你课笔记 —— 相关和因果，2020" />
+<link rel="canonical" href="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/" />
+<meta property="og:url" content="http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/1.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-06-21T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"一、分布和因果图     例1. 海拔和温度     假设，海拔和温度的分布及因果关系是已知的，且如下图所示：     海拔和温度存在因果关系，平均每上升100米，温度下降0.6摄氏度。上图中左图是海拔和温度的分布情况，右边是因果图。Nx，Ny为独立同分布，假设它们都服从期望值为0，标准差为1的标准正太分布。X，Y服从二维正太分布如上图所示。     如何对这个系统进行干预呢？直接确定X的值即可。                 当确定了X的值后，Y的分布也会产生变化，Y服从均为为-16，标准差为1的正太分布。     也可以对Y进行干预，使Y服从均值为2，标准差为2的正太分布：     那么X和Y之间的因果关系就被破坏了，因为要改变Y的分布，比如你装了一台超级大的空调，使得Y服从了这样的分布，那么海拔的变化便不再有影响力。海拔和温度之间的因果关系就不存在了。海拔和温度就变成了两个独立的变量，X，Y的联合分布也变成了上图所示。     可观察到的所有变量X1，…，Xd的分布式集，我们称之为P，即下图左边的所有公式。     当我们要对系统进行干预时，即改变某些变量的值或者和其他变量的关系，如把X1的值固定在0上，分布式集则变为Pdo(X1:=0)，变量之间的因果关系也会产生相应的变化。 ​ Pdo的下标do表示的是干预的这个动作。下图中将X4这个变量的值通过干预使之固定为13。为什么要加一个do的下标来表示干预呢，因为直接写成P(X4:=13)，很容易被误理解为P(.|X4=13)，即X4=13时系统的状况。Pdo(X4:=13)与P(.|X4=13)完全是两码事。    例2. 肾结石     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论。     假设我们现在只知道肾结石治疗的因果图，不知道每个变量的分布情况。肾结石治愈率受治疗方案和结石大小影响，而结石大小又对治疗方案的选择有直接的影响。     我们想知道的是，治疗方案A和治疗方案B的治愈率分别是多少，那么它们在这个场景中则不能简单地用P( R =1 | T =A )和P( R =1 | T =B)去表示治疗方案A和B的治愈率。而应该用Pdo(T:=A)(R=1)和Pdo(T:=B)(R=1)来表示，因为我们想知道的是，如果我们不管结石大或小，选择治疗方案A或B能获得的治愈率，如下图：     现有一些样本统计结果：     Pdo(T:=A)(R=1)的值的计算如下：     说几个比较重要的点，Pdo(T:=A)(S = s, T = A) = Pdo(T:=A)(S = s)，是因为有了do(T:=A)这个干预后，S和T相互独立。Pdo(T:=A)(S = s) = P(S = s)，因在因果关系中S不受治疗方案和治愈率的影响。Pdo(T:=A)(R=1|S = s, T = A) = P(R=1|S = s, T = A)的道理也是一样，这样的干预并没有改变R和S还有T之间的因果关系。最后得到的Pdo(T:=A)(R=1)不等于P(R=1|T=A)，因此，当我们想进行主动干预的时候，比如主动选择治疗方案的时候，因果推理就十分有必要了。     将上面的现象一般化，即可得到下面有效调整集(valid adjustment set)的定义，对于上一例，结石大小就属于(T，R)的有效调整集。     为什么需要定义一个有效调整集？在探索X，Y之间的因果关系时，需要计算Pdo(X:=x)(y)，而去场景中干预X做实验，有时候是不现实的。比如，假设一个人去了医院发现了肾结石，但医院检查结石大小的机器恰好坏了，他得在A，B方案中选择一个，因此他得知道A，B方案的治愈率，那个时候再去干预X做实验来获得X和Y之间的因果关系显然是不现实的，他拥有的只有过往的一些统计数据，还有统计变量之间的因果关系。那么是哪些变量使得这些统计数据不能直接用来表示X和Y的因果关系？如何去掉这些变量造成的影响，通过对已有数据的计算来得到X对Y的影响？     符合上述条件的即为有效调整集，那么怎么样快速有效的找到有效调整集，下面给出了一个方法，但注意这个方法不能找出所有的有效调整集。     结合下面这张因果结构图理解一下有效调整集的概念。     X&lt;-A-&gt;K-&gt;Y被定义为“backdoor path”，上面因果图中，人们其实并不关心其他的因果关系，他们只关心X和Y的因果关系，就像肾结石那例，我们并不关心医生依照结石大小会对方案做出的选择，我们只想知道每种治疗方案的治愈率。因此我们想知道的是X-&gt;D-&gt;Y这条关系，X对Y有什么样的影响。对于A对X造成的影响，我们不关心，因此，X&lt;-A-&gt;K-&gt;Y这种同时影响着X和Y的因果关系链被称之为“backdoor path”。     上图因果关系中的有效调整集都有哪些呢？这里举三个有效调整集，{A，C}，{K}，{F，C，K}，这三个并不是全部的有效调整集。{A，C}这组有效调整集即X的父结点的集合，为什么取X的不包含Y的父节点的集合能得到有效调整集呢？因为有效调整集必须能够切断所有的“backdoor path”。在这一例中，能够切断“backdoor path”的结点是A和K，而其他结点都是可有可无的，比如C或F在不在有效调整集中，都不会影响调整集的有效性。     那么为什么要切断所有“backdoor path”呢？当我们对X进行干预的时候，A对X的影响就被切断了，A只对Y产生影响。do(X:=x)这个动作改变了因果关系，舍掉了A对X能产生的影响，所以计算中也应该排除A对X产生的影响。值得注意的是，虽然A才是关键的影响着X的结点，但是统计计算的时候受A影响又影响着Y的K也可以作为有效调整集的必要点，因为它的状况可以反馈A的状况，如果A不易被观察到，观察K也可以得到正确结果。     另外，D，G，H都不应该出现在有效调整集当中。D，G会直接或者间接地切断X和Y的关联，H则会暴露Y。     例3. 烟草和肺癌     再回到烟草和肺癌这个经典案例：     关于这个例子，上一节MIT因果迷你课笔记 —— 相关和因果中有做一些讨论，在1950年的时候有这样一篇文章发表，详细分析了吸烟和肝癌之间的相关性，现在我们知道，相关不一定构成因果，可能是由潜在的原因同时导致了吸烟和肝癌。     而这篇文章的优秀之处在于，结合了各种可能的潜在原因，比如将各种压力，性别，地域等因素列为观察的变量。即增加不同的调整集，发现吸烟和肝癌总是强相关，即，找不到有效调整集可以改变吸烟和肝癌之间的相关性。既然吸烟有害身体健康，那么政府就想让烟草公司纳税，烟草公司为了避税，把这个潜在原因归到了基因上，即某种基因导致了一个人既喜欢吸烟，又容易患肝癌，我们今天来看当然是非常荒诞的，但是当时科技还不怎么发达，人们对基因的认知也很有限，就这样被烟草公司忽悠了。这里Jonas Peters推荐了一本书《Merchants of Doubt》，不能尽信科学家，他们也会被利益驱动去做一些违背道德的事情，商人和政客就更不用说了。     例4. 坏血病和柠檬     在1747年的五月，James Lind在一艘行驶在海上的船上，对患有坏血病的12名船员做了一个随机化实验，将十二名船员随机分成六组，配给不同的食物，得到的结果是，每天获得柠檬的病人，病情明显好转。他可能意识到调整饮食可以治愈这种病，但是又不知道如何调整，才能治愈这种病。因此他设计了一个随机化实验，这种实验方式后来被广泛应用于医疗领域。     随机化实验的价值在于，因果关系是复杂的，但如果你把船员随机分组，然后再配给食物，那么食物配给就不受任何因素影响了，即切断了因果图中所有到food这个结点的父结点，那么观察到的food和recovery之间的因果关系就不需要有效调整集来调整了，得到的相关性就是它们之间的因果关系。     接下来是一些小概念，如果这两个模型有相同的概率{概率和干预}分布，我们称两个模型概率上{干预上}对等。在干预时，随机化干预能得到正确的因果关系。     下面用四种方式定义了认定X是Y的因需要符合的条件。(i)中X和Y中间的符号是dependence的意思，去掉斜杠是independence。     思考：如果X和Y之间存在因果关系，那么X和Y之间因果关系的强度又该怎么定义和计算？     也许是： &lt;div align=center&gt;&lt;/div&gt;     工具变量(Instrumental Variables)     我们依然是想计算X，Y之间的因果关系，以及它们之间的系数，但是由于H不好观察，X不好控制，我们没有办法通过控制X来得到它和Y之间的关系，这个时候如果有个变量I，它独立于X，H，Y这个系统，那么就可以通过控制它得到X和Y之间的关系。这种变量被称之为工具变量。     反事实(Counterfactuals)     《生活大爆炸》第四季里有一段关于反事实的游，感兴趣的搜索着看一下。     关于反事实，上一节有提过，这个概念对照的是人类反思和想象的能力，这个能力非常重要，是让我们有洞察力的关键，不过也有很多副作用。     对应到SCM，可以做如下定义：     通俗地说，反事实就是对SCM中分布公式中的随机部分做定义，从而改变因果关系。举个例子：     如上图，假设一种病，是否治疗服从NT随机分布，如果治疗，治愈率为99%，如果不治疗，治愈率为1%。如今，Tom也得了这种病，而他恰好就是一个特例，如果他治疗，治愈率是0，如果他不治疗，反而会好。但这只有发生后才明确知道，因此，在Tom接受治疗，死亡后，我们说如果Tom不治疗，那么他反而会痊愈，这就是反事实。          接下来总结一下这个部分：     1. 因果关系不是什么时候都有必要研究，很多时候我们只需要知道相关性，比如你想让机器人把猫认出来，相关性即可，你想要机器人把猫画出来，可能会需要因果关系。因果关系通常是，我们想对环境进行干预，并想知道干预后的结果，才有必要去了解的。     2. 当我们有了因果图和变量的分布公式后，我们就能推演出干预后变量分布的变化。反事实也是如此。     下面这个研究很有趣，想知道死神走多快吗？可能是0.82m/s，要走的比他快哦，被赶上就完蛋了。 此篇上一节为：MIT因果迷你课笔记 —— 相关和因果 此系列未完待续，敬请关注^_^。 声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。 参考： [1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017 [2] Judea Pearl and Dana Mackenzie, The Book of Why, 2018 [3] 我是啤酒，MIT因果迷你课笔记 —— 相关和因果，2020","url":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/","image":"http://localhost:4000/assets/images/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0%20%E2%80%94%E2%80%94%20%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/1.png","@type":"BlogPosting","headline":"MIT因果迷你课笔记 —— 因果语言和因果推理","dateModified":"2020-06-21T00:00:00+08:00","datePublished":"2020-06-21T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">MIT因果迷你课笔记 —— 因果语言和因果推理</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-06-21">21 Jun 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/1.png" alt="MIT因果迷你课笔记 —— 因果语言和因果推理">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>一、分布和因果图</strong></p>
+
+<p>    <strong>例1. 海拔和温度</strong></p>
+
+<p>    假设，海拔和温度的分布及因果关系是已知的，且如下图所示：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/1.png" style="zoom: 80%;" /></p>
+
+<p>    海拔和温度存在因果关系，平均每上升100米，温度下降0.6摄氏度。上图中左图是海拔和温度的分布情况，右边是因果图。<strong>Nx</strong>，<strong>Ny</strong>为独立同分布，假设它们都服从期望值为0，标准差为1的标准正太分布。<strong>X</strong>，<strong>Y</strong>服从二维正太分布如上图所示。</p>
+
+<p>    如何对这个系统进行干预呢？直接确定X的值即可。            </p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/2.png" style="zoom:80%;" /></p>
+
+<p>    当确定了<strong>X</strong>的值后，<strong>Y</strong>的分布也会产生变化，<strong>Y</strong>服从均为为-16，标准差为1的正太分布。</p>
+
+<p>    也可以对<strong>Y</strong>进行干预，使<strong>Y</strong>服从均值为2，标准差为2的正太分布：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/3.png" style="zoom:80%;" /></p>
+
+<p>    那么<strong>X</strong>和<strong>Y</strong>之间的因果关系就被破坏了，因为要改变<strong>Y</strong>的分布，比如你装了一台超级大的空调，使得<strong>Y</strong>服从了这样的分布，那么海拔的变化便不再有影响力。海拔和温度之间的因果关系就不存在了。海拔和温度就变成了两个独立的变量，<strong>X</strong>，<strong>Y</strong>的联合分布也变成了上图所示。</p>
+
+<p>    可观察到的所有变量<strong>X1</strong>，…，<strong>Xd</strong>的分布式集，我们称之为<strong>P</strong>，即下图左边的所有公式。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/4.png" style="zoom:80%;" /></p>
+
+<p>    当我们要对系统进行干预时，即改变某些变量的值或者和其他变量的关系，如把<strong>X1</strong>的值固定在0上，分布式集则变为<strong>Pdo</strong>(<strong>X1:=</strong>0)，变量之间的因果关系也会产生相应的变化。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/5.png" style="zoom:80%;" /></p>
+
+<p>​	<strong>Pdo</strong>的下标<strong>do</strong>表示的是干预的这个动作。下图中将<strong>X4</strong>这个变量的值通过干预使之固定为13。为什么要加一个<strong>do</strong>的下标来表示干预呢，因为直接写成<strong>P</strong>(<strong>X4</strong>:=13)，很容易被误理解为<strong>P</strong>(<strong>.</strong>|<strong>X4</strong>=13)，即<strong>X4</strong>=13时系统的状况。<strong>Pdo(X4:=13)</strong>与<strong>P</strong>(<strong>.</strong>|<strong>X4</strong>=13)完全是两码事。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/6.png" style="zoom:80%;" /></p>
+
+<p>   <strong>例2. 肾结石</strong></p>
+
+<p>    关于这个例子，上一节<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 相关和因果</a>中有做一些讨论。</p>
+
+<p>    假设我们现在只知道肾结石治疗的因果图，不知道每个变量的分布情况。肾结石治愈率受治疗方案和结石大小影响，而结石大小又对治疗方案的选择有直接的影响。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/7.png" style="zoom:80%;" /></p>
+
+<p>    我们想知道的是，治疗方案<strong>A</strong>和治疗方案<strong>B</strong>的治愈率分别是多少，那么它们在这个场景中则不能简单地用<strong>P</strong>( <strong>R</strong> =1 | <strong>T</strong> =<strong>A</strong> )和<strong>P</strong>( <strong>R</strong> =1 | <strong>T</strong> =<strong>B</strong>)去表示治疗方案<strong>A</strong>和<strong>B</strong>的治愈率。而应该用<strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>R</strong>=1)和<strong>Pdo</strong>(<strong>T</strong>:=<strong>B</strong>)(<strong>R</strong>=1)来表示，因为我们想知道的是，如果我们不管结石大或小，选择治疗方案<strong>A</strong>或<strong>B</strong>能获得的治愈率，如下图：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/8.png" style="zoom:80%;" /></p>
+
+<p>    现有一些样本统计结果：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/9.jpeg" style="zoom:80%;" /></p>
+
+<p>    <strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>R</strong>=1)的值的计算如下：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/10.png" style="zoom: 67%;" /></p>
+
+<p>    说几个比较重要的点，<strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>S = s, T = A</strong>) = <strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>S = s</strong>)，是因为有了<strong>do</strong>(<strong>T</strong>:=<strong>A</strong>)这个干预后，<strong>S</strong>和<strong>T</strong>相互独立。<strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>S = s</strong>) = <strong>P</strong>(<strong>S = s</strong>)，因在因果关系中<strong>S</strong>不受治疗方案和治愈率的影响。<strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>R=1</strong>|<strong>S = s, T = A</strong>) = <strong>P</strong>(<strong>R=1</strong>|<strong>S = s, T = A</strong>)的道理也是一样，这样的干预并没有改变<strong>R</strong>和<strong>S</strong>还有<strong>T</strong>之间的因果关系。最后得到的<strong>Pdo</strong>(<strong>T</strong>:=<strong>A</strong>)(<strong>R</strong>=1)不等于<strong>P</strong>(<strong>R</strong>=1|<strong>T</strong>=<strong>A</strong>)，因此，当我们想进行主动干预的时候，比如主动选择治疗方案的时候，因果推理就十分有必要了。</p>
+
+<p>    将上面的现象一般化，即可得到下面有效调整集(valid adjustment set)的定义，对于上一例，结石大小就属于(<strong>T</strong>，<strong>R</strong>)的有效调整集。</p>
+
+<p>    为什么需要定义一个有效调整集？在探索<strong>X</strong>，<strong>Y</strong>之间的因果关系时，需要计算<strong>Pdo</strong>(<strong>X</strong>:=<strong>x</strong>)(<strong>y</strong>)，而去场景中干预X做实验，有时候是不现实的。比如，假设一个人去了医院发现了肾结石，但医院检查结石大小的机器恰好坏了，他得在<strong>A</strong>，<strong>B</strong>方案中选择一个，因此他得知道<strong>A</strong>，<strong>B</strong>方案的治愈率，那个时候再去干预X做实验来获得<strong>X</strong>和<strong>Y</strong>之间的因果关系显然是不现实的，他拥有的只有过往的一些统计数据，还有统计变量之间的因果关系。那么是哪些变量使得这些统计数据不能直接用来表示<strong>X</strong>和<strong>Y</strong>的因果关系？如何去掉这些变量造成的影响，通过对已有数据的计算来得到<strong>X</strong>对<strong>Y</strong>的影响？</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/11.png" style="zoom:80%;" /></p>
+
+<p>    符合上述条件的即为有效调整集，那么怎么样快速有效的找到有效调整集，下面给出了一个方法，但注意这个方法不能找出所有的有效调整集。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/12.png" style="zoom:80%;" /></p>
+
+<p>    结合下面这张因果结构图理解一下有效调整集的概念。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/13.png" style="zoom:80%;" /></p>
+
+<p>    <strong>X</strong>&lt;-<strong>A</strong>-&gt;<strong>K</strong>-&gt;<strong>Y</strong>被定义为“backdoor path”，上面因果图中，人们其实并不关心其他的因果关系，他们只关心<strong>X</strong>和<strong>Y</strong>的因果关系，就像肾结石那例，我们并不关心医生依照结石大小会对方案做出的选择，我们只想知道每种治疗方案的治愈率。因此我们想知道的是<strong>X</strong>-&gt;<strong>D</strong>-&gt;<strong>Y</strong>这条关系，<strong>X</strong>对<strong>Y</strong>有什么样的影响。对于<strong>A</strong>对<strong>X</strong>造成的影响，我们不关心，因此，<strong>X</strong>&lt;-<strong>A</strong>-&gt;<strong>K</strong>-&gt;<strong>Y</strong>这种同时影响着X和Y的因果关系链被称之为“backdoor path”。</p>
+
+<p>    上图因果关系中的有效调整集都有哪些呢？这里举三个有效调整集，{<strong>A</strong>，<strong>C</strong>}，{<strong>K</strong>}，{<strong>F，C</strong>，<strong>K</strong>}，这三个并不是全部的有效调整集。{<strong>A</strong>，<strong>C</strong>}这组有效调整集即<strong>X</strong>的父结点的集合，为什么取<strong>X</strong>的不包含Y的父节点的集合能得到有效调整集呢？因为有效调整集必须能够切断所有的“backdoor path”。在这一例中，能够切断“backdoor path”的结点是<strong>A</strong>和<strong>K</strong>，而其他结点都是可有可无的，比如C或F在不在有效调整集中，都不会影响调整集的有效性。</p>
+
+<p>    那么为什么要切断所有“backdoor path”呢？当我们对<strong>X</strong>进行干预的时候，<strong>A</strong>对<strong>X</strong>的影响就被切断了，<strong>A</strong>只对<strong>Y</strong>产生影响。<strong>do</strong>(<strong>X</strong>:=<strong>x</strong>)这个动作改变了因果关系，舍掉了<strong>A</strong>对<strong>X</strong>能产生的影响，所以计算中也应该排除<strong>A</strong>对<strong>X</strong>产生的影响。值得注意的是，虽然<strong>A</strong>才是关键的影响着X的结点，但是统计计算的时候受<strong>A</strong>影响又影响着Y的K也可以作为有效调整集的必要点，因为它的状况可以反馈<strong>A</strong>的状况，如果<strong>A</strong>不易被观察到，观察<strong>K</strong>也可以得到正确结果。</p>
+
+<p>    另外，<strong>D</strong>，<strong>G</strong>，<strong>H</strong>都不应该出现在有效调整集当中。<strong>D</strong>，<strong>G</strong>会直接或者间接地切断<strong>X</strong>和<strong>Y</strong>的关联，<strong>H</strong>则会暴露<strong>Y</strong>。</p>
+
+<p>    <strong>例3. 烟草和肺癌</strong></p>
+
+<p>    再回到烟草和肺癌这个经典案例：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/14.png" style="zoom:80%;" /></p>
+
+<p>    关于这个例子，上一节<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 相关和因果</a>中有做一些讨论，在1950年的时候有这样一篇文章发表，详细分析了吸烟和肝癌之间的相关性，现在我们知道，相关不一定构成因果，可能是由潜在的原因同时导致了吸烟和肝癌。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/15.png" alt="" /></p>
+
+<p>    而这篇文章的优秀之处在于，结合了各种可能的潜在原因，比如将各种压力，性别，地域等因素列为观察的变量。即增加不同的调整集，发现吸烟和肝癌总是强相关，即，找不到有效调整集可以改变吸烟和肝癌之间的相关性。既然吸烟有害身体健康，那么政府就想让烟草公司纳税，烟草公司为了避税，把这个潜在原因归到了基因上，即某种基因导致了一个人既喜欢吸烟，又容易患肝癌，我们今天来看当然是非常荒诞的，但是当时科技还不怎么发达，人们对基因的认知也很有限，就这样被烟草公司忽悠了。这里Jonas Peters推荐了一本书《Merchants of Doubt》，不能尽信科学家，他们也会被利益驱动去做一些违背道德的事情，商人和政客就更不用说了。</p>
+
+<p>    <strong>例4. 坏血病和柠檬</strong></p>
+
+<p>    在1747年的五月，James Lind在一艘行驶在海上的船上，对患有坏血病的12名船员做了一个随机化实验，将十二名船员随机分成六组，配给不同的食物，得到的结果是，每天获得柠檬的病人，病情明显好转。他可能意识到调整饮食可以治愈这种病，但是又不知道如何调整，才能治愈这种病。因此他设计了一个随机化实验，这种实验方式后来被广泛应用于医疗领域。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/16.png" style="zoom:80%;" /></p>
+
+<p>    随机化实验的价值在于，因果关系是复杂的，但如果你把船员随机分组，然后再配给食物，那么食物配给就不受任何因素影响了，即切断了因果图中所有到food这个结点的父结点，那么观察到的food和recovery之间的因果关系就不需要有效调整集来调整了，得到的相关性就是它们之间的因果关系。</p>
+
+<p>    接下来是一些小概念，如果这两个模型有相同的概率{概率和干预}分布，我们称两个模型概率上{干预上}<strong>对等</strong>。在干预时，随机化干预能得到正确的因果关系。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/17.png" style="zoom:80%;" /></p>
+
+<p>    下面用四种方式定义了认定<strong>X</strong>是<strong>Y</strong>的因需要符合的条件。(i)中<strong>X</strong>和<strong>Y</strong>中间的符号是dependence的意思，去掉斜杠是independence。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/18.png" style="zoom:80%;" /></p>
+
+<p>    <strong>思考：</strong>如果<strong>X</strong>和<strong>Y</strong>之间存在因果关系，那么<strong>X</strong>和<strong>Y</strong>之间因果关系的强度又该怎么定义和计算？</p>
+
+<p>    也许是：</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/19.png" style="zoom:80%;" />&lt;/div&gt;</p>
+
+<p>    <strong>工具变量(Instrumental Variables)
+</strong></p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/20.png" style="zoom:80%;" /></p>
+
+<p>    我们依然是想计算<strong>X</strong>，<strong>Y</strong>之间的因果关系，以及它们之间的系数，但是由于<strong>H</strong>不好观察，<strong>X</strong>不好控制，我们没有办法通过控制<strong>X</strong>来得到它和<strong>Y</strong>之间的关系，这个时候如果有个变量<strong>I</strong>，它独立于<strong>X</strong>，<strong>H</strong>，<strong>Y</strong>这个系统，那么就可以通过控制它得到<strong>X</strong>和<strong>Y</strong>之间的关系。这种变量被称之为工具变量。</p>
+
+<p>    <strong>反事实(Counterfactuals)</strong></p>
+
+<p>    《生活大爆炸》第四季里有一段关于反事实的游，感兴趣的搜索着看一下。</p>
+
+<p>    关于反事实，上一节有提过，这个概念对照的是人类反思和想象的能力，这个能力非常重要，是让我们有洞察力的关键，不过也有很多副作用。</p>
+
+<p>    对应到SCM，可以做如下定义：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/21.png" style="zoom:80%;" /></p>
+
+<p>    通俗地说，反事实就是对SCM中分布公式中的随机部分做定义，从而改变因果关系。举个例子：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/22.png" style="zoom:80%;" /></p>
+
+<p>    如上图，假设一种病，是否治疗服从<strong>NT</strong>随机分布，如果治疗，治愈率为99%，如果不治疗，治愈率为1%。如今，Tom也得了这种病，而他恰好就是一个特例，如果他治疗，治愈率是0，如果他不治疗，反而会好。但这只有发生后才明确知道，因此，在Tom接受治疗，死亡后，我们说<strong>如果</strong>Tom不治疗，<strong>那么</strong>他反而会痊愈，这就是反事实。</p>
+
+<p>    </p>
+
+<p>    接下来总结一下这个部分：</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/23.png" style="zoom:80%;" /></p>
+
+<p>    1. 因果关系不是什么时候都有必要研究，很多时候我们只需要知道相关性，比如你想让机器人把猫认出来，相关性即可，你想要机器人把猫画出来，可能会需要因果关系。因果关系通常是，我们想对环境进行干预，并想知道干预后的结果，才有必要去了解的。
+                2. 当我们有了因果图和变量的分布公式后，我们就能推演出干预后变量分布的变化。反事实也是如此。</p>
+
+<p>    下面这个研究很有趣，想知道死神走多快吗？可能是0.82m/s，要走的比他快哦，被赶上就完蛋了。</p>
+
+<p><img src="../assets/images/MIT因果迷你课笔记 —— 因果语言和因果推理/24.png" alt="" /></p>
+
+<p>此篇上一节为：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 相关和因果</a></p>
+
+<p>此系列未完待续，敬请关注^_^。</p>
+
+<p>声明：所有图片均来自Jonas Peters的课件，没有原创图片和公式。</p>
+
+<p>参考：</p>
+
+<p>[1] Jonas Peters, University of Copenhagen, Mini course on Causality, Laboratory for Information &amp; Decision Systems (LIDS) and Models, Inference &amp; Algorithms of the Broad Institute, MIT, 2017</p>
+
+<p>[2] Judea Pearl and Dana Mackenzie, <strong>The Book of Why</strong>, 2018</p>
+
+<p>[3] 我是啤酒，<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483822&amp;idx=1&amp;sn=9cb75450e93ab012f7d83a468a3c2424&amp;chksm=c067636cf710ea7ac7b1b6273f6fc76bfd7cd19e175503fd16008c018d3ce6198ad0791719f0&amp;scene=21#wechat_redirect">MIT因果迷你课笔记 —— 相关和因果</a>，2020</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=MIT因果迷你课笔记 —— 因果语言和因果推理&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E8%AF%AD%E8%A8%80%E5%92%8C%E5%9B%A0%E6%9E%9C%E6%8E%A8%E7%90%86/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#MIT-Causality-Course">MIT Causality Course</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

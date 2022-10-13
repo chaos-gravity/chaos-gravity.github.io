@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>Facebook DeiT(Data-efficient Image Transformers) 解析 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>Facebook DeiT(Data-efficient Image Transformers) 解析 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="Facebook DeiT(Data-efficient Image Transformers) 解析" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    今天看Facebook AI的DeiT。比起Moco v3训练出来的模型，DeiT胜在模型小，训练和推理都更加迅速。且精准度还有了很大提高。     迅速到什么程度呢？用一个8-GPU服务器，训练3天就可以（其中预训练占用了53小时，fine-tuning占20个小时）。     看下图的效能比对，可以发现，DeiT确实是强悍的。     接下来我们看DeiT的具体原理，首先，它的主干模型还是ViT，关于ViT可以看这篇：ViT (Vision Transformer)原理及代码解析，这里就不赘述了。     它可以训练的这么快的原因是用了蒸馏技术（distillation）。 那什么是蒸馏技术呢？就是把一个模型的知识往另外一个模型迁移的过程。被迁移知识的那个模型，我们叫他teacher，是训练好的。从别的模型学到知识的模型，我们叫他student。通常是把大模型的知识往小模型上迁移。以期在不过分损失精准度的前提下，使推理速度大大提高。迁移的方式通常是让小模型和大模型有一样的输出。接下来看两种蒸馏方式： 软蒸馏（soft distillation）：     Zt是teacher模型的输出，Zs是student模型的输出。ψ表示的是softmax，KL是KL散度（Kullback-Leibler），又叫相对熵，Lce是交叉熵（cross-entropy）。y是真实标签（ground truth label）。     这里参考Cross Entropy Loss简单说一下KL散度和交叉熵的区别，这里就不上公式了，用大白话说，如果觉得有公式更容易理解，可以看参考文章中的公式。     首先说一下信息量的概念，信息量指的是一个事件发生含的信息量，发生的概率越小，含的信息量就越大，比如太阳有天从西边升起来了，那么这个事件含的信息量就超级大了，全世界都得炸。而计算机里的信息量的大小指的是，描述一个事件发生所需要的位元（bits）。这里的描述和我们通常的语言描述是不一样的。而信息熵是信息量的期望值，还是太阳升起这个问题，它有可能从东边升起，也有可能从西边，南边，北边升起，虽然概率无限趋近于0，但是墨菲定律告诉我们，只要有概率，就一定会发生。那么太阳升起的方向这个事件有一个信息量的期望值，我们怎么理解期望值呢？太阳升起是从东南西北哪个方向呢，每个方向都会由一个概率，假设这件事情遵循特定的概率分布，如果这件事情发生无数次，那么平均每次我们需要用多少个位元来描述这件事情呢。平均每次，事件携带的信息量的大小，就是信息熵。     接下来我们解释相对熵，也就是KL散度。比如太阳升起是从东南西北哪个方向，假设这件事情遵循特定概率分布p，假设我们不知道这个p，现在我们自己估一个概率分布q，是根据模型或者自己的认知设定的，那么用真实的概率分布会有一个信息熵，用我们估计的概率分布也会有一个信息熵，用估计的信息熵减去真实的信息熵，就是相对熵。相对熵计算的是，如果用我们估计的这个概率分布来替代真实的概率分布，如果这个事件会发生无数次，那么平均传输和描述这个事件需要多出多少位元。     而交叉熵就是，如果用这个估计的分布替代真实的分布，如果这个事件发生无数次，平均需要多少位元来描述和传输这个事件。     这两个都可以用来比较两个分布的差异，差异越大，相对熵或者交叉熵就越大，差异越小，相对熵或者交叉熵就越小。     到这里我们来理解一下，为什么上面的公式，前面用的是交叉熵，后面用的是相对熵，因为前面y是固定的，不管我们怎么对样本进行变化，y都是不变的，因此由真实概率分布所得的信息熵是固定的，没有必要再去减一个固定值。但是后面的ψ(Zt/τ)则不一样了，如果我们用样本增强，或者我们不止有一个teacher，改变τ的值，那么ψ(Zt/τ)的值就会发生变化，信息熵也会发生变化，出于这种考虑，用相对熵保留差异部分可能可以更好的排除一些其他因素对loss造成的干扰。     当然，我这种理解不一定对。 硬蒸馏 (hard-label distillation)：      与软蒸馏不同的地方是，这里的yt是teacher的hard decision，yt = argmaxcZt(c)，也就是说yt不再是一个概率分布，而是一个根据最高概率做出的一个决策结果（但其实也可以看成一个概率分布，这里只是相对而言）。     与软蒸馏不同的，还有损失函数的选择。在硬蒸馏里，yt和y的关系是对等的，对结果起到的作用是对等的。大家会更偏好硬蒸馏，硬蒸馏参数更少，容易理解。这里的yt也会因为数据增强而产生不同结果，不是一定的。     接下来看，DeiT是怎么实现软硬蒸馏的。     在ViT的结构中，增加了一个和class token一样功能的distillation token。具体的代码实现可以看ViT (Vision Transformer)原理及代码解析，在一般的硬蒸馏里，用来和y计算差异的Zs和用来和yt计算差异的Zs是一致的，但是在DeiT里，分开了。 # https://github.com/facebookresearch/deit/blob/main/models.py if self.training:             # x是class token, x_dist是distillation token  return x, x_dist else: # during inference, return the average of both classifier predictions             return (x + x_dist) / 2     根据DeiT模型里的代码，训练的时候返回的是cls_token，和distillation token，而在推理的时候，返回的是cls_token和distillation_token的均值。也就是说DeiT中的class token和distillation_token被认定有等价的推理价值。取均值会让推理更准确。 # https://github.com/facebookresearch/deit/blob/main/losses.py def forward(self, inputs, outputs, labels): &quot;&quot;&quot; Args: inputs: The original inputs that are feed to the teacher model outputs: the outputs of the model to be trained. It is expected to be either a Tensor, or a Tuple[Tensor, Tensor], with the original output in the first position and the distillation predictions as the second output labels: the labels for the base criterion         &quot;&quot;&quot; outputs_kd = None if not isinstance(outputs, torch.Tensor): # assume that the model outputs a tuple of [outputs, outputs_kd]             # class token，distillation token outputs, outputs_kd = outputs         # class token和groud-truth labels产生base loss base_loss = self.base_criterion(outputs, labels) if self.distillation_type == &#39;none&#39;: return base_loss if outputs_kd is None: raise ValueError(&quot;When knowledge distillation is enabled, the model is &quot; &quot;expected to return a Tuple[Tensor, Tensor] with the output of the &quot; &quot;class_token and the dist_token&quot;) # don&#39;t backprop throught the teacher with torch.no_grad(): teacher_outputs = self.teacher_model(inputs) if self.distillation_type == &#39;soft&#39;: T = self.tau # taken from https://github.com/peterliht/knowledge-distillation-pytorch/blob/master/model/net.py#L100 # with slight modifications distillation_loss = F.kl_div( F.log_softmax(outputs_kd / T, dim=1), #We provide the teacher&#39;s targets in log probability because we use log_target=True #(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719) #but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both. F.log_softmax(teacher_outputs / T, dim=1), reduction=&#39;sum&#39;, log_target=True ) * (T * T) / outputs_kd.numel() #We divide by outputs_kd.numel() to have the legacy PyTorch behavior. #But we also experiments output_kd.size(0) #see issue 61(https://github.com/facebookresearch/deit/issues/61) for more details elif self.distillation_type == &#39;hard&#39;: distillation_loss = F.cross_entropy(outputs_kd, teacher_outputs.argmax(dim=1)) loss = base_loss * (1 - self.alpha) + distillation_loss * self.alpha return loss     看DeiT中的代码，软蒸馏和硬蒸馏都被定义了，inputs是样本，由teacher_model产生teacher_outputs，outputs中包含了class token和distillation token，class token和ground-truth label产生base_loss，而distillation token和teacher model产生的结果产生distillation_loss。     DeiT的原理大概说清楚了，实验的话，实在是懒，作者做了大量实验，如果想用DeiT，还是建议仔细看实验的。之后可能会写一篇，怎么用DeiT做分类和Transfer的文章。期待的话就关注吧。" />
+<meta property="og:description" content="    今天看Facebook AI的DeiT。比起Moco v3训练出来的模型，DeiT胜在模型小，训练和推理都更加迅速。且精准度还有了很大提高。     迅速到什么程度呢？用一个8-GPU服务器，训练3天就可以（其中预训练占用了53小时，fine-tuning占20个小时）。     看下图的效能比对，可以发现，DeiT确实是强悍的。     接下来我们看DeiT的具体原理，首先，它的主干模型还是ViT，关于ViT可以看这篇：ViT (Vision Transformer)原理及代码解析，这里就不赘述了。     它可以训练的这么快的原因是用了蒸馏技术（distillation）。 那什么是蒸馏技术呢？就是把一个模型的知识往另外一个模型迁移的过程。被迁移知识的那个模型，我们叫他teacher，是训练好的。从别的模型学到知识的模型，我们叫他student。通常是把大模型的知识往小模型上迁移。以期在不过分损失精准度的前提下，使推理速度大大提高。迁移的方式通常是让小模型和大模型有一样的输出。接下来看两种蒸馏方式： 软蒸馏（soft distillation）：     Zt是teacher模型的输出，Zs是student模型的输出。ψ表示的是softmax，KL是KL散度（Kullback-Leibler），又叫相对熵，Lce是交叉熵（cross-entropy）。y是真实标签（ground truth label）。     这里参考Cross Entropy Loss简单说一下KL散度和交叉熵的区别，这里就不上公式了，用大白话说，如果觉得有公式更容易理解，可以看参考文章中的公式。     首先说一下信息量的概念，信息量指的是一个事件发生含的信息量，发生的概率越小，含的信息量就越大，比如太阳有天从西边升起来了，那么这个事件含的信息量就超级大了，全世界都得炸。而计算机里的信息量的大小指的是，描述一个事件发生所需要的位元（bits）。这里的描述和我们通常的语言描述是不一样的。而信息熵是信息量的期望值，还是太阳升起这个问题，它有可能从东边升起，也有可能从西边，南边，北边升起，虽然概率无限趋近于0，但是墨菲定律告诉我们，只要有概率，就一定会发生。那么太阳升起的方向这个事件有一个信息量的期望值，我们怎么理解期望值呢？太阳升起是从东南西北哪个方向呢，每个方向都会由一个概率，假设这件事情遵循特定的概率分布，如果这件事情发生无数次，那么平均每次我们需要用多少个位元来描述这件事情呢。平均每次，事件携带的信息量的大小，就是信息熵。     接下来我们解释相对熵，也就是KL散度。比如太阳升起是从东南西北哪个方向，假设这件事情遵循特定概率分布p，假设我们不知道这个p，现在我们自己估一个概率分布q，是根据模型或者自己的认知设定的，那么用真实的概率分布会有一个信息熵，用我们估计的概率分布也会有一个信息熵，用估计的信息熵减去真实的信息熵，就是相对熵。相对熵计算的是，如果用我们估计的这个概率分布来替代真实的概率分布，如果这个事件会发生无数次，那么平均传输和描述这个事件需要多出多少位元。     而交叉熵就是，如果用这个估计的分布替代真实的分布，如果这个事件发生无数次，平均需要多少位元来描述和传输这个事件。     这两个都可以用来比较两个分布的差异，差异越大，相对熵或者交叉熵就越大，差异越小，相对熵或者交叉熵就越小。     到这里我们来理解一下，为什么上面的公式，前面用的是交叉熵，后面用的是相对熵，因为前面y是固定的，不管我们怎么对样本进行变化，y都是不变的，因此由真实概率分布所得的信息熵是固定的，没有必要再去减一个固定值。但是后面的ψ(Zt/τ)则不一样了，如果我们用样本增强，或者我们不止有一个teacher，改变τ的值，那么ψ(Zt/τ)的值就会发生变化，信息熵也会发生变化，出于这种考虑，用相对熵保留差异部分可能可以更好的排除一些其他因素对loss造成的干扰。     当然，我这种理解不一定对。 硬蒸馏 (hard-label distillation)：      与软蒸馏不同的地方是，这里的yt是teacher的hard decision，yt = argmaxcZt(c)，也就是说yt不再是一个概率分布，而是一个根据最高概率做出的一个决策结果（但其实也可以看成一个概率分布，这里只是相对而言）。     与软蒸馏不同的，还有损失函数的选择。在硬蒸馏里，yt和y的关系是对等的，对结果起到的作用是对等的。大家会更偏好硬蒸馏，硬蒸馏参数更少，容易理解。这里的yt也会因为数据增强而产生不同结果，不是一定的。     接下来看，DeiT是怎么实现软硬蒸馏的。     在ViT的结构中，增加了一个和class token一样功能的distillation token。具体的代码实现可以看ViT (Vision Transformer)原理及代码解析，在一般的硬蒸馏里，用来和y计算差异的Zs和用来和yt计算差异的Zs是一致的，但是在DeiT里，分开了。 # https://github.com/facebookresearch/deit/blob/main/models.py if self.training:             # x是class token, x_dist是distillation token  return x, x_dist else: # during inference, return the average of both classifier predictions             return (x + x_dist) / 2     根据DeiT模型里的代码，训练的时候返回的是cls_token，和distillation token，而在推理的时候，返回的是cls_token和distillation_token的均值。也就是说DeiT中的class token和distillation_token被认定有等价的推理价值。取均值会让推理更准确。 # https://github.com/facebookresearch/deit/blob/main/losses.py def forward(self, inputs, outputs, labels): &quot;&quot;&quot; Args: inputs: The original inputs that are feed to the teacher model outputs: the outputs of the model to be trained. It is expected to be either a Tensor, or a Tuple[Tensor, Tensor], with the original output in the first position and the distillation predictions as the second output labels: the labels for the base criterion         &quot;&quot;&quot; outputs_kd = None if not isinstance(outputs, torch.Tensor): # assume that the model outputs a tuple of [outputs, outputs_kd]             # class token，distillation token outputs, outputs_kd = outputs         # class token和groud-truth labels产生base loss base_loss = self.base_criterion(outputs, labels) if self.distillation_type == &#39;none&#39;: return base_loss if outputs_kd is None: raise ValueError(&quot;When knowledge distillation is enabled, the model is &quot; &quot;expected to return a Tuple[Tensor, Tensor] with the output of the &quot; &quot;class_token and the dist_token&quot;) # don&#39;t backprop throught the teacher with torch.no_grad(): teacher_outputs = self.teacher_model(inputs) if self.distillation_type == &#39;soft&#39;: T = self.tau # taken from https://github.com/peterliht/knowledge-distillation-pytorch/blob/master/model/net.py#L100 # with slight modifications distillation_loss = F.kl_div( F.log_softmax(outputs_kd / T, dim=1), #We provide the teacher&#39;s targets in log probability because we use log_target=True #(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719) #but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both. F.log_softmax(teacher_outputs / T, dim=1), reduction=&#39;sum&#39;, log_target=True ) * (T * T) / outputs_kd.numel() #We divide by outputs_kd.numel() to have the legacy PyTorch behavior. #But we also experiments output_kd.size(0) #see issue 61(https://github.com/facebookresearch/deit/issues/61) for more details elif self.distillation_type == &#39;hard&#39;: distillation_loss = F.cross_entropy(outputs_kd, teacher_outputs.argmax(dim=1)) loss = base_loss * (1 - self.alpha) + distillation_loss * self.alpha return loss     看DeiT中的代码，软蒸馏和硬蒸馏都被定义了，inputs是样本，由teacher_model产生teacher_outputs，outputs中包含了class token和distillation token，class token和ground-truth label产生base_loss，而distillation token和teacher model产生的结果产生distillation_loss。     DeiT的原理大概说清楚了，实验的话，实在是懒，作者做了大量实验，如果想用DeiT，还是建议仔细看实验的。之后可能会写一篇，怎么用DeiT做分类和Transfer的文章。期待的话就关注吧。" />
+<link rel="canonical" href="http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/" />
+<meta property="og:url" content="http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/Facebook%20DeiT(Data-efficient%20Image%20Transformers)%20%E8%A7%A3%E6%9E%90/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-11-23T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    今天看Facebook AI的DeiT。比起Moco v3训练出来的模型，DeiT胜在模型小，训练和推理都更加迅速。且精准度还有了很大提高。     迅速到什么程度呢？用一个8-GPU服务器，训练3天就可以（其中预训练占用了53小时，fine-tuning占20个小时）。     看下图的效能比对，可以发现，DeiT确实是强悍的。     接下来我们看DeiT的具体原理，首先，它的主干模型还是ViT，关于ViT可以看这篇：ViT (Vision Transformer)原理及代码解析，这里就不赘述了。     它可以训练的这么快的原因是用了蒸馏技术（distillation）。 那什么是蒸馏技术呢？就是把一个模型的知识往另外一个模型迁移的过程。被迁移知识的那个模型，我们叫他teacher，是训练好的。从别的模型学到知识的模型，我们叫他student。通常是把大模型的知识往小模型上迁移。以期在不过分损失精准度的前提下，使推理速度大大提高。迁移的方式通常是让小模型和大模型有一样的输出。接下来看两种蒸馏方式： 软蒸馏（soft distillation）：     Zt是teacher模型的输出，Zs是student模型的输出。ψ表示的是softmax，KL是KL散度（Kullback-Leibler），又叫相对熵，Lce是交叉熵（cross-entropy）。y是真实标签（ground truth label）。     这里参考Cross Entropy Loss简单说一下KL散度和交叉熵的区别，这里就不上公式了，用大白话说，如果觉得有公式更容易理解，可以看参考文章中的公式。     首先说一下信息量的概念，信息量指的是一个事件发生含的信息量，发生的概率越小，含的信息量就越大，比如太阳有天从西边升起来了，那么这个事件含的信息量就超级大了，全世界都得炸。而计算机里的信息量的大小指的是，描述一个事件发生所需要的位元（bits）。这里的描述和我们通常的语言描述是不一样的。而信息熵是信息量的期望值，还是太阳升起这个问题，它有可能从东边升起，也有可能从西边，南边，北边升起，虽然概率无限趋近于0，但是墨菲定律告诉我们，只要有概率，就一定会发生。那么太阳升起的方向这个事件有一个信息量的期望值，我们怎么理解期望值呢？太阳升起是从东南西北哪个方向呢，每个方向都会由一个概率，假设这件事情遵循特定的概率分布，如果这件事情发生无数次，那么平均每次我们需要用多少个位元来描述这件事情呢。平均每次，事件携带的信息量的大小，就是信息熵。     接下来我们解释相对熵，也就是KL散度。比如太阳升起是从东南西北哪个方向，假设这件事情遵循特定概率分布p，假设我们不知道这个p，现在我们自己估一个概率分布q，是根据模型或者自己的认知设定的，那么用真实的概率分布会有一个信息熵，用我们估计的概率分布也会有一个信息熵，用估计的信息熵减去真实的信息熵，就是相对熵。相对熵计算的是，如果用我们估计的这个概率分布来替代真实的概率分布，如果这个事件会发生无数次，那么平均传输和描述这个事件需要多出多少位元。     而交叉熵就是，如果用这个估计的分布替代真实的分布，如果这个事件发生无数次，平均需要多少位元来描述和传输这个事件。     这两个都可以用来比较两个分布的差异，差异越大，相对熵或者交叉熵就越大，差异越小，相对熵或者交叉熵就越小。     到这里我们来理解一下，为什么上面的公式，前面用的是交叉熵，后面用的是相对熵，因为前面y是固定的，不管我们怎么对样本进行变化，y都是不变的，因此由真实概率分布所得的信息熵是固定的，没有必要再去减一个固定值。但是后面的ψ(Zt/τ)则不一样了，如果我们用样本增强，或者我们不止有一个teacher，改变τ的值，那么ψ(Zt/τ)的值就会发生变化，信息熵也会发生变化，出于这种考虑，用相对熵保留差异部分可能可以更好的排除一些其他因素对loss造成的干扰。     当然，我这种理解不一定对。 硬蒸馏 (hard-label distillation)：      与软蒸馏不同的地方是，这里的yt是teacher的hard decision，yt = argmaxcZt(c)，也就是说yt不再是一个概率分布，而是一个根据最高概率做出的一个决策结果（但其实也可以看成一个概率分布，这里只是相对而言）。     与软蒸馏不同的，还有损失函数的选择。在硬蒸馏里，yt和y的关系是对等的，对结果起到的作用是对等的。大家会更偏好硬蒸馏，硬蒸馏参数更少，容易理解。这里的yt也会因为数据增强而产生不同结果，不是一定的。     接下来看，DeiT是怎么实现软硬蒸馏的。     在ViT的结构中，增加了一个和class token一样功能的distillation token。具体的代码实现可以看ViT (Vision Transformer)原理及代码解析，在一般的硬蒸馏里，用来和y计算差异的Zs和用来和yt计算差异的Zs是一致的，但是在DeiT里，分开了。 # https://github.com/facebookresearch/deit/blob/main/models.py if self.training:             # x是class token, x_dist是distillation token  return x, x_dist else: # during inference, return the average of both classifier predictions             return (x + x_dist) / 2     根据DeiT模型里的代码，训练的时候返回的是cls_token，和distillation token，而在推理的时候，返回的是cls_token和distillation_token的均值。也就是说DeiT中的class token和distillation_token被认定有等价的推理价值。取均值会让推理更准确。 # https://github.com/facebookresearch/deit/blob/main/losses.py def forward(self, inputs, outputs, labels): &quot;&quot;&quot; Args: inputs: The original inputs that are feed to the teacher model outputs: the outputs of the model to be trained. It is expected to be either a Tensor, or a Tuple[Tensor, Tensor], with the original output in the first position and the distillation predictions as the second output labels: the labels for the base criterion         &quot;&quot;&quot; outputs_kd = None if not isinstance(outputs, torch.Tensor): # assume that the model outputs a tuple of [outputs, outputs_kd]             # class token，distillation token outputs, outputs_kd = outputs         # class token和groud-truth labels产生base loss base_loss = self.base_criterion(outputs, labels) if self.distillation_type == &#39;none&#39;: return base_loss if outputs_kd is None: raise ValueError(&quot;When knowledge distillation is enabled, the model is &quot; &quot;expected to return a Tuple[Tensor, Tensor] with the output of the &quot; &quot;class_token and the dist_token&quot;) # don&#39;t backprop throught the teacher with torch.no_grad(): teacher_outputs = self.teacher_model(inputs) if self.distillation_type == &#39;soft&#39;: T = self.tau # taken from https://github.com/peterliht/knowledge-distillation-pytorch/blob/master/model/net.py#L100 # with slight modifications distillation_loss = F.kl_div( F.log_softmax(outputs_kd / T, dim=1), #We provide the teacher&#39;s targets in log probability because we use log_target=True #(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719) #but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both. F.log_softmax(teacher_outputs / T, dim=1), reduction=&#39;sum&#39;, log_target=True ) * (T * T) / outputs_kd.numel() #We divide by outputs_kd.numel() to have the legacy PyTorch behavior. #But we also experiments output_kd.size(0) #see issue 61(https://github.com/facebookresearch/deit/issues/61) for more details elif self.distillation_type == &#39;hard&#39;: distillation_loss = F.cross_entropy(outputs_kd, teacher_outputs.argmax(dim=1)) loss = base_loss * (1 - self.alpha) + distillation_loss * self.alpha return loss     看DeiT中的代码，软蒸馏和硬蒸馏都被定义了，inputs是样本，由teacher_model产生teacher_outputs，outputs中包含了class token和distillation token，class token和ground-truth label产生base_loss，而distillation token和teacher model产生的结果产生distillation_loss。     DeiT的原理大概说清楚了，实验的话，实在是懒，作者做了大量实验，如果想用DeiT，还是建议仔细看实验的。之后可能会写一篇，怎么用DeiT做分类和Transfer的文章。期待的话就关注吧。","url":"http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/","image":"http://localhost:4000/assets/images/Facebook%20DeiT(Data-efficient%20Image%20Transformers)%20%E8%A7%A3%E6%9E%90/2.png","@type":"BlogPosting","headline":"Facebook DeiT(Data-efficient Image Transformers) 解析","dateModified":"2021-11-23T00:00:00+08:00","datePublished":"2021-11-23T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">Facebook DeiT(Data-efficient Image Transformers) 解析</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-11-23">23 Nov 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/2.png" alt="Facebook DeiT(Data-efficient Image Transformers) 解析">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    今天看Facebook AI的DeiT。比起Moco v3训练出来的模型，DeiT胜在模型小，训练和推理都更加迅速。且精准度还有了很大提高。</p>
+
+<p><img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/1.png" style="zoom: 50%;" /></p>
+
+<p>    迅速到什么程度呢？用一个8-GPU服务器，训练3天就可以（其中预训练占用了53小时，fine-tuning占20个小时）。</p>
+
+<p>    看下图的效能比对，可以发现，DeiT确实是强悍的。</p>
+
+<p><img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/2.png" style="zoom: 50%;" /></p>
+
+<p>    接下来我们看DeiT的具体原理，首先，它的主干模型还是ViT，关于ViT可以看这篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a>，这里就不赘述了。</p>
+
+<p>    它可以训练的这么快的原因是用了<strong>蒸馏技术（distillation）</strong>。 那什么是蒸馏技术呢？就是把一个模型的知识往另外一个模型迁移的过程。被迁移知识的那个模型，我们叫他teacher，是训练好的。从别的模型学到知识的模型，我们叫他student。通常是把大模型的知识往小模型上迁移。以期在不过分损失精准度的前提下，使推理速度大大提高。迁移的方式通常是让小模型和大模型有一样的输出。接下来看两种蒸馏方式：</p>
+
+<p><strong>软蒸馏（soft distillation）</strong>：</p>
+
+<p><img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/3.png" style="zoom: 67%;" /></p>
+
+<p>    Zt是teacher模型的输出，Zs是student模型的输出。ψ表示的是softmax，KL是KL散度（Kullback-Leibler），又叫相对熵，Lce是交叉熵（cross-entropy）。y是真实标签（ground truth label）。</p>
+
+<p>    这里参考<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect">Cross Entropy Loss</a>简单说一下KL散度和交叉熵的区别，这里就不上公式了，用大白话说，如果觉得有公式更容易理解，可以看参考文章中的公式。</p>
+
+<p>    首先说一下<strong>信息量</strong>的概念，信息量指的是一个事件发生含的信息量，发生的概率越小，含的信息量就越大，比如太阳有天从西边升起来了，那么这个事件含的信息量就超级大了，全世界都得炸。而计算机里的信息量的大小指的是，描述一个事件发生所需要的位元（bits）。这里的描述和我们通常的语言描述是不一样的。而信息熵是信息量的期望值，还是太阳升起这个问题，它有可能从东边升起，也有可能从西边，南边，北边升起，虽然概率无限趋近于0，但是墨菲定律告诉我们，只要有概率，就一定会发生。那么太阳升起的方向这个事件有一个信息量的期望值，我们怎么理解期望值呢？太阳升起是从东南西北哪个方向呢，每个方向都会由一个概率，假设这件事情遵循特定的概率分布，如果这件事情发生无数次，那么平均每次我们需要用多少个位元来描述这件事情呢。平均每次，事件携带的信息量的大小，就是<strong>信息熵</strong>。</p>
+
+<p>    接下来我们解释<strong>相对熵</strong>，也就是<strong>KL散度</strong>。比如太阳升起是从东南西北哪个方向，假设这件事情遵循特定概率分布<strong>p</strong>，假设我们不知道这个<strong>p</strong>，现在我们自己估一个概率分布<strong>q</strong>，是根据模型或者自己的认知设定的，那么用真实的概率分布会有一个信息熵，用我们估计的概率分布也会有一个信息熵，用估计的信息熵减去真实的信息熵，就是相对熵。相对熵计算的是，如果用我们估计的这个概率分布来替代真实的概率分布，如果这个事件会发生无数次，那么平均传输和描述这个事件需要多出多少位元。</p>
+
+<p>    而<strong>交叉熵</strong>就是，如果用这个估计的分布替代真实的分布，如果这个事件发生无数次，平均需要多少位元来描述和传输这个事件。</p>
+
+<p>    这两个都可以用来比较两个分布的差异，差异越大，相对熵或者交叉熵就越大，差异越小，相对熵或者交叉熵就越小。</p>
+
+<p>    到这里我们来理解一下，为什么上面的公式，前面用的是交叉熵，后面用的是相对熵，因为前面y是固定的，不管我们怎么对样本进行变化，y都是不变的，因此由真实概率分布所得的信息熵是固定的，没有必要再去减一个固定值。但是后面的ψ(Zt/τ)则不一样了，如果我们用样本增强，或者我们不止有一个teacher，改变τ的值，那么ψ(Zt/τ)的值就会发生变化，信息熵也会发生变化，出于这种考虑，用相对熵保留差异部分可能可以更好的排除一些其他因素对loss造成的干扰。</p>
+
+<p>    当然，我这种理解不一定对。</p>
+
+<p><strong>硬蒸馏 (hard-label distillation)</strong>： </p>
+
+<p>    与软蒸馏不同的地方是，这里的yt是teacher的hard decision，yt = argmaxcZt(c)，也就是说yt不再是一个概率分布，而是一个根据最高概率做出的一个决策结果（但其实也可以看成一个概率分布，这里只是相对而言）。</p>
+
+<p><img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/4.png" style="zoom:50%;" /></p>
+
+<p>    与软蒸馏不同的，还有损失函数的选择。在硬蒸馏里，yt和y的关系是对等的，对结果起到的作用是对等的。大家会更偏好硬蒸馏，硬蒸馏参数更少，容易理解。这里的yt也会因为数据增强而产生不同结果，不是一定的。</p>
+
+<p>    接下来看，DeiT是怎么实现软硬蒸馏的。</p>
+
+<p><img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/5.png" style="zoom: 50%;" /></p>
+
+<p>    在ViT的结构中，增加了一个和class token一样功能的distillation token。具体的代码实现可以看<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484653&amp;idx=1&amp;sn=d490fc1c2f46d669de3419fa6fd7f89a&amp;chksm=c067662ff710ef3970093452e7597825ed84c4c79d3cef931828ef62c0cf41d5b816fdb5fb5f&amp;scene=21#wechat_redirect">ViT (Vision Transformer)原理及代码解析</a>，在一般的硬蒸馏里，用来和y计算差异的Zs和用来和yt计算差异的Zs是一致的，但是在DeiT里，分开了。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># https://github.com/facebookresearch/deit/blob/main/models.py        
+</span>        <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">training</span><span class="p">:</span>
+<span class="err">            </span><span class="c1"># x是class token, x_dist是distillation token 
+</span>            <span class="k">return</span> <span class="n">x</span><span class="p">,</span> <span class="n">x_dist</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># during inference, return the average of both classifier predictions
+</span><span class="err">            </span><span class="k">return</span><span class="err"> </span><span class="p">(</span><span class="n">x</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">x_dist</span><span class="p">)</span><span class="err"> </span><span class="o">/</span><span class="err"> </span><span class="mi">2</span>
+</code></pre></div></div>
+
+<p>    根据DeiT模型里的代码，训练的时候返回的是cls_token，和distillation token，而在推理的时候，返回的是cls_token和distillation_token的均值。也就是说DeiT中的class token和distillation_token被认定有等价的推理价值。取均值会让推理更准确。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="c1"># https://github.com/facebookresearch/deit/blob/main/losses.py    
+</span>    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">inputs</span><span class="p">,</span> <span class="n">outputs</span><span class="p">,</span> <span class="n">labels</span><span class="p">):</span>
+        <span class="s">"""
+        Args:
+            inputs: The original inputs that are feed to the teacher model
+            outputs: the outputs of the model to be trained. It is expected to be
+                either a Tensor, or a Tuple[Tensor, Tensor], with the original output
+                in the first position and the distillation predictions as the second output
+            labels: the labels for the base criterion
+        """</span>
+        <span class="n">outputs_kd</span> <span class="o">=</span> <span class="bp">None</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">torch</span><span class="p">.</span><span class="n">Tensor</span><span class="p">):</span>
+            <span class="c1"># assume that the model outputs a tuple of [outputs, outputs_kd]
+</span><span class="err">            </span><span class="c1"># class token，distillation token
+</span>            <span class="n">outputs</span><span class="p">,</span> <span class="n">outputs_kd</span> <span class="o">=</span> <span class="n">outputs</span>
+<span class="err">        </span><span class="c1"># class token和groud-truth labels产生base loss
+</span>        <span class="n">base_loss</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">base_criterion</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">distillation_type</span> <span class="o">==</span> <span class="s">'none'</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">base_loss</span>
+
+
+        <span class="k">if</span> <span class="n">outputs_kd</span> <span class="ow">is</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nb">ValueError</span><span class="p">(</span><span class="s">"When knowledge distillation is enabled, the model is "</span>
+                             <span class="s">"expected to return a Tuple[Tensor, Tensor] with the output of the "</span>
+                             <span class="s">"class_token and the dist_token"</span><span class="p">)</span>
+        <span class="c1"># don't backprop throught the teacher
+</span>        <span class="k">with</span> <span class="n">torch</span><span class="p">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">teacher_outputs</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">teacher_model</span><span class="p">(</span><span class="n">inputs</span><span class="p">)</span>
+
+
+        <span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">distillation_type</span> <span class="o">==</span> <span class="s">'soft'</span><span class="p">:</span>
+            <span class="n">T</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">tau</span>
+            <span class="c1"># taken from https://github.com/peterliht/knowledge-distillation-pytorch/blob/master/model/net.py#L100
+</span>            <span class="c1"># with slight modifications
+</span>            <span class="n">distillation_loss</span> <span class="o">=</span> <span class="n">F</span><span class="p">.</span><span class="n">kl_div</span><span class="p">(</span>
+                <span class="n">F</span><span class="p">.</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">outputs_kd</span> <span class="o">/</span> <span class="n">T</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+                <span class="c1">#We provide the teacher's targets in log probability because we use log_target=True 
+</span>                <span class="c1">#(as recommended in pytorch https://github.com/pytorch/pytorch/blob/9324181d0ac7b4f7949a574dbc3e8be30abe7041/torch/nn/functional.py#L2719)
+</span>                <span class="c1">#but it is possible to give just the probabilities and set log_target=False. In our experiments we tried both.
+</span>                <span class="n">F</span><span class="p">.</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">teacher_outputs</span> <span class="o">/</span> <span class="n">T</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span>
+                <span class="n">reduction</span><span class="o">=</span><span class="s">'sum'</span><span class="p">,</span>
+                <span class="n">log_target</span><span class="o">=</span><span class="bp">True</span>
+            <span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">T</span> <span class="o">*</span> <span class="n">T</span><span class="p">)</span> <span class="o">/</span> <span class="n">outputs_kd</span><span class="p">.</span><span class="n">numel</span><span class="p">()</span>
+            <span class="c1">#We divide by outputs_kd.numel() to have the legacy PyTorch behavior. 
+</span>            <span class="c1">#But we also experiments output_kd.size(0) 
+</span>            <span class="c1">#see issue 61(https://github.com/facebookresearch/deit/issues/61) for more details
+</span>        <span class="k">elif</span> <span class="bp">self</span><span class="p">.</span><span class="n">distillation_type</span> <span class="o">==</span> <span class="s">'hard'</span><span class="p">:</span>
+            <span class="n">distillation_loss</span> <span class="o">=</span> <span class="n">F</span><span class="p">.</span><span class="n">cross_entropy</span><span class="p">(</span><span class="n">outputs_kd</span><span class="p">,</span> <span class="n">teacher_outputs</span><span class="p">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">))</span>
+
+
+        <span class="n">loss</span> <span class="o">=</span> <span class="n">base_loss</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="bp">self</span><span class="p">.</span><span class="n">alpha</span><span class="p">)</span> <span class="o">+</span> <span class="n">distillation_loss</span> <span class="o">*</span> <span class="bp">self</span><span class="p">.</span><span class="n">alpha</span>
+        <span class="k">return</span> <span class="n">loss</span>
+</code></pre></div></div>
+
+<p>    看DeiT中的代码，软蒸馏和硬蒸馏都被定义了，inputs是样本，由teacher_model产生teacher_outputs，outputs中包含了class token和distillation token，class token和ground-truth label产生base_loss，而distillation token和teacher model产生的结果产生distillation_loss。</p>
+
+<p>    DeiT的原理大概说清楚了，实验的话，实在是懒，作者做了大量实验，如果想用DeiT，还是建议仔细看实验的。之后可能会写一篇，怎么用DeiT做分类和Transfer的文章。期待的话就关注吧。<img src="../assets/images/Facebook DeiT(Data-efficient Image Transformers) 解析/6.png" style="zoom:50%;" /></p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=Facebook DeiT(Data-efficient Image Transformers) 解析&url=http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/Facebook-DeiT(Data-efficient-Image-Transformers)-%E8%A7%A3%E6%9E%90/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Representation-Learning">Representation Learning</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Distillation">Distillation</a>               
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#ViT">ViT</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/piano_trans_paper_2020/0.png" alt="钢琴曲转谱（Solo Piano Transcription）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/%E9%92%A2%E7%90%B4%E6%9B%B2%E8%BD%AC%E8%B0%B1-Solo-Piano-Transcription/">钢琴曲转谱（Solo Piano Transcription）</a>
+                
+            </h2>
+            <h4 class="card-text">​    今天来看一篇钢琴琴谱翻译的文章，出自ByteDance字节跳动，Giant-Piano（GiantMIDI-Piano：字节跳动发布的大型古典钢琴乐MIDI数据集）采用的转谱模型就是这个：
+</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">28 Jun 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

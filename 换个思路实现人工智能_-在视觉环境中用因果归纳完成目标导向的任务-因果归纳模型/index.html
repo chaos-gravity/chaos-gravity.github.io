@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型 | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型 | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)     今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中训练归纳模型的部分。     官方源代码地址： https://github.com/StanfordVL/causal_induction     1. 归纳模型训练(Train Induction Model) python3 trainF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --type iter --images 1 --seen 10 --data-dir output/     先说一下各个参数的意思：             horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal-conditioned，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的控制模式，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，如果有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数用于设定参与因果归纳模型训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     上面这些参数，上篇生成数据中都有出现，这篇多出的是type，用来指定模型，有三个模型可指定，分别是Iterative causal induction network (ICIN)，temporal convolutions (TCIN)，iterative model without the attention mechanism (ICIN (No Attn))。对应的参数分别是iter_attn，cnn，和iter。     1.1 初始化模型 F = IterativeModel(args.horizon, args.num, ms = msv, images=args.images)     对照着模型的定义来看： def __init__(self, horizon,num=5, ms=False, images=False):     ms是指structure是否是masterswitch模式，当structure是masterswitch的时候，ms为True，horizon = 2args.horizon -1，不然，ms为False，horizon是args.horizon。原因上一篇有说过，找master switch的时候需要把所有switch遍历一遍，再将剩下的N-1个switch遍历一遍。     1.2 训练模型 train_supervised(F, a, a2, args.num, steps=2000, bs=512, images=args.images)     对照着函数定义来看： def train_supervised(F, buf, gtbuf, num, steps = 1, bs=32, images=False):     F是定义的模型，buf是预存的训练样本，gtbuf是预存的训练样本对应的因果关系，steps是训练多少轮，bs是batch size的意思，是每轮有多少个样本参与训练。     前35000个样本做训练，后5000做测试。分别随机排序，提取前bs个样本做训练和测试。 perm = th.randperm(buf.size(0)-5000) testperm = th.randperm(5000) + 35000 idx = perm[:bs] samples = buf[idx] gts= gtbuf[idx] testidx = testperm[:bs] testsamples = buf[testidx] testgts= gtbuf[testidx]     从样本中分离出状态(states)和动作(actions)： states = samples[:, :, :split].contiguous().view(bs, -1).cuda() actions = samples[:, :, split:].contiguous().view(bs, -1).cuda()     获得每组样本对应的因果关系(y)，另外用样本预测出因果关系(y’)： groundtruth = gts.cuda() pred = F(states, actions)     计算损失，调用反向传播函数调整网络： loss = ((pred - groundtruth)**2).sum(1).mean() testloss = ((testpred - testgroundtruth)**2).sum(1).mean() loss.backward()     接下来看实验中三个模型：     1.3 ImageEncoder     先说三个模型都会用到的ImageEncoder，对应的是图中的Observation Encoder，将32×32×3的图形输入这个ImageEncoder，输出是维度为N的向量，这里N是灯的数量，如果ImageEncoder被训练好了，这个向量理想状况应该要能表示灯的状态。所以ImageEncoder的作用是将图像转换为灯的状态向量。网络结构如下，具体可以参看源代码，三层卷积池化激励，最后一层全连接层。 e1 = self.encoder_conv(x)     # 3*32*32 -&gt; 8*16*16 e2 = self.encoder_conv2(e1)   # 8*16*16 -&gt; 16*8*8 e3 = self.encoder_conv3(e2)   # 16*8*8 -&gt; 32*4*4 e3 = e3.view(e3.size(0), -1)  # 16*8*8 -&gt; 32*4*4    encoding = self.fc(e3)        # 32*4*4 -&gt; N     1.4 ICIN (No Attn), TCIN 相同部分     三个模型的forward一开始都会经历这一段代码： if self.images: s_im = s.view(-1, 32, 32, 3).permute(0,3,1,2) senc = self.ie(s_im) sp = senc.view(-1, self.horizon, self.num) else: sp = s.view(-1, self.horizon, self.num) sp[:,1:] = sp[:,1:] - sp[:,:-1]   # TCIN 没有这行 a = a.view(-1, self.horizon, self.num+1) e = th.cat([sp, a], 2)     s是states，是灯的状态图，将样本的维度格式转换成适合ImageEncoder处理的格式，转变成灯的状态向量，动作后的状态向量减去动作前的状态向量，得到状态差（对应的是上面结构图中的state residual），将状态差向量与动作向量拼接。之前生成样本的时候有说过，每组样本是agent采取了一系列动作之后，得到的一系列状态，那么后一个状态减去前一个状态，则是动作让环境产生的变化。要留意的是，TCIN中没有求状态差。     1.3 ICIN     初始化，下面不是所有的初始化代码，有些看了就能明白，不需要提到的，且三个模型都一样的初始化代码就没放上来。 if self.ms: self.attnsize = num + 1 self.outsize = num else: self.attnsize = num     self.outsize = num self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.attnsize + num) self.fc4 = nn.Linear(self.attnsize*self.outsize, self.attnsize + num) self.softmax = nn.Softmax(dim=1)         这里我们有可能会觉得古怪的是fc1的输入维度是2×N+1，照理来说，输入是动作向量和状态差向量，两个向量大小应该一致，都是N才对，拼起来是2×N才对，但却多了一维出来，原因是动作向量多了一维，动作向量是N+1维。这个设计到现在没有看出来有什么用，多出来的那维好像也没有被用到过。 p = th.zeros((sp.size(0), self.attnsize, self.outsize)).cuda() for i in range(self.horizon): inn = e[:,i,:]     e1 = self.relu(self.dp(self.fc1(inn))) # 2N+1 -&gt; 1024  e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512     e3 = self.fc3(e2)                      # 512  -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3     p = p + r     这一段代码对应图中Transition Encoder和Edge Decoder两个部分，agent每做一个动作，就会对状态差进行一次编码解码。Transition Encoder 的部分是三层全连接层，对应的是代码中inn-&gt;e3的部分，最后输出的大小是attnsize+N的向量。而Edge Decoder的原理图如下： 将Transition Encoder输出的向量分解为上图中Attention的部分和Edge Update的部分，两部分相乘，预测出最后的因果关系。Attention是N维，或者N+1维（当structure是masterswitch的时候），Edge Update是N维向量，所以最后p（Predicted Graph Update）的维度或大小是N×N或者(N+1)×N。     这部分的公式表达为： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt;     到这里，我们要回过头去看一个问题，上一小节中sp的维度是horizon×N，但这其实不是很合理，sp存储随动作序列产生的状态向量，加上最原始的状态，进行了horizon个动作的序列，应该会有horizon+1个状态，但是这个程序在最开始生成数据的时候，没有存储最后一个动作执行后的状态向量，因此sp是horizon×N维，而存储状态差的sp[:,1:]只有(horizon-1)×N维，那和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入在意义上完全不一样，这样的设计感觉是逻辑上的疏失，也可能会对训练出来的模型精确度造成不小的影响。     结构图上也能体现这个疏失，下面产生的因果关系是从1到H，但照图上的逻辑，状态差只能从1到H-1。     最后，再多一个编码解码的过程，得到最后的因果关系。不是很理解，为什么最后加这么一段网络。根据论文上的描述，应该是如果最后还有灯没有和哪个开关产生因果关系，由这一段来补齐，这样有点像在补前两段提到的训练代码设计的不合理的地方。 e3 = self.fc4(p.view(-1, self.attnsize*self.num)) # attnsize*N -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3 p = p + r p = p.view(-1, self.attnsize*self.num)     至于Attention机制的设计，可以这样想，因果关系里Edge Update决定哪些列是有效的，Attention决定哪些行是有效的。在因果关系矩阵里，列坐标表示的是开关编号，行坐标表示的是功能，即控制哪个灯，是否是master switch。理论上，如果网络训练的足够好，Attention会指示这一步哪些功能被开关触发，Edge Update会指示触发了哪些开关。     1.4 ICIN (No Attn)     初始化部分，没有Attention的机制，输出的outsize即因果关系向量的大小： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.outsize) self.fc4 = nn.Linear(self.outsize, self.outsize)     forward部分，： e = e.permute(0,2,1) c2 = e p = th.zeros((sp.size(0), self.outsize)).cuda() for i in range(self.horizon): e1 = self.relu(self.dp(self.fc1(c2[:,:,i]))) # 2N+1 -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 e3 = self.sigmoid(self.fc3(e2)) # 512 -&gt; attnsize+N p = p + e3 p = self.sigmoid(self.fc4(p))     因为没有了Attention机制，自然也没有了Encoder，Decoder的区分，在时序中，三层全连接网络将灯的状态差和动作向量转换成因果关系，最后再通过一层全连接网络得到最后的因果关系。     1.5 TCIN ​ 初始化部分，和前两个网络不同的地方是，除了有全连接层，还有三个卷积层： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.cnn1 = nn.Conv1d(2*num+1, 256, kernel_size=3, padding=1) self.cnn2 = nn.Conv1d(256, 128, kernel_size=3, padding=1) self.cnn3 = nn.Conv1d(128, 128, kernel_size=3, padding=1) self.fc1 = nn.Linear(self.horizon*128, 1024) self.fc3 = nn.Linear(512, self.outsize)     forward部分： e = e.permute(0,2,1) c1 = self.relu(self.cnn1(e)) # (2N+1)*horizon -&gt; 256*horizon c2 = self.relu(self.cnn2(c1)) # 256*horizon -&gt; 128*horizon c2 = self.relu(self.cnn3(c2)) # 128*horizon -&gt; 128*horizon c2 = c2.view(-1, self.horizon*128) e1 = self.relu(self.dp(self.fc1(c2))) # 128*horizon -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 rec = self.sigmoid(self.fc3(e2)) # 512 -&gt; (N+1)N return rec     先将状态向量组合在一起，然后经过三层一维卷积层，再经过三层全连接层，输出最后因果向量。     卷积网络设计的过分简单了。     2. 因果模型评估(Causal Model Evaluation)     这部分内容不多，就和训练写在一块了。 python3 evalF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --method trajFi --images 1 --seen 10 --data-dir output/     method对应的是模型的种类，指定为trajF，为TCIN，指定为trajFia，为ICIN，其他为ICIN (No Attn)，这里选择ICIN评估。     初始化环境，tj = “gt”时，l.gt是一维化后的因果关系向量，filename用于记录l.step运行过程中产生的log，在这篇中，没有被调用： gc = 1 - args.fixed_goal tj = &quot;gt&quot; l = LightEnv(args.horizon, args.num, tj, args.structure, gc, filename=&quot;exp/&quot;+str(gc)+&quot;_&quot;+args.method, seen = args.seen) env = DummyVecEnv(1 * [lambda: l])     加载模型： F = th.load(args.data_dir+&quot;iter_attn_Redo_L2_S&quot;+str(args.seen)+&quot;_h&quot;+str(args.horizon)+&quot;_&quot;+str(args.structure)+addonn).cuda() F = F.eval() # 模型中有用到dropout或者BN,需要设定eval模式进行测试，ta     模型中有用到dropout或者BN，需要设定eval模式进行测试，train模式进行训练。     测试过程，先重置环境，用训练过程中用到的因果关系生成一组数据，用模型生成预测的因果关系，和真正的因果关系对比，求F1 Score，再将环境设置为test模式，重置环境，用训练没有用过的因果关系生成一组数据，用模型预测因果关系，和真正的因果关系对比，求F1 Score。如此循环一百次，分别计算训练中用过的因果关系产生的F1 Scores和没用过的因果关系产生的F1 Scores的均值。     代码如下： for mep in range(100): l.keep_struct = False     obs = env.reset()         #重置环境，主要作用是切换因果关系 l.keep_struct = True buf = induction(args.structure,args.num, args.horizon, l, images=args.images) pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)      trloss.append(f) #### TEST ON UNSEEN CS l.keep_struct = False     l.train = False      #将train设置为False,则因果关系会从训练样本中没有出现果的集合中选择     obs= env.reset()     buf = induction(args.structure,args.num, args.horizon, l, images=args.images)     pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)     tsloss.append(f)     l.keep_struct = True     l.train = True print(np.mean(trloss), np.mean(tsloss))     induction的部分和生成数据中产生样本的部分完全一致，就不贴出来说了，输出是生成测试要用的样本图序列，以及对应的动作。     predict函数，predgt是模型根据分解出的状态图组和动作组得到的因果关系： s = th.FloatTensor(buf[:,:-(num+1)]).float().cuda() a = th.FloatTensor(buf[:,-(1+num):]).float().cuda() predgt = F(s, a)     最后F1 Score函数，gt是这个环境现在真实使用的因果关系： p = 1 * (pred &gt; 0.5) # 结果二值化，0 or 1 if np.sum(p) == 0: prec = 0 else: prec = np.sum(gt * p) / np.sum(p) rec =np.sum(gt*p) / np.sum(gt) if (prec == 0) and (rec==0): return 0 return 2 * (prec * rec) / (prec+rec)     论文里尝试调整了switch的数量，在四种structure模式下测试了三种模型的效果，ICIN的方法要优于其他两种方法很多，且受switch数量影响较小。     这篇论文的代码解析还有一篇，是策略模型的定义，训练和评估。敬请关注和期待。（PS: 看代码看得有点想吐了，缓缓，先更一集因果课再回头把最后一部分代码更完）     记：     这个训练模型的程序也是有比较多问题的：     1. 训练过程中的testloss应该用模型没见过的因果关系更合适，不然出来的数据，几乎和loss一样，并没有很大参考价值。     2. action，动作向量设置成了N+1维，似乎没有必要。     3. 每组样本序列，生成的最后一张图没有保存下来，保存的是最开始的，和最后一个动作执行前的图，程序里和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入意义上非常不一样，这样的设计感觉是逻辑上的疏失。     4. 因果归纳网络的结构图有容易让人误解的地方。     5. evalF中定义的st没有用到     上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction" />
+<meta property="og:description" content="    上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)     今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中训练归纳模型的部分。     官方源代码地址： https://github.com/StanfordVL/causal_induction     1. 归纳模型训练(Train Induction Model) python3 trainF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --type iter --images 1 --seen 10 --data-dir output/     先说一下各个参数的意思：             horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal-conditioned，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的控制模式，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，如果有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数用于设定参与因果归纳模型训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     上面这些参数，上篇生成数据中都有出现，这篇多出的是type，用来指定模型，有三个模型可指定，分别是Iterative causal induction network (ICIN)，temporal convolutions (TCIN)，iterative model without the attention mechanism (ICIN (No Attn))。对应的参数分别是iter_attn，cnn，和iter。     1.1 初始化模型 F = IterativeModel(args.horizon, args.num, ms = msv, images=args.images)     对照着模型的定义来看： def __init__(self, horizon,num=5, ms=False, images=False):     ms是指structure是否是masterswitch模式，当structure是masterswitch的时候，ms为True，horizon = 2args.horizon -1，不然，ms为False，horizon是args.horizon。原因上一篇有说过，找master switch的时候需要把所有switch遍历一遍，再将剩下的N-1个switch遍历一遍。     1.2 训练模型 train_supervised(F, a, a2, args.num, steps=2000, bs=512, images=args.images)     对照着函数定义来看： def train_supervised(F, buf, gtbuf, num, steps = 1, bs=32, images=False):     F是定义的模型，buf是预存的训练样本，gtbuf是预存的训练样本对应的因果关系，steps是训练多少轮，bs是batch size的意思，是每轮有多少个样本参与训练。     前35000个样本做训练，后5000做测试。分别随机排序，提取前bs个样本做训练和测试。 perm = th.randperm(buf.size(0)-5000) testperm = th.randperm(5000) + 35000 idx = perm[:bs] samples = buf[idx] gts= gtbuf[idx] testidx = testperm[:bs] testsamples = buf[testidx] testgts= gtbuf[testidx]     从样本中分离出状态(states)和动作(actions)： states = samples[:, :, :split].contiguous().view(bs, -1).cuda() actions = samples[:, :, split:].contiguous().view(bs, -1).cuda()     获得每组样本对应的因果关系(y)，另外用样本预测出因果关系(y’)： groundtruth = gts.cuda() pred = F(states, actions)     计算损失，调用反向传播函数调整网络： loss = ((pred - groundtruth)**2).sum(1).mean() testloss = ((testpred - testgroundtruth)**2).sum(1).mean() loss.backward()     接下来看实验中三个模型：     1.3 ImageEncoder     先说三个模型都会用到的ImageEncoder，对应的是图中的Observation Encoder，将32×32×3的图形输入这个ImageEncoder，输出是维度为N的向量，这里N是灯的数量，如果ImageEncoder被训练好了，这个向量理想状况应该要能表示灯的状态。所以ImageEncoder的作用是将图像转换为灯的状态向量。网络结构如下，具体可以参看源代码，三层卷积池化激励，最后一层全连接层。 e1 = self.encoder_conv(x)     # 3*32*32 -&gt; 8*16*16 e2 = self.encoder_conv2(e1)   # 8*16*16 -&gt; 16*8*8 e3 = self.encoder_conv3(e2)   # 16*8*8 -&gt; 32*4*4 e3 = e3.view(e3.size(0), -1)  # 16*8*8 -&gt; 32*4*4    encoding = self.fc(e3)        # 32*4*4 -&gt; N     1.4 ICIN (No Attn), TCIN 相同部分     三个模型的forward一开始都会经历这一段代码： if self.images: s_im = s.view(-1, 32, 32, 3).permute(0,3,1,2) senc = self.ie(s_im) sp = senc.view(-1, self.horizon, self.num) else: sp = s.view(-1, self.horizon, self.num) sp[:,1:] = sp[:,1:] - sp[:,:-1]   # TCIN 没有这行 a = a.view(-1, self.horizon, self.num+1) e = th.cat([sp, a], 2)     s是states，是灯的状态图，将样本的维度格式转换成适合ImageEncoder处理的格式，转变成灯的状态向量，动作后的状态向量减去动作前的状态向量，得到状态差（对应的是上面结构图中的state residual），将状态差向量与动作向量拼接。之前生成样本的时候有说过，每组样本是agent采取了一系列动作之后，得到的一系列状态，那么后一个状态减去前一个状态，则是动作让环境产生的变化。要留意的是，TCIN中没有求状态差。     1.3 ICIN     初始化，下面不是所有的初始化代码，有些看了就能明白，不需要提到的，且三个模型都一样的初始化代码就没放上来。 if self.ms: self.attnsize = num + 1 self.outsize = num else: self.attnsize = num     self.outsize = num self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.attnsize + num) self.fc4 = nn.Linear(self.attnsize*self.outsize, self.attnsize + num) self.softmax = nn.Softmax(dim=1)         这里我们有可能会觉得古怪的是fc1的输入维度是2×N+1，照理来说，输入是动作向量和状态差向量，两个向量大小应该一致，都是N才对，拼起来是2×N才对，但却多了一维出来，原因是动作向量多了一维，动作向量是N+1维。这个设计到现在没有看出来有什么用，多出来的那维好像也没有被用到过。 p = th.zeros((sp.size(0), self.attnsize, self.outsize)).cuda() for i in range(self.horizon): inn = e[:,i,:]     e1 = self.relu(self.dp(self.fc1(inn))) # 2N+1 -&gt; 1024  e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512     e3 = self.fc3(e2)                      # 512  -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3     p = p + r     这一段代码对应图中Transition Encoder和Edge Decoder两个部分，agent每做一个动作，就会对状态差进行一次编码解码。Transition Encoder 的部分是三层全连接层，对应的是代码中inn-&gt;e3的部分，最后输出的大小是attnsize+N的向量。而Edge Decoder的原理图如下： 将Transition Encoder输出的向量分解为上图中Attention的部分和Edge Update的部分，两部分相乘，预测出最后的因果关系。Attention是N维，或者N+1维（当structure是masterswitch的时候），Edge Update是N维向量，所以最后p（Predicted Graph Update）的维度或大小是N×N或者(N+1)×N。     这部分的公式表达为： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt;     到这里，我们要回过头去看一个问题，上一小节中sp的维度是horizon×N，但这其实不是很合理，sp存储随动作序列产生的状态向量，加上最原始的状态，进行了horizon个动作的序列，应该会有horizon+1个状态，但是这个程序在最开始生成数据的时候，没有存储最后一个动作执行后的状态向量，因此sp是horizon×N维，而存储状态差的sp[:,1:]只有(horizon-1)×N维，那和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入在意义上完全不一样，这样的设计感觉是逻辑上的疏失，也可能会对训练出来的模型精确度造成不小的影响。     结构图上也能体现这个疏失，下面产生的因果关系是从1到H，但照图上的逻辑，状态差只能从1到H-1。     最后，再多一个编码解码的过程，得到最后的因果关系。不是很理解，为什么最后加这么一段网络。根据论文上的描述，应该是如果最后还有灯没有和哪个开关产生因果关系，由这一段来补齐，这样有点像在补前两段提到的训练代码设计的不合理的地方。 e3 = self.fc4(p.view(-1, self.attnsize*self.num)) # attnsize*N -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3 p = p + r p = p.view(-1, self.attnsize*self.num)     至于Attention机制的设计，可以这样想，因果关系里Edge Update决定哪些列是有效的，Attention决定哪些行是有效的。在因果关系矩阵里，列坐标表示的是开关编号，行坐标表示的是功能，即控制哪个灯，是否是master switch。理论上，如果网络训练的足够好，Attention会指示这一步哪些功能被开关触发，Edge Update会指示触发了哪些开关。     1.4 ICIN (No Attn)     初始化部分，没有Attention的机制，输出的outsize即因果关系向量的大小： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.outsize) self.fc4 = nn.Linear(self.outsize, self.outsize)     forward部分，： e = e.permute(0,2,1) c2 = e p = th.zeros((sp.size(0), self.outsize)).cuda() for i in range(self.horizon): e1 = self.relu(self.dp(self.fc1(c2[:,:,i]))) # 2N+1 -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 e3 = self.sigmoid(self.fc3(e2)) # 512 -&gt; attnsize+N p = p + e3 p = self.sigmoid(self.fc4(p))     因为没有了Attention机制，自然也没有了Encoder，Decoder的区分，在时序中，三层全连接网络将灯的状态差和动作向量转换成因果关系，最后再通过一层全连接网络得到最后的因果关系。     1.5 TCIN ​ 初始化部分，和前两个网络不同的地方是，除了有全连接层，还有三个卷积层： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.cnn1 = nn.Conv1d(2*num+1, 256, kernel_size=3, padding=1) self.cnn2 = nn.Conv1d(256, 128, kernel_size=3, padding=1) self.cnn3 = nn.Conv1d(128, 128, kernel_size=3, padding=1) self.fc1 = nn.Linear(self.horizon*128, 1024) self.fc3 = nn.Linear(512, self.outsize)     forward部分： e = e.permute(0,2,1) c1 = self.relu(self.cnn1(e)) # (2N+1)*horizon -&gt; 256*horizon c2 = self.relu(self.cnn2(c1)) # 256*horizon -&gt; 128*horizon c2 = self.relu(self.cnn3(c2)) # 128*horizon -&gt; 128*horizon c2 = c2.view(-1, self.horizon*128) e1 = self.relu(self.dp(self.fc1(c2))) # 128*horizon -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 rec = self.sigmoid(self.fc3(e2)) # 512 -&gt; (N+1)N return rec     先将状态向量组合在一起，然后经过三层一维卷积层，再经过三层全连接层，输出最后因果向量。     卷积网络设计的过分简单了。     2. 因果模型评估(Causal Model Evaluation)     这部分内容不多，就和训练写在一块了。 python3 evalF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --method trajFi --images 1 --seen 10 --data-dir output/     method对应的是模型的种类，指定为trajF，为TCIN，指定为trajFia，为ICIN，其他为ICIN (No Attn)，这里选择ICIN评估。     初始化环境，tj = “gt”时，l.gt是一维化后的因果关系向量，filename用于记录l.step运行过程中产生的log，在这篇中，没有被调用： gc = 1 - args.fixed_goal tj = &quot;gt&quot; l = LightEnv(args.horizon, args.num, tj, args.structure, gc, filename=&quot;exp/&quot;+str(gc)+&quot;_&quot;+args.method, seen = args.seen) env = DummyVecEnv(1 * [lambda: l])     加载模型： F = th.load(args.data_dir+&quot;iter_attn_Redo_L2_S&quot;+str(args.seen)+&quot;_h&quot;+str(args.horizon)+&quot;_&quot;+str(args.structure)+addonn).cuda() F = F.eval() # 模型中有用到dropout或者BN,需要设定eval模式进行测试，ta     模型中有用到dropout或者BN，需要设定eval模式进行测试，train模式进行训练。     测试过程，先重置环境，用训练过程中用到的因果关系生成一组数据，用模型生成预测的因果关系，和真正的因果关系对比，求F1 Score，再将环境设置为test模式，重置环境，用训练没有用过的因果关系生成一组数据，用模型预测因果关系，和真正的因果关系对比，求F1 Score。如此循环一百次，分别计算训练中用过的因果关系产生的F1 Scores和没用过的因果关系产生的F1 Scores的均值。     代码如下： for mep in range(100): l.keep_struct = False     obs = env.reset()         #重置环境，主要作用是切换因果关系 l.keep_struct = True buf = induction(args.structure,args.num, args.horizon, l, images=args.images) pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)      trloss.append(f) #### TEST ON UNSEEN CS l.keep_struct = False     l.train = False      #将train设置为False,则因果关系会从训练样本中没有出现果的集合中选择     obs= env.reset()     buf = induction(args.structure,args.num, args.horizon, l, images=args.images)     pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)     tsloss.append(f)     l.keep_struct = True     l.train = True print(np.mean(trloss), np.mean(tsloss))     induction的部分和生成数据中产生样本的部分完全一致，就不贴出来说了，输出是生成测试要用的样本图序列，以及对应的动作。     predict函数，predgt是模型根据分解出的状态图组和动作组得到的因果关系： s = th.FloatTensor(buf[:,:-(num+1)]).float().cuda() a = th.FloatTensor(buf[:,-(1+num):]).float().cuda() predgt = F(s, a)     最后F1 Score函数，gt是这个环境现在真实使用的因果关系： p = 1 * (pred &gt; 0.5) # 结果二值化，0 or 1 if np.sum(p) == 0: prec = 0 else: prec = np.sum(gt * p) / np.sum(p) rec =np.sum(gt*p) / np.sum(gt) if (prec == 0) and (rec==0): return 0 return 2 * (prec * rec) / (prec+rec)     论文里尝试调整了switch的数量，在四种structure模式下测试了三种模型的效果，ICIN的方法要优于其他两种方法很多，且受switch数量影响较小。     这篇论文的代码解析还有一篇，是策略模型的定义，训练和评估。敬请关注和期待。（PS: 看代码看得有点想吐了，缓缓，先更一集因果课再回头把最后一部分代码更完）     记：     这个训练模型的程序也是有比较多问题的：     1. 训练过程中的testloss应该用模型没见过的因果关系更合适，不然出来的数据，几乎和loss一样，并没有很大参考价值。     2. action，动作向量设置成了N+1维，似乎没有必要。     3. 每组样本序列，生成的最后一张图没有保存下来，保存的是最开始的，和最后一个动作执行前的图，程序里和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入意义上非常不一样，这样的设计感觉是逻辑上的疏失。     4. 因果归纳网络的结构图有容易让人误解的地方。     5. evalF中定义的st没有用到     上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction" />
+<link rel="canonical" href="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/" />
+<meta property="og:url" content="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1%E2%80%94%E2%80%94%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/1.jpeg" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-07-03T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)     今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中训练归纳模型的部分。     官方源代码地址： https://github.com/StanfordVL/causal_induction     1. 归纳模型训练(Train Induction Model) python3 trainF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --type iter --images 1 --seen 10 --data-dir output/     先说一下各个参数的意思：             horizon是上图中H的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal-conditioned，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的控制模式，有如下四类： 每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，如果有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数用于设定参与因果归纳模型训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。     上面这些参数，上篇生成数据中都有出现，这篇多出的是type，用来指定模型，有三个模型可指定，分别是Iterative causal induction network (ICIN)，temporal convolutions (TCIN)，iterative model without the attention mechanism (ICIN (No Attn))。对应的参数分别是iter_attn，cnn，和iter。     1.1 初始化模型 F = IterativeModel(args.horizon, args.num, ms = msv, images=args.images)     对照着模型的定义来看： def __init__(self, horizon,num=5, ms=False, images=False):     ms是指structure是否是masterswitch模式，当structure是masterswitch的时候，ms为True，horizon = 2args.horizon -1，不然，ms为False，horizon是args.horizon。原因上一篇有说过，找master switch的时候需要把所有switch遍历一遍，再将剩下的N-1个switch遍历一遍。     1.2 训练模型 train_supervised(F, a, a2, args.num, steps=2000, bs=512, images=args.images)     对照着函数定义来看： def train_supervised(F, buf, gtbuf, num, steps = 1, bs=32, images=False):     F是定义的模型，buf是预存的训练样本，gtbuf是预存的训练样本对应的因果关系，steps是训练多少轮，bs是batch size的意思，是每轮有多少个样本参与训练。     前35000个样本做训练，后5000做测试。分别随机排序，提取前bs个样本做训练和测试。 perm = th.randperm(buf.size(0)-5000) testperm = th.randperm(5000) + 35000 idx = perm[:bs] samples = buf[idx] gts= gtbuf[idx] testidx = testperm[:bs] testsamples = buf[testidx] testgts= gtbuf[testidx]     从样本中分离出状态(states)和动作(actions)： states = samples[:, :, :split].contiguous().view(bs, -1).cuda() actions = samples[:, :, split:].contiguous().view(bs, -1).cuda()     获得每组样本对应的因果关系(y)，另外用样本预测出因果关系(y’)： groundtruth = gts.cuda() pred = F(states, actions)     计算损失，调用反向传播函数调整网络： loss = ((pred - groundtruth)**2).sum(1).mean() testloss = ((testpred - testgroundtruth)**2).sum(1).mean() loss.backward()     接下来看实验中三个模型：     1.3 ImageEncoder     先说三个模型都会用到的ImageEncoder，对应的是图中的Observation Encoder，将32×32×3的图形输入这个ImageEncoder，输出是维度为N的向量，这里N是灯的数量，如果ImageEncoder被训练好了，这个向量理想状况应该要能表示灯的状态。所以ImageEncoder的作用是将图像转换为灯的状态向量。网络结构如下，具体可以参看源代码，三层卷积池化激励，最后一层全连接层。 e1 = self.encoder_conv(x)     # 3*32*32 -&gt; 8*16*16 e2 = self.encoder_conv2(e1)   # 8*16*16 -&gt; 16*8*8 e3 = self.encoder_conv3(e2)   # 16*8*8 -&gt; 32*4*4 e3 = e3.view(e3.size(0), -1)  # 16*8*8 -&gt; 32*4*4    encoding = self.fc(e3)        # 32*4*4 -&gt; N     1.4 ICIN (No Attn), TCIN 相同部分     三个模型的forward一开始都会经历这一段代码： if self.images: s_im = s.view(-1, 32, 32, 3).permute(0,3,1,2) senc = self.ie(s_im) sp = senc.view(-1, self.horizon, self.num) else: sp = s.view(-1, self.horizon, self.num) sp[:,1:] = sp[:,1:] - sp[:,:-1]   # TCIN 没有这行 a = a.view(-1, self.horizon, self.num+1) e = th.cat([sp, a], 2)     s是states，是灯的状态图，将样本的维度格式转换成适合ImageEncoder处理的格式，转变成灯的状态向量，动作后的状态向量减去动作前的状态向量，得到状态差（对应的是上面结构图中的state residual），将状态差向量与动作向量拼接。之前生成样本的时候有说过，每组样本是agent采取了一系列动作之后，得到的一系列状态，那么后一个状态减去前一个状态，则是动作让环境产生的变化。要留意的是，TCIN中没有求状态差。     1.3 ICIN     初始化，下面不是所有的初始化代码，有些看了就能明白，不需要提到的，且三个模型都一样的初始化代码就没放上来。 if self.ms: self.attnsize = num + 1 self.outsize = num else: self.attnsize = num     self.outsize = num self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.attnsize + num) self.fc4 = nn.Linear(self.attnsize*self.outsize, self.attnsize + num) self.softmax = nn.Softmax(dim=1)         这里我们有可能会觉得古怪的是fc1的输入维度是2×N+1，照理来说，输入是动作向量和状态差向量，两个向量大小应该一致，都是N才对，拼起来是2×N才对，但却多了一维出来，原因是动作向量多了一维，动作向量是N+1维。这个设计到现在没有看出来有什么用，多出来的那维好像也没有被用到过。 p = th.zeros((sp.size(0), self.attnsize, self.outsize)).cuda() for i in range(self.horizon): inn = e[:,i,:]     e1 = self.relu(self.dp(self.fc1(inn))) # 2N+1 -&gt; 1024  e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512     e3 = self.fc3(e2)                      # 512  -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3     p = p + r     这一段代码对应图中Transition Encoder和Edge Decoder两个部分，agent每做一个动作，就会对状态差进行一次编码解码。Transition Encoder 的部分是三层全连接层，对应的是代码中inn-&gt;e3的部分，最后输出的大小是attnsize+N的向量。而Edge Decoder的原理图如下： 将Transition Encoder输出的向量分解为上图中Attention的部分和Edge Update的部分，两部分相乘，预测出最后的因果关系。Attention是N维，或者N+1维（当structure是masterswitch的时候），Edge Update是N维向量，所以最后p（Predicted Graph Update）的维度或大小是N×N或者(N+1)×N。     这部分的公式表达为： &lt;div align=center&gt;&lt;/div&gt; &lt;div align=center&gt;&lt;/div&gt;     到这里，我们要回过头去看一个问题，上一小节中sp的维度是horizon×N，但这其实不是很合理，sp存储随动作序列产生的状态向量，加上最原始的状态，进行了horizon个动作的序列，应该会有horizon+1个状态，但是这个程序在最开始生成数据的时候，没有存储最后一个动作执行后的状态向量，因此sp是horizon×N维，而存储状态差的sp[:,1:]只有(horizon-1)×N维，那和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入在意义上完全不一样，这样的设计感觉是逻辑上的疏失，也可能会对训练出来的模型精确度造成不小的影响。     结构图上也能体现这个疏失，下面产生的因果关系是从1到H，但照图上的逻辑，状态差只能从1到H-1。     最后，再多一个编码解码的过程，得到最后的因果关系。不是很理解，为什么最后加这么一段网络。根据论文上的描述，应该是如果最后还有灯没有和哪个开关产生因果关系，由这一段来补齐，这样有点像在补前两段提到的训练代码设计的不合理的地方。 e3 = self.fc4(p.view(-1, self.attnsize*self.num)) # attnsize*N -&gt; attnsize+N atn = self.softmax(e3[:, :self.attnsize]).unsqueeze(-1) e3 = self.sigmoid(e3[:, self.attnsize:].unsqueeze(1).repeat(1, self.attnsize, 1)) r = atn * e3 p = p + r p = p.view(-1, self.attnsize*self.num)     至于Attention机制的设计，可以这样想，因果关系里Edge Update决定哪些列是有效的，Attention决定哪些行是有效的。在因果关系矩阵里，列坐标表示的是开关编号，行坐标表示的是功能，即控制哪个灯，是否是master switch。理论上，如果网络训练的足够好，Attention会指示这一步哪些功能被开关触发，Edge Update会指示触发了哪些开关。     1.4 ICIN (No Attn)     初始化部分，没有Attention的机制，输出的outsize即因果关系向量的大小： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.fc1 = nn.Linear(2*num+1, 1024) self.fc3 = nn.Linear(512, self.outsize) self.fc4 = nn.Linear(self.outsize, self.outsize)     forward部分，： e = e.permute(0,2,1) c2 = e p = th.zeros((sp.size(0), self.outsize)).cuda() for i in range(self.horizon): e1 = self.relu(self.dp(self.fc1(c2[:,:,i]))) # 2N+1 -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 e3 = self.sigmoid(self.fc3(e2)) # 512 -&gt; attnsize+N p = p + e3 p = self.sigmoid(self.fc4(p))     因为没有了Attention机制，自然也没有了Encoder，Decoder的区分，在时序中，三层全连接网络将灯的状态差和动作向量转换成因果关系，最后再通过一层全连接网络得到最后的因果关系。     1.5 TCIN ​ 初始化部分，和前两个网络不同的地方是，除了有全连接层，还有三个卷积层： if self.ms: self.outsize = num**2 + num else: self.outsize = num**2 self.cnn1 = nn.Conv1d(2*num+1, 256, kernel_size=3, padding=1) self.cnn2 = nn.Conv1d(256, 128, kernel_size=3, padding=1) self.cnn3 = nn.Conv1d(128, 128, kernel_size=3, padding=1) self.fc1 = nn.Linear(self.horizon*128, 1024) self.fc3 = nn.Linear(512, self.outsize)     forward部分： e = e.permute(0,2,1) c1 = self.relu(self.cnn1(e)) # (2N+1)*horizon -&gt; 256*horizon c2 = self.relu(self.cnn2(c1)) # 256*horizon -&gt; 128*horizon c2 = self.relu(self.cnn3(c2)) # 128*horizon -&gt; 128*horizon c2 = c2.view(-1, self.horizon*128) e1 = self.relu(self.dp(self.fc1(c2))) # 128*horizon -&gt; 1024 e2 = self.relu(self.dp(self.fc2(e1))) # 1024 -&gt; 512 rec = self.sigmoid(self.fc3(e2)) # 512 -&gt; (N+1)N return rec     先将状态向量组合在一起，然后经过三层一维卷积层，再经过三层全连接层，输出最后因果向量。     卷积网络设计的过分简单了。     2. 因果模型评估(Causal Model Evaluation)     这部分内容不多，就和训练写在一块了。 python3 evalF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --method trajFi --images 1 --seen 10 --data-dir output/     method对应的是模型的种类，指定为trajF，为TCIN，指定为trajFia，为ICIN，其他为ICIN (No Attn)，这里选择ICIN评估。     初始化环境，tj = “gt”时，l.gt是一维化后的因果关系向量，filename用于记录l.step运行过程中产生的log，在这篇中，没有被调用： gc = 1 - args.fixed_goal tj = &quot;gt&quot; l = LightEnv(args.horizon, args.num, tj, args.structure, gc, filename=&quot;exp/&quot;+str(gc)+&quot;_&quot;+args.method, seen = args.seen) env = DummyVecEnv(1 * [lambda: l])     加载模型： F = th.load(args.data_dir+&quot;iter_attn_Redo_L2_S&quot;+str(args.seen)+&quot;_h&quot;+str(args.horizon)+&quot;_&quot;+str(args.structure)+addonn).cuda() F = F.eval() # 模型中有用到dropout或者BN,需要设定eval模式进行测试，ta     模型中有用到dropout或者BN，需要设定eval模式进行测试，train模式进行训练。     测试过程，先重置环境，用训练过程中用到的因果关系生成一组数据，用模型生成预测的因果关系，和真正的因果关系对比，求F1 Score，再将环境设置为test模式，重置环境，用训练没有用过的因果关系生成一组数据，用模型预测因果关系，和真正的因果关系对比，求F1 Score。如此循环一百次，分别计算训练中用过的因果关系产生的F1 Scores和没用过的因果关系产生的F1 Scores的均值。     代码如下： for mep in range(100): l.keep_struct = False     obs = env.reset()         #重置环境，主要作用是切换因果关系 l.keep_struct = True buf = induction(args.structure,args.num, args.horizon, l, images=args.images) pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)      trloss.append(f) #### TEST ON UNSEEN CS l.keep_struct = False     l.train = False      #将train设置为False,则因果关系会从训练样本中没有出现果的集合中选择     obs= env.reset()     buf = induction(args.structure,args.num, args.horizon, l, images=args.images)     pred = predict(buf, F,args.structure, args.num)     f = f1score(pred, l.gt)     tsloss.append(f)     l.keep_struct = True     l.train = True print(np.mean(trloss), np.mean(tsloss))     induction的部分和生成数据中产生样本的部分完全一致，就不贴出来说了，输出是生成测试要用的样本图序列，以及对应的动作。     predict函数，predgt是模型根据分解出的状态图组和动作组得到的因果关系： s = th.FloatTensor(buf[:,:-(num+1)]).float().cuda() a = th.FloatTensor(buf[:,-(1+num):]).float().cuda() predgt = F(s, a)     最后F1 Score函数，gt是这个环境现在真实使用的因果关系： p = 1 * (pred &gt; 0.5) # 结果二值化，0 or 1 if np.sum(p) == 0: prec = 0 else: prec = np.sum(gt * p) / np.sum(p) rec =np.sum(gt*p) / np.sum(gt) if (prec == 0) and (rec==0): return 0 return 2 * (prec * rec) / (prec+rec)     论文里尝试调整了switch的数量，在四种structure模式下测试了三种模型的效果，ICIN的方法要优于其他两种方法很多，且受switch数量影响较小。     这篇论文的代码解析还有一篇，是策略模型的定义，训练和评估。敬请关注和期待。（PS: 看代码看得有点想吐了，缓缓，先更一集因果课再回头把最后一部分代码更完）     记：     这个训练模型的程序也是有比较多问题的：     1. 训练过程中的testloss应该用模型没见过的因果关系更合适，不然出来的数据，几乎和loss一样，并没有很大参考价值。     2. action，动作向量设置成了N+1维，似乎没有必要。     3. 每组样本序列，生成的最后一张图没有保存下来，保存的是最开始的，和最后一个动作执行前的图，程序里和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入意义上非常不一样，这样的设计感觉是逻辑上的疏失。     4. 因果归纳网络的结构图有容易让人误解的地方。     5. evalF中定义的st没有用到     上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据     上上篇：换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019 参考代码： https://github.com/StanfordVL/causal_induction","url":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/","image":"http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1%E2%80%94%E2%80%94%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/1.jpeg","@type":"BlogPosting","headline":"换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型","dateModified":"2020-07-03T00:00:00+08:00","datePublished":"2020-07-03T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-07-03">03 Jul 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/1.jpeg" alt="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong style="max-width: 100%;box-sizing: border-box !important;overflow-wrap: break-word !important;">    上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483927&amp;idx=1&amp;sn=3547f29df0003f6a89a1aec76d737d6f&amp;chksm=c06760d5f710e9c39dbd0f7da4a562b9c2284cb53430d43e8dd8ff7606de4ae95d1edecf6fe3&amp;scene=21#wechat_redirect">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据</a>
+</strong></p>
+
+<p>    <strong>上上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect"><strong>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</strong></a></p>
+
+<p>    今天我们来说一说《CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS》实验中训练归纳模型的部分。</p>
+
+<p>    官方源代码地址：</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://github.com/StanfordVL/causal_induction
+</code></pre></div></div>
+
+<p>    <strong>1. 归纳模型训练(Train Induction Model)</strong></p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>python3 trainF.py --horizon 7 --num 7 --fixed-goal 0 --structure one_to_one --type iter --images 1 --seen 10 --data-dir output/
+</code></pre></div></div>
+
+<p>    先说一下各个参数的意思：</p>
+
+<p>       </p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/1.jpeg" style="zoom: 80%;" /></p>
+
+<p>    horizon是上图中<strong>H</strong>的值，num是开关或灯的数量，–fixed-goal是指学习是否是goal-conditioned，如果–fixed-goal=0，那表示有多个目标，是goal-conditioned。structure是开关和灯的控制模式，有如下四类：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/2.png" style="zoom:67%;" /></p>
+
+<p>每一类都可以组合出非常多不同的因果关系，比如说One-to-One这种情况，如果有七组开关和灯，那么开关和灯之间可以有5040种不同的因果关系。在训练的过程中，给的训练数据会包含一些因果关系，最后需要测试训练好的agent在它从未见过的因果关系上的效果。seen这个参数用于设定参与因果归纳模型训练的因果关系的数量，在这篇论文中，seen这个值会被设为10，50，100和500来做实验。images这个参数如果设定为1，表示会存储场景图片，而如果设为0，则不会存储观察到的场景图，而是灯的状态向量。data_dir，数据的存储路径。</p>
+
+<p>    上面这些参数，上篇生成数据中都有出现，这篇多出的是type，用来指定模型，有三个模型可指定，分别是Iterative causal induction network (ICIN)，temporal convolutions (TCIN)，iterative model without the attention mechanism (ICIN (No Attn))。对应的参数分别是iter_attn，cnn，和iter。</p>
+
+<p>    <strong>1.1 初始化模型</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">F</span> <span class="o">=</span> <span class="n">IterativeModel</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">ms</span> <span class="o">=</span> <span class="n">msv</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    对照着模型的定义来看：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">def</span><span class="err"> </span><span class="n">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span><span class="err"> </span><span class="n">horizon</span><span class="p">,</span><span class="n">num</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span><span class="err"> </span><span class="n">ms</span><span class="o">=</span><span class="bp">False</span><span class="p">,</span><span class="err"> </span><span class="n">images</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+</code></pre></div></div>
+
+<p>    ms是指structure是否是masterswitch模式，当structure是masterswitch的时候，ms为True，horizon = 2args.horizon -1，不然，ms为False，horizon是args.horizon。原因上一篇有说过，找master switch的时候需要把所有switch遍历一遍，再将剩下的<strong>N</strong>-1个switch遍历一遍。</p>
+
+<p>    <strong>1.2 训练模型</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">train_supervised</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">a</span><span class="p">,</span> <span class="n">a2</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">steps</span><span class="o">=</span><span class="mi">2000</span><span class="p">,</span> <span class="n">bs</span><span class="o">=</span><span class="mi">512</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    对照着函数定义来看：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">def</span> <span class="nf">train_supervised</span><span class="p">(</span><span class="n">F</span><span class="p">,</span> <span class="n">buf</span><span class="p">,</span> <span class="n">gtbuf</span><span class="p">,</span> <span class="n">num</span><span class="p">,</span> <span class="n">steps</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span> <span class="n">bs</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="bp">False</span><span class="p">):</span>
+</code></pre></div></div>
+
+<p>    F是定义的模型，buf是预存的训练样本，gtbuf是预存的训练样本对应的因果关系，steps是训练多少轮，bs是batch size的意思，是每轮有多少个样本参与训练。</p>
+
+<p>    前35000个样本做训练，后5000做测试。分别随机排序，提取前bs个样本做训练和测试。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">perm</span> <span class="o">=</span><span class="err"> </span><span class="n">th</span><span class="p">.</span><span class="n">randperm</span><span class="p">(</span><span class="n">buf</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">-</span><span class="mi">5000</span><span class="p">)</span>
+<span class="n">testperm</span> <span class="o">=</span><span class="err"> </span><span class="n">th</span><span class="p">.</span><span class="n">randperm</span><span class="p">(</span><span class="mi">5000</span><span class="p">)</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="mi">35000</span>
+
+
+<span class="n">idx</span> <span class="o">=</span> <span class="n">perm</span><span class="p">[:</span><span class="n">bs</span><span class="p">]</span>
+<span class="n">samples</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+<span class="n">gts</span><span class="o">=</span> <span class="n">gtbuf</span><span class="p">[</span><span class="n">idx</span><span class="p">]</span>
+<span class="n">testidx</span> <span class="o">=</span> <span class="n">testperm</span><span class="p">[:</span><span class="n">bs</span><span class="p">]</span>
+<span class="n">testsamples</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">testidx</span><span class="p">]</span>
+<span class="n">testgts</span><span class="o">=</span> <span class="n">gtbuf</span><span class="p">[</span><span class="n">testidx</span><span class="p">]</span>
+</code></pre></div></div>
+
+<p>    从样本中分离出状态(states)和动作(actions)：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">states</span> <span class="o">=</span> <span class="n">samples</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:</span><span class="n">split</span><span class="p">].</span><span class="n">contiguous</span><span class="p">().</span><span class="n">view</span><span class="p">(</span><span class="n">bs</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">actions</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">samples</span><span class="p">[:,</span><span class="err"> </span><span class="p">:,</span><span class="err"> </span><span class="n">split</span><span class="p">:].</span><span class="n">contiguous</span><span class="p">().</span><span class="n">view</span><span class="p">(</span><span class="n">bs</span><span class="p">,</span><span class="err"> </span><span class="o">-</span><span class="mi">1</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>    获得每组样本对应的因果关系(y)，另外用样本预测出因果关系(y’)：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">groundtruth</span> <span class="o">=</span> <span class="n">gts</span><span class="p">.</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">pred</span> <span class="o">=</span> <span class="n">F</span><span class="p">(</span><span class="n">states</span><span class="p">,</span> <span class="n">actions</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    计算损失，调用反向传播函数调整网络：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">loss</span> <span class="o">=</span><span class="err"> </span><span class="p">((</span><span class="n">pred</span><span class="err"> </span><span class="o">-</span><span class="err"> </span><span class="n">groundtruth</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">).</span><span class="nb">sum</span><span class="p">(</span><span class="mi">1</span><span class="p">).</span><span class="n">mean</span><span class="p">()</span>
+<span class="n">testloss</span> <span class="o">=</span><span class="err"> </span><span class="p">((</span><span class="n">testpred</span><span class="err"> </span><span class="o">-</span><span class="err"> </span><span class="n">testgroundtruth</span><span class="p">)</span><span class="o">**</span><span class="mi">2</span><span class="p">).</span><span class="nb">sum</span><span class="p">(</span><span class="mi">1</span><span class="p">).</span><span class="n">mean</span><span class="p">()</span>
+<span class="n">loss</span><span class="p">.</span><span class="n">backward</span><span class="p">()</span>
+</code></pre></div></div>
+
+<p>    接下来看实验中三个模型：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/3.jpeg" style="zoom: 80%;" /></p>
+
+<p>    <strong>1.3 ImageEncoder</strong></p>
+
+<p>    先说三个模型都会用到的ImageEncoder，对应的是图中的Observation Encoder，将32×32×3的图形输入这个ImageEncoder，输出是维度为<strong>N</strong>的向量，这里<strong>N</strong>是灯的数量，如果ImageEncoder被训练好了，这个向量理想状况应该要能表示灯的状态。所以ImageEncoder的作用是将图像转换为灯的状态向量。网络结构如下，具体可以参看源代码，三层卷积池化激励，最后一层全连接层。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">e1</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv</span><span class="p">(</span><span class="n">x</span><span class="p">)</span><span class="err">     </span><span class="c1"># 3*32*32 -&gt; 8*16*16
+</span><span class="n">e2</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv2</span><span class="p">(</span><span class="n">e1</span><span class="p">)</span><span class="err">   </span><span class="c1"># 8*16*16 -&gt; 16*8*8
+</span><span class="n">e3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">encoder_conv3</span><span class="p">(</span><span class="n">e2</span><span class="p">)</span><span class="err">   </span><span class="c1"># 16*8*8 -&gt; 32*4*4
+</span><span class="n">e3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">e3</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="n">e3</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="err"> </span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="err">  </span><span class="c1"># 16*8*8 -&gt; 32*4*4   
+</span><span class="n">encoding</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">fc</span><span class="p">(</span><span class="n">e3</span><span class="p">)</span><span class="err">        </span><span class="c1"># 32*4*4 -&gt; N
+</span></code></pre></div></div>
+
+<p>    <strong>1.4 ICIN (No Attn), TCIN 相同部分</strong></p>
+
+<p>    三个模型的forward一开始都会经历这一段代码：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">images</span><span class="p">:</span>
+    <span class="n">s_im</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">3</span><span class="p">).</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">senc</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">ie</span><span class="p">(</span><span class="n">s_im</span><span class="p">)</span>
+    <span class="n">sp</span> <span class="o">=</span> <span class="n">senc</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">sp</span> <span class="o">=</span> <span class="n">s</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="n">sp</span><span class="p">[:,</span><span class="mi">1</span><span class="p">:]</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">sp</span><span class="p">[:,</span><span class="mi">1</span><span class="p">:]</span><span class="err"> </span><span class="o">-</span><span class="err"> </span><span class="n">sp</span><span class="p">[:,:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="err">   </span><span class="c1"># TCIN 没有这行
+</span><span class="n">a</span> <span class="o">=</span> <span class="n">a</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">e</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">cat</span><span class="p">([</span><span class="n">sp</span><span class="p">,</span> <span class="n">a</span><span class="p">],</span> <span class="mi">2</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    s是states，是灯的状态图，将样本的维度格式转换成适合ImageEncoder处理的格式，转变成灯的状态向量，动作后的状态向量减去动作前的状态向量，得到状态差（对应的是上面结构图中的state residual），将状态差向量与动作向量拼接。之前生成样本的时候有说过，每组样本是agent采取了一系列动作之后，得到的一系列状态，那么后一个状态减去前一个状态，则是动作让环境产生的变化。要留意的是，TCIN中没有求状态差。</p>
+
+<p>    <strong>1.3 ICIN
+</strong></p>
+
+<p>    初始化，下面不是所有的初始化代码，有些看了就能明白，不需要提到的，且三个模型都一样的初始化代码就没放上来。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span> <span class="o">=</span> <span class="n">num</span> <span class="o">+</span> <span class="mi">1</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span> <span class="o">=</span> <span class="n">num</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span> <span class="o">=</span> <span class="n">num</span> 
+<span class="err">    </span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">num</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="mi">1024</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">num</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc4</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">num</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">softmax</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Softmax</span><span class="p">(</span><span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="err">    </span>
+</code></pre></div></div>
+
+<p>    这里我们有可能会觉得古怪的是fc1的输入维度是2×<strong>N</strong>+1，照理来说，输入是动作向量和状态差向量，两个向量大小应该一致，都是<strong>N</strong>才对，拼起来是2×<strong>N</strong>才对，但却多了一维出来，原因是动作向量多了一维，动作向量是<strong>N</strong>+1维。这个设计到现在没有看出来有什么用，多出来的那维好像也没有被用到过。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">p</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">sp</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">)).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="p">):</span>
+    <span class="n">inn</span> <span class="o">=</span> <span class="n">e</span><span class="p">[:,</span><span class="n">i</span><span class="p">,:]</span>
+<span class="err">    </span><span class="n">e1</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">inn</span><span class="p">)))</span><span class="err"> </span><span class="c1"># 2N+1 -&gt; 1024 
+</span>    <span class="n">e2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">e1</span><span class="p">)))</span>  <span class="c1"># 1024  -&gt; 512
+</span><span class="err">    </span><span class="n">e3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">fc3</span><span class="p">(</span><span class="n">e2</span><span class="p">)</span><span class="err">                      </span><span class="c1"># 512  -&gt; attnsize+N
+</span>
+
+    <span class="n">atn</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">e3</span><span class="p">[:,</span> <span class="p">:</span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">]).</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">e3</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">e3</span><span class="p">[:,</span> <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">:].</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">).</span><span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+    <span class="n">r</span> <span class="o">=</span> <span class="n">atn</span> <span class="o">*</span> <span class="n">e3</span>
+<span class="err">    </span><span class="n">p</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">p</span><span class="err"> </span><span class="o">+</span><span class="err"> </span><span class="n">r</span>
+</code></pre></div></div>
+
+<p>    这一段代码对应图中Transition Encoder和Edge Decoder两个部分，agent每做一个动作，就会对状态差进行一次编码解码。Transition Encoder 的部分是三层全连接层，对应的是代码中inn-&gt;e3的部分，最后输出的大小是attnsize+<strong>N</strong>的向量。而Edge Decoder的原理图如下：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/4.png" style="zoom:80%;" /></p>
+
+<p>将Transition Encoder输出的向量分解为上图中Attention的部分和Edge Update的部分，两部分相乘，预测出最后的因果关系。Attention是<strong>N</strong>维，或者<strong>N</strong>+1维（当structure是masterswitch的时候），Edge Update是<strong>N</strong>维向量，所以最后<strong>p</strong>（Predicted Graph Update）的维度或大小是<strong>N</strong>×<strong>N</strong>或者(<strong>N</strong>+1)×<strong>N</strong>。</p>
+
+<p>    这部分的公式表达为：</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/5.png" style="zoom: 20%;" />&lt;/div&gt;</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/6.png" style="zoom: 40%;" />&lt;/div&gt;</p>
+
+<p>    到这里，我们要回过头去看一个问题，上一小节中sp的维度是horizon×<strong>N</strong>，但这其实不是很合理，sp存储随动作序列产生的状态向量，加上最原始的状态，进行了horizon个动作的序列，应该会有horizon+1个状态，但是这个程序在最开始生成数据的时候，没有存储最后一个动作执行后的状态向量，因此sp是horizon×<strong>N</strong>维，而存储状态差的sp[:,1:]只有(horizon-1)×<strong>N</strong>维，那和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入在意义上完全不一样，这样的设计感觉是逻辑上的疏失，也可能会对训练出来的模型精确度造成不小的影响。</p>
+
+<p>    结构图上也能体现这个疏失，下面产生的因果关系是从1到<strong>H</strong>，但照图上的逻辑，状态差只能从1到<strong>H</strong>-1。</p>
+
+<p>    最后，再多一个编码解码的过程，得到最后的因果关系。不是很理解，为什么最后加这么一段网络。根据论文上的描述，应该是如果最后还有灯没有和哪个开关产生因果关系，由这一段来补齐，这样有点像在补前两段提到的训练代码设计的不合理的地方。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">e3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">fc4</span><span class="p">(</span><span class="n">p</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">))</span><span class="err"> </span><span class="c1"># attnsize*N -&gt; attnsize+N
+</span><span class="n">atn</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">softmax</span><span class="p">(</span><span class="n">e3</span><span class="p">[:,</span> <span class="p">:</span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">]).</span><span class="n">unsqueeze</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">e3</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">e3</span><span class="p">[:,</span> <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">:].</span><span class="n">unsqueeze</span><span class="p">(</span><span class="mi">1</span><span class="p">).</span><span class="n">repeat</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">atn</span> <span class="o">*</span> <span class="n">e3</span>
+<span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="n">r</span>
+<span class="n">p</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">p</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">attnsize</span><span class="o">*</span><span class="bp">self</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    至于Attention机制的设计，可以这样想，因果关系里Edge Update决定哪些列是有效的，Attention决定哪些行是有效的。在因果关系矩阵里，列坐标表示的是开关编号，行坐标表示的是功能，即控制哪个灯，是否是master switch。理论上，如果网络训练的足够好，Attention会指示这一步哪些功能被开关触发，Edge Update会指示触发了哪些开关。</p>
+
+<p>    <strong>1.4 ICIN (No Attn)</strong></p>
+
+<p>    初始化部分，没有Attention的机制，输出的outsize即因果关系向量的大小：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span> <span class="o">=</span> <span class="n">num</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">num</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span> <span class="o">=</span> <span class="n">num</span><span class="o">**</span><span class="mi">2</span>             
+<span class="bp">self</span><span class="p">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc3</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc4</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    forward部分，：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">e</span> <span class="o">=</span> <span class="n">e</span><span class="p">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">c2</span> <span class="o">=</span> <span class="n">e</span>
+<span class="n">p</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">th</span><span class="p">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">sp</span><span class="p">.</span><span class="n">size</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">)).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="k">for</span><span class="err"> </span><span class="n">i</span><span class="err"> </span><span class="ow">in</span><span class="err"> </span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="p">):</span>
+    <span class="n">e1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">c2</span><span class="p">[:,:,</span><span class="n">i</span><span class="p">])))</span>  <span class="c1"># 2N+1 -&gt; 1024 
+</span>    <span class="n">e2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">e1</span><span class="p">)))</span>   <span class="c1"># 1024 -&gt; 512
+</span>    <span class="n">e3</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc3</span><span class="p">(</span><span class="n">e2</span><span class="p">))</span>    <span class="c1"># 512 -&gt; attnsize+N
+</span>    <span class="n">p</span> <span class="o">=</span> <span class="n">p</span> <span class="o">+</span> <span class="n">e3</span>
+<span class="n">p</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc4</span><span class="p">(</span><span class="n">p</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>    因为没有了Attention机制，自然也没有了Encoder，Decoder的区分，在时序中，三层全连接网络将灯的状态差和动作向量转换成因果关系，最后再通过一层全连接网络得到最后的因果关系。</p>
+
+<p>    <strong>1.5 TCIN</strong></p>
+
+<p>​	初始化部分，和前两个网络不同的地方是，除了有全连接层，还有三个卷积层：<strong>
+</strong></p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">if</span> <span class="bp">self</span><span class="p">.</span><span class="n">ms</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span> <span class="o">=</span> <span class="n">num</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">num</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="bp">self</span><span class="p">.</span><span class="n">outsize</span> <span class="o">=</span> <span class="n">num</span><span class="o">**</span><span class="mi">2</span> 
+<span class="bp">self</span><span class="p">.</span><span class="n">cnn1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="mi">2</span><span class="o">*</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">cnn2</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">cnn3</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Conv1d</span><span class="p">(</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="n">kernel_size</span><span class="o">=</span><span class="mi">3</span><span class="p">,</span> <span class="n">padding</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc1</span> <span class="o">=</span> <span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="o">*</span><span class="mi">128</span><span class="p">,</span> <span class="mi">1024</span><span class="p">)</span>
+<span class="bp">self</span><span class="p">.</span><span class="n">fc3</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">nn</span><span class="p">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">outsize</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    forward部分：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">e</span> <span class="o">=</span> <span class="n">e</span><span class="p">.</span><span class="n">permute</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">c1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">cnn1</span><span class="p">(</span><span class="n">e</span><span class="p">))</span> <span class="c1"># (2N+1)*horizon -&gt; 256*horizon 
+</span><span class="n">c2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">cnn2</span><span class="p">(</span><span class="n">c1</span><span class="p">))</span> <span class="c1"># 256*horizon -&gt; 128*horizon
+</span><span class="n">c2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">cnn3</span><span class="p">(</span><span class="n">c2</span><span class="p">))</span> <span class="c1"># 128*horizon -&gt; 128*horizon
+</span>
+
+<span class="n">c2</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">c2</span><span class="p">.</span><span class="n">view</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">horizon</span><span class="o">*</span><span class="mi">128</span><span class="p">)</span> 
+<span class="n">e1</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc1</span><span class="p">(</span><span class="n">c2</span><span class="p">)))</span> <span class="c1"># 128*horizon -&gt; 1024
+</span><span class="n">e2</span> <span class="o">=</span> <span class="bp">self</span><span class="p">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">dp</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc2</span><span class="p">(</span><span class="n">e1</span><span class="p">)))</span> <span class="c1"># 1024 -&gt; 512
+</span><span class="n">rec</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">self</span><span class="p">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="bp">self</span><span class="p">.</span><span class="n">fc3</span><span class="p">(</span><span class="n">e2</span><span class="p">))</span>      <span class="c1"># 512 -&gt; (N+1)N
+</span><span class="k">return</span> <span class="n">rec</span>
+</code></pre></div></div>
+
+<p>    先将状态向量组合在一起，然后经过三层一维卷积层，再经过三层全连接层，输出最后因果向量。</p>
+
+<p>    卷积网络设计的过分简单了。</p>
+
+<p>    <strong>2. 因果模型评估(Causal Model Evaluation)</strong></p>
+
+<p>    这部分内容不多，就和训练写在一块了。</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">python3</span> <span class="n">evalF</span><span class="p">.</span><span class="n">py</span> <span class="o">--</span><span class="n">horizon</span> <span class="mi">7</span> <span class="o">--</span><span class="n">num</span> <span class="mi">7</span> <span class="o">--</span><span class="n">fixed</span><span class="o">-</span><span class="n">goal</span> <span class="mi">0</span> <span class="o">--</span><span class="n">structure</span> <span class="n">one_to_one</span> <span class="o">--</span><span class="n">method</span> <span class="n">trajFi</span> <span class="o">--</span><span class="n">images</span> <span class="mi">1</span> <span class="o">--</span><span class="n">seen</span> <span class="mi">10</span> <span class="o">--</span><span class="n">data</span><span class="o">-</span><span class="nb">dir</span> <span class="n">output</span><span class="o">/</span>
+</code></pre></div></div>
+
+<p>    method对应的是模型的种类，指定为trajF，为TCIN，指定为trajFia，为ICIN，其他为ICIN (No Attn)，这里选择ICIN评估。</p>
+
+<p>    初始化环境，tj = “gt”时，l.gt是一维化后的因果关系向量，filename用于记录l.step运行过程中产生的log，在这篇中，没有被调用：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">gc</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">args</span><span class="p">.</span><span class="n">fixed_goal</span>
+<span class="n">tj</span> <span class="o">=</span> <span class="s">"gt"</span>
+<span class="n">l</span> <span class="o">=</span> <span class="n">LightEnv</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">tj</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="n">gc</span><span class="p">,</span> <span class="n">filename</span><span class="o">=</span><span class="s">"exp/"</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">gc</span><span class="p">)</span><span class="o">+</span><span class="s">"_"</span><span class="o">+</span><span class="n">args</span><span class="p">.</span><span class="n">method</span><span class="p">,</span> <span class="n">seen</span> <span class="o">=</span> <span class="n">args</span><span class="p">.</span><span class="n">seen</span><span class="p">)</span>
+<span class="n">env</span> <span class="o">=</span> <span class="n">DummyVecEnv</span><span class="p">(</span><span class="mi">1</span> <span class="o">*</span> <span class="p">[</span><span class="k">lambda</span><span class="p">:</span> <span class="n">l</span><span class="p">])</span>
+</code></pre></div></div>
+
+<p>    加载模型：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">F</span> <span class="o">=</span> <span class="n">th</span><span class="p">.</span><span class="n">load</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">data_dir</span><span class="o">+</span><span class="s">"iter_attn_Redo_L2_S"</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">seen</span><span class="p">)</span><span class="o">+</span><span class="s">"_h"</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">)</span><span class="o">+</span><span class="s">"_"</span><span class="o">+</span><span class="nb">str</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">)</span><span class="o">+</span><span class="n">addonn</span><span class="p">).</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">F</span> <span class="o">=</span> <span class="n">F</span><span class="p">.</span><span class="nb">eval</span><span class="p">()</span> <span class="c1"># 模型中有用到dropout或者BN,需要设定eval模式进行测试，ta
+</span></code></pre></div></div>
+
+<p>    模型中有用到dropout或者BN，需要设定eval模式进行测试，train模式进行训练。</p>
+
+<p>    测试过程，先重置环境，用训练过程中用到的因果关系生成一组数据，用模型生成预测的因果关系，和真正的因果关系对比，求F1 Score，再将环境设置为test模式，重置环境，用训练没有用过的因果关系生成一组数据，用模型预测因果关系，和真正的因果关系对比，求F1 Score。如此循环一百次，分别计算训练中用过的因果关系产生的F1 Scores和没用过的因果关系产生的F1 Scores的均值。</p>
+
+<p>    代码如下：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">for</span> <span class="n">mep</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span> <span class="o">=</span> <span class="bp">False</span>
+<span class="err">    </span><span class="n">obs</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">env</span><span class="p">.</span><span class="n">reset</span><span class="p">()</span><span class="err">         </span><span class="c1">#重置环境，主要作用是切换因果关系
+</span>    <span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span> <span class="o">=</span> <span class="bp">True</span>
+
+
+    <span class="n">buf</span> <span class="o">=</span> <span class="n">induction</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+    <span class="n">pred</span> <span class="o">=</span> <span class="n">predict</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span> <span class="n">F</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span> <span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="err">    </span><span class="n">f</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">f1score</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="err"> </span><span class="n">l</span><span class="p">.</span><span class="n">gt</span><span class="p">)</span>
+<span class="err">    </span>
+    <span class="n">trloss</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+
+
+    <span class="c1">#### TEST ON UNSEEN CS
+</span>    <span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span> <span class="o">=</span> <span class="bp">False</span>
+<span class="err">    </span><span class="n">l</span><span class="p">.</span><span class="n">train</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">False</span><span class="err">      </span><span class="c1">#将train设置为False,则因果关系会从训练样本中没有出现果的集合中选择
+</span><span class="err">    </span><span class="n">obs</span><span class="o">=</span><span class="err"> </span><span class="n">env</span><span class="p">.</span><span class="n">reset</span><span class="p">()</span>
+<span class="err">    </span><span class="n">buf</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">induction</span><span class="p">(</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">,</span><span class="err"> </span><span class="n">args</span><span class="p">.</span><span class="n">horizon</span><span class="p">,</span><span class="err"> </span><span class="n">l</span><span class="p">,</span><span class="err"> </span><span class="n">images</span><span class="o">=</span><span class="n">args</span><span class="p">.</span><span class="n">images</span><span class="p">)</span>
+<span class="err">    </span><span class="n">pred</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">predict</span><span class="p">(</span><span class="n">buf</span><span class="p">,</span><span class="err"> </span><span class="n">F</span><span class="p">,</span><span class="n">args</span><span class="p">.</span><span class="n">structure</span><span class="p">,</span><span class="err"> </span><span class="n">args</span><span class="p">.</span><span class="n">num</span><span class="p">)</span>
+<span class="err">    </span><span class="n">f</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="n">f1score</span><span class="p">(</span><span class="n">pred</span><span class="p">,</span><span class="err"> </span><span class="n">l</span><span class="p">.</span><span class="n">gt</span><span class="p">)</span>
+<span class="err">    </span><span class="n">tsloss</span><span class="p">.</span><span class="n">append</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+<span class="err">    </span><span class="n">l</span><span class="p">.</span><span class="n">keep_struct</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">True</span>
+<span class="err">    </span><span class="n">l</span><span class="p">.</span><span class="n">train</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="bp">True</span>
+<span class="k">print</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="n">mean</span><span class="p">(</span><span class="n">trloss</span><span class="p">),</span><span class="err"> </span><span class="n">np</span><span class="p">.</span><span class="n">mean</span><span class="p">(</span><span class="n">tsloss</span><span class="p">))</span>
+</code></pre></div></div>
+
+<p>    induction的部分和生成数据中产生样本的部分完全一致，就不贴出来说了，输出是生成测试要用的样本图序列，以及对应的动作。</p>
+
+<p>    predict函数，predgt是模型根据分解出的状态图组和动作组得到的因果关系：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">s</span> <span class="o">=</span><span class="err"> </span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">buf</span><span class="p">[:,:</span><span class="o">-</span><span class="p">(</span><span class="n">num</span><span class="o">+</span><span class="mi">1</span><span class="p">)]).</span><span class="nb">float</span><span class="p">().</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">a</span> <span class="o">=</span><span class="err"> </span><span class="n">th</span><span class="p">.</span><span class="n">FloatTensor</span><span class="p">(</span><span class="n">buf</span><span class="p">[:,</span><span class="o">-</span><span class="p">(</span><span class="mi">1</span><span class="o">+</span><span class="n">num</span><span class="p">):]).</span><span class="nb">float</span><span class="p">().</span><span class="n">cuda</span><span class="p">()</span>
+<span class="n">predgt</span> <span class="o">=</span><span class="err"> </span><span class="n">F</span><span class="p">(</span><span class="n">s</span><span class="p">,</span><span class="err"> </span><span class="n">a</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    最后F1 Score函数，gt是这个环境现在真实使用的因果关系：</p>
+
+<div class="language-python highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="n">p</span><span class="err"> </span><span class="o">=</span><span class="err"> </span><span class="mi">1</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="p">(</span><span class="n">pred</span><span class="err"> </span><span class="o">&gt;</span><span class="err"> </span><span class="mf">0.5</span><span class="p">)</span><span class="err"> </span><span class="c1"># 结果二值化，0 or 1
+</span>
+<span class="k">if</span><span class="err"> </span><span class="n">np</span><span class="p">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="err"> </span><span class="o">==</span><span class="err"> </span><span class="mi">0</span><span class="p">:</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="n">prec</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">gt</span> <span class="o">*</span> <span class="n">p</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="p">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="p">)</span>
+<span class="n">rec</span> <span class="o">=</span><span class="n">np</span><span class="p">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">gt</span><span class="o">*</span><span class="n">p</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="p">.</span><span class="nb">sum</span><span class="p">(</span><span class="n">gt</span><span class="p">)</span>
+<span class="k">if</span> <span class="p">(</span><span class="n">prec</span> <span class="o">==</span> <span class="mi">0</span><span class="p">)</span> <span class="ow">and</span> <span class="p">(</span><span class="n">rec</span><span class="o">==</span><span class="mi">0</span><span class="p">):</span>  
+    <span class="k">return</span> <span class="mi">0</span>
+<span class="k">return</span><span class="err"> </span><span class="mi">2</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="p">(</span><span class="n">prec</span><span class="err"> </span><span class="o">*</span><span class="err"> </span><span class="n">rec</span><span class="p">)</span><span class="err"> </span><span class="o">/</span><span class="err"> </span><span class="p">(</span><span class="n">prec</span><span class="o">+</span><span class="n">rec</span><span class="p">)</span>
+</code></pre></div></div>
+
+<p>    论文里尝试调整了switch的数量，在四种structure模式下测试了三种模型的效果，ICIN的方法要优于其他两种方法很多，且受switch数量影响较小。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/7.png" style="zoom:67%;" /></p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/8.png" style="zoom:80%;" /></p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型/9.png" style="zoom:80%;" /></p>
+
+<p>    这篇论文的代码解析还有一篇，是策略模型的定义，训练和评估。敬请关注和期待。（PS: 看代码看得有点想吐了，缓缓，先更一集因果课再回头把最后一部分代码更完）</p>
+
+<p>   </p>
+
+<p>记：</p>
+
+<p>    这个训练模型的程序也是有比较多问题的：</p>
+
+<p>    1. 训练过程中的testloss应该用模型没见过的因果关系更合适，不然出来的数据，几乎和loss一样，并没有很大参考价值。
+                2. action，动作向量设置成了<strong>N</strong>+1维，似乎没有必要。
+                3. 每组样本序列，生成的最后一张图没有保存下来，保存的是最开始的，和最后一个动作执行前的图，程序里和最后一个动作拼接的其实是最后一个动作执行前的状态向量，而不是这个动作造成的状态差向量，这样最后一个输入和其他输入意义上非常不一样，这样的设计感觉是逻辑上的疏失。
+                      4. 因果归纳网络的结构图有容易让人误解的地方。
+                      5. evalF中定义的st没有用到</p>
+
+<p><strong style="max-width: 100%;box-sizing: border-box !important;overflow-wrap: break-word !important;">    上篇：<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483927&amp;idx=1&amp;sn=3547f29df0003f6a89a1aec76d737d6f&amp;chksm=c06760d5f710e9c39dbd0f7da4a562b9c2284cb53430d43e8dd8ff7606de4ae95d1edecf6fe3&amp;scene=21#wechat_redirect">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——生成数据</a>
+</strong></p>
+
+<p>    <strong>上上篇：</strong><a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483737&amp;idx=1&amp;sn=c7ea0b3055d8a60b8fc7c207fce314e4&amp;chksm=c067639bf710ea8d5cdcc166da892fe60311bcac94737fdaa313c624932e3b627ce31b1f0d50&amp;scene=21#wechat_redirect"><strong>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</strong></a></p>
+
+<p>参考论文：</p>
+
+<ol>
+  <li>Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford  University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS  FOR GOAL DIRECTED TASKS, 2019</li>
+</ol>
+
+<p>参考代码：</p>
+
+<ol>
+  <li>https://github.com/StanfordVL/causal_induction</li>
+</ol>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务——因果归纳模型&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E6%A8%A1%E5%9E%8B/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Goal-Directed-Task">Goal Directed Task</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

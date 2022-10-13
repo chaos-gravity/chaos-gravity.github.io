@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>用于细分类的API-Net（Attentive Pairwise Interaction Network） | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>用于细分类的API-Net（Attentive Pairwise Interaction Network） | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="用于细分类的API-Net（Attentive Pairwise Interaction Network）" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="    在分类问题中，细分类是一个很有挑战性的问题，鸟和人的区别很大，但是不同品种的鸟之间，区别就不是很大了，具有高度混淆性，即使是人，有时候也很难分辨。另外分类越细，每个类别的数据量就会越少。     下面这篇发表在AAAI2020的文章，提出了一个新的网络结构来解决这个问题。Attentive Pairwise Interaction Network (API-Net)，这个网络的名字包含了这个网络设计的三个要点：Attentive对应的是注意力机制，Pairwise表明训练用的是成对训练的方式，Interaction对应的是交互机制。     因为是老问题了，就直接看网络结构吧：     网络结构就如上图，首先将数据两两成组，两张图分别通过一个CNN网络得到特征向量，x1和x2，再将x1和x2拼接在一起，通过一个多层感知器（Multilayer Perceptron，MLP）得到共同向量xm：     我们期望xm标记了x1和x2差距大的位置。打个比方，如果x1，x2向量第一个位置标记的是鸟爪的颜色，如果两只鸟鸟爪的颜色很不一样，那么我们期望xm第一个位置的值接近1，如果两只鸟鸟爪的颜色一致，那么我们期望xm第一个位置的值接近0。当然每个位置代表的特征不是事先定义好的，这里只是举个例子，具象化解释一下。             接下来分别计算两个特征向量的注意向量g1和g2：     g1被期望表达的是x1和x2不同的地方，且这个不同的地方是x1的主要特征，而g2表达的是x2与x1不同的地方，且这个不同的地方是x2的主要特征。比如说向量的一个位置表达的是爪子是否是黄色，x1在这个位置值高，x2在这个位置值低，那么我们就期望g1在这个位置的值会去接近1，g2在这个位置的值会去接近0。那么如果x1和x2在这个位置的值都高和都低呢？那么就期望g1和g2在这个位置的值都低。     接下来说Pairwise Interaction，硬要翻译的话，两两交互吧：     self可以理解为强化自己的重点，other可以理解为强化别人的重点。softmax做最后的分类归纳。     最后的损失函数： &lt;div align=center&gt;&lt;/div&gt;         这部分用的是交叉熵(Cross Entropy Loss)，表达的是两个分布之间的距离，也可以理解为预测的结果和真实的结果之间的距离。     这部分用的是Score Ranking Regularization，这部分想要表达的是，强化了自己的重点的向量得到的分类结果，应该要比强化了别人的重点得到的分类结果要更准确。     这篇就说到这里，如果觉得还不错，帮忙右下角点个“在看”再走哇。 声明：所有公式和图片还有原理均来自论文本身。" />
+<meta property="og:description" content="    在分类问题中，细分类是一个很有挑战性的问题，鸟和人的区别很大，但是不同品种的鸟之间，区别就不是很大了，具有高度混淆性，即使是人，有时候也很难分辨。另外分类越细，每个类别的数据量就会越少。     下面这篇发表在AAAI2020的文章，提出了一个新的网络结构来解决这个问题。Attentive Pairwise Interaction Network (API-Net)，这个网络的名字包含了这个网络设计的三个要点：Attentive对应的是注意力机制，Pairwise表明训练用的是成对训练的方式，Interaction对应的是交互机制。     因为是老问题了，就直接看网络结构吧：     网络结构就如上图，首先将数据两两成组，两张图分别通过一个CNN网络得到特征向量，x1和x2，再将x1和x2拼接在一起，通过一个多层感知器（Multilayer Perceptron，MLP）得到共同向量xm：     我们期望xm标记了x1和x2差距大的位置。打个比方，如果x1，x2向量第一个位置标记的是鸟爪的颜色，如果两只鸟鸟爪的颜色很不一样，那么我们期望xm第一个位置的值接近1，如果两只鸟鸟爪的颜色一致，那么我们期望xm第一个位置的值接近0。当然每个位置代表的特征不是事先定义好的，这里只是举个例子，具象化解释一下。             接下来分别计算两个特征向量的注意向量g1和g2：     g1被期望表达的是x1和x2不同的地方，且这个不同的地方是x1的主要特征，而g2表达的是x2与x1不同的地方，且这个不同的地方是x2的主要特征。比如说向量的一个位置表达的是爪子是否是黄色，x1在这个位置值高，x2在这个位置值低，那么我们就期望g1在这个位置的值会去接近1，g2在这个位置的值会去接近0。那么如果x1和x2在这个位置的值都高和都低呢？那么就期望g1和g2在这个位置的值都低。     接下来说Pairwise Interaction，硬要翻译的话，两两交互吧：     self可以理解为强化自己的重点，other可以理解为强化别人的重点。softmax做最后的分类归纳。     最后的损失函数： &lt;div align=center&gt;&lt;/div&gt;         这部分用的是交叉熵(Cross Entropy Loss)，表达的是两个分布之间的距离，也可以理解为预测的结果和真实的结果之间的距离。     这部分用的是Score Ranking Regularization，这部分想要表达的是，强化了自己的重点的向量得到的分类结果，应该要比强化了别人的重点得到的分类结果要更准确。     这篇就说到这里，如果觉得还不错，帮忙右下角点个“在看”再走哇。 声明：所有公式和图片还有原理均来自论文本身。" />
+<link rel="canonical" href="http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/" />
+<meta property="og:url" content="http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net(Attentive%20Pairwise%20Interaction%20Network)/2.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2021-02-23T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"    在分类问题中，细分类是一个很有挑战性的问题，鸟和人的区别很大，但是不同品种的鸟之间，区别就不是很大了，具有高度混淆性，即使是人，有时候也很难分辨。另外分类越细，每个类别的数据量就会越少。     下面这篇发表在AAAI2020的文章，提出了一个新的网络结构来解决这个问题。Attentive Pairwise Interaction Network (API-Net)，这个网络的名字包含了这个网络设计的三个要点：Attentive对应的是注意力机制，Pairwise表明训练用的是成对训练的方式，Interaction对应的是交互机制。     因为是老问题了，就直接看网络结构吧：     网络结构就如上图，首先将数据两两成组，两张图分别通过一个CNN网络得到特征向量，x1和x2，再将x1和x2拼接在一起，通过一个多层感知器（Multilayer Perceptron，MLP）得到共同向量xm：     我们期望xm标记了x1和x2差距大的位置。打个比方，如果x1，x2向量第一个位置标记的是鸟爪的颜色，如果两只鸟鸟爪的颜色很不一样，那么我们期望xm第一个位置的值接近1，如果两只鸟鸟爪的颜色一致，那么我们期望xm第一个位置的值接近0。当然每个位置代表的特征不是事先定义好的，这里只是举个例子，具象化解释一下。             接下来分别计算两个特征向量的注意向量g1和g2：     g1被期望表达的是x1和x2不同的地方，且这个不同的地方是x1的主要特征，而g2表达的是x2与x1不同的地方，且这个不同的地方是x2的主要特征。比如说向量的一个位置表达的是爪子是否是黄色，x1在这个位置值高，x2在这个位置值低，那么我们就期望g1在这个位置的值会去接近1，g2在这个位置的值会去接近0。那么如果x1和x2在这个位置的值都高和都低呢？那么就期望g1和g2在这个位置的值都低。     接下来说Pairwise Interaction，硬要翻译的话，两两交互吧：     self可以理解为强化自己的重点，other可以理解为强化别人的重点。softmax做最后的分类归纳。     最后的损失函数： &lt;div align=center&gt;&lt;/div&gt;         这部分用的是交叉熵(Cross Entropy Loss)，表达的是两个分布之间的距离，也可以理解为预测的结果和真实的结果之间的距离。     这部分用的是Score Ranking Regularization，这部分想要表达的是，强化了自己的重点的向量得到的分类结果，应该要比强化了别人的重点得到的分类结果要更准确。     这篇就说到这里，如果觉得还不错，帮忙右下角点个“在看”再走哇。 声明：所有公式和图片还有原理均来自论文本身。","url":"http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/","image":"http://localhost:4000/assets/images/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net(Attentive%20Pairwise%20Interaction%20Network)/2.png","@type":"BlogPosting","headline":"用于细分类的API-Net（Attentive Pairwise Interaction Network）","dateModified":"2021-02-23T00:00:00+08:00","datePublished":"2021-02-23T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">用于细分类的API-Net（Attentive Pairwise Interaction Network）</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2021-02-23">23 Feb 2021</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/2.png" alt="用于细分类的API-Net（Attentive Pairwise Interaction Network）">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p>    在分类问题中，细分类是一个很有挑战性的问题，鸟和人的区别很大，但是不同品种的鸟之间，区别就不是很大了，具有高度混淆性，即使是人，有时候也很难分辨。另外分类越细，每个类别的数据量就会越少。</p>
+
+<p>    下面这篇发表在AAAI2020的文章，提出了一个新的网络结构来解决这个问题。Attentive Pairwise Interaction Network (API-Net)，这个网络的名字包含了这个网络设计的三个要点：Attentive对应的是注意力机制，Pairwise表明训练用的是成对训练的方式，Interaction对应的是交互机制。</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/1.png" style="zoom:80%;" /></p>
+
+<p>    因为是老问题了，就直接看网络结构吧：</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/2.png" alt="" /></p>
+
+<p>    网络结构就如上图，首先将数据两两成组，两张图分别通过一个CNN网络得到特征向量，x1和x2，再将x1和x2拼接在一起，通过一个多层感知器（Multilayer Perceptron，MLP）得到共同向量xm：</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/3.png" style="zoom: 50%;" /></p>
+
+<p>    我们期望xm标记了x1和x2差距大的位置。打个比方，如果x1，x2向量第一个位置标记的是鸟爪的颜色，如果两只鸟鸟爪的颜色很不一样，那么我们期望xm第一个位置的值接近1，如果两只鸟鸟爪的颜色一致，那么我们期望xm第一个位置的值接近0。当然每个位置代表的特征不是事先定义好的，这里只是举个例子，具象化解释一下。        </p>
+
+<p>    接下来分别计算两个特征向量的注意向量g1和g2：</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/4.png" style="zoom: 50%;" /></p>
+
+<p>    g1被期望表达的是x1和x2不同的地方，且这个不同的地方是x1的主要特征，而g2表达的是x2与x1不同的地方，且这个不同的地方是x2的主要特征。比如说向量的一个位置表达的是爪子是否是黄色，x1在这个位置值高，x2在这个位置值低，那么我们就期望g1在这个位置的值会去接近1，g2在这个位置的值会去接近0。那么如果x1和x2在这个位置的值都高和都低呢？那么就期望g1和g2在这个位置的值都低。</p>
+
+<p>    接下来说<strong>Pairwise Interaction</strong>，硬要翻译的话，两两交互吧：</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/5.png" style="zoom: 50%;" /></p>
+
+<p>    self可以理解为强化自己的重点，other可以理解为强化别人的重点。softmax做最后的分类归纳。</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/6.png" style="zoom: 50%;" /></p>
+
+<p>    最后的损失函数：</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/7.png" style="zoom: 50%;" />&lt;/div&gt;    </p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/8.png" style="zoom: 50%;" /></p>
+
+<p>    这部分用的是交叉熵(<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247484059&amp;idx=1&amp;sn=422a4565edeba1b9087615ed0f72a59a&amp;chksm=c0676059f710e94fe65e01143f15585b9ef1e7f46187f30a40fc5b9d6dd9c5bc38bddb2cf115&amp;scene=21#wechat_redirect"><strong>Cross Entropy Loss</strong></a>)，表达的是两个分布之间的距离，也可以理解为预测的结果和真实的结果之间的距离。</p>
+
+<p><img src="../assets/images/用于细分类的API-Net（Attentive Pairwise Interaction Network）/9.png" style="zoom:50%;" /></p>
+
+<p>    这部分用的是Score Ranking Regularization，这部分想要表达的是，强化了自己的重点的向量得到的分类结果，应该要比强化了别人的重点得到的分类结果要更准确。</p>
+
+<p>    这篇就说到这里，如果觉得还不错，帮忙右下角点个“在看”再走哇。</p>
+
+<p>声明：所有公式和图片还有原理均来自论文本身。</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=用于细分类的API-Net（Attentive Pairwise Interaction Network）&url=http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E7%94%A8%E4%BA%8E%E7%BB%86%E5%88%86%E7%B1%BB%E7%9A%84API-Net-Attentive-Pairwise-Interaction-Network/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#CV">CV</a>                
+    
+
+    <!-- Tags -->  
+    
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Implicit Models -- GANs (上)/1.png" alt="UC Berkeley非监督学习--Implicit Models -- GANs (上)"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Implicit-Models-GANs-(%E4%B8%8A)/">UC Berkeley非监督学习--Implicit Models -- GANs (上)</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第五六讲Implicit Models – GANs。分三篇：上，中，下。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+http</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">10 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）/1.png" alt="UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-Latent-Variable-Models-VAE-%E6%BD%9C%E5%8F%98%E9%87%8F%E6%A8%A1%E5%9E%8B-VAE/">UC Berkeley非监督学习--Latent Variable Models -- VAE（潜变量模型--VAE）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第四讲Latent Variable Models – VAE。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://s</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">06 May 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/UC Berkeley非监督学习--流模型（Flow Models）/1.png" alt="UC Berkeley非监督学习--流模型（Flow Models）"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/UC-Berkeley%E9%9D%9E%E7%9B%91%E7%9D%A3%E5%AD%A6%E4%B9%A0-%E6%B5%81%E6%A8%A1%E5%9E%8B-Flow-Models/">UC Berkeley非监督学习--流模型（Flow Models）</a>
+                
+            </h2>
+            <h4 class="card-text">    翻译整理一下UC Berkeley非监督学习的课程。这篇翻译第三讲Flow Models，流模型。
+
+
+
+    这个课程总共十二讲，官方链接：
+
+https://sites.google.c</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">21 Mar 2022</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>

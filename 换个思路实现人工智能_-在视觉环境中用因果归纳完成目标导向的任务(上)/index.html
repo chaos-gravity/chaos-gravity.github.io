@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+<link rel="icon" href="/assets/images/logo.png">
+
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) | Chaos万有引力</title>
+
+<!-- Begin Jekyll SEO tag v2.6.1 -->
+<title>换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上) | Chaos万有引力</title>
+<meta name="generator" content="Jekyll v3.8.7" />
+<meta property="og:title" content="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)" />
+<meta name="author" content="Luna" />
+<meta property="og:locale" content="en_US" />
+<meta name="description" content="能让机器拥有智慧的，可能既不是机器学习，也不是深度学习。              今天我们来说一说这篇文章：     什么是因果，《The Book of Why》中举了两个例子，公鸡打鸣，太阳升起，那么公鸡打鸣是太阳升起的因吗？显然不是，如果公鸡打鸣，太阳升起，但有一天你按住了公鸡的嘴，让它打不了鸣，那天太阳居然没有升起，则公鸡打鸣才可能是太阳升起的因。另一个例子，现在有一种疾病，服用药物D的人比不服用药物D的人存活时间要长，那么你可以判断服用药物D是患病的人存活时间较长的因吗？显然也不可以，因为很有可能不是因为服用了药物D，而是因为买得起药物D的人能获得更好的医疗资源来延长寿命。因此，如果要确认药物D是不是这个因，则需要对照实验。《The Book of Why》这本书更认为，发现因果的能力即智能，而我们现在构建的深度学习，机器学习，只能提取事物之间的相关性，并没有发现因果的能力。     能改变果的元素才是因，这个元素可以不单一。人类天生就有从与世界的互动中提取因果的能力，这也是一项基本生存技能。那么怎么赋予机器这种能力呢？              今天的这个系统则尝试赋予智能系统因果归纳和推理的能力，以便在视觉环境内完成目标导向的任务。     想象一下，有天，你买了一个机器人回家做家务，它第一次来到陌生的你的家，如果你事先没有和它说家的情况，它就需要自己理清开关和灯之间的关系，这之后你才能给它下达开关灯的命令。它自己触碰开关，理清开关和灯之间的关系的这个过程叫做因果归纳。在它理清之后，你下达命令，它根据之前归纳的因果关系，推理触碰哪个开关，则称之为因果推理。怎么让你的机器人拥有这项基本的因果归纳和推理的能力呢？  一、问题定义     首先，定义问题，用(S, A, p, G, r, γ)定义一个基于目标的马可夫决策过程(Goal-Conditioned Markov Decision Process)[可以先了解一下马可夫决策过程再看这篇]，其中S是状态域，A是动作域，p: S × A → S 是状态域随采取动作的变化(transition dynamics)，G是目标域，r : S × A × G → R 是收益方程，每行动一次，根据结果，有的即时收益。γ是discount factor。这个问题的解是可以使过程获得最大收益的策略πG: S × G → A。收益的计算方式如下：     t是时间或者步骤编号。     在这里我们不止有一个MDP，而是有K个有着不同的p: S × A → S的MDP，用M = {M(1), M(2), . . . , M(K)}表示。M(k) 则是(S, A, p(k), G, r, γ)。p(k) 定义了动作和状态之间的因果关系。遵循不同的p(k)则在同样的状态下做同样的动作，会转换到不同的状态。 &lt;div align=center&gt;&lt;/div&gt;    如上图所示，因果归纳有两个步骤，第一步，我们执行交互策略πI来收集一系列转变τ = {(s1 , a1 ), (s2 , a2 ), . . .}，这一系列转变会被用来训练因果归纳模型(causal induction model) F，生成潜在因果模型(latent causal model)C^ = F (τ )模型。第二步，环境不变，用第一步得到的C^来得到πG，这样系统就可以用新的策略来交互。我们将所有的MDP的集合M分成两个不相交的子集，分别是Mtrain和Mtest，在训练过程中，我们用Mtrain来学习因果归纳模型F和基于目标的策略πG，在测试过程中，我们会评估模型F是否能够通过观察交互数据来为新的MDP解出最佳策略πG。 二、迭代因果归纳网络(ITERATIVE CAUSAL INDUCTION NETWORK)     这个网络的目标是理清因和果的对应关系，即理清行动会对环境造成的影响。     刚开始的时候，在我们的因果结构C^里，是没有因果之间的连接的，也就是所有关系的初始权值是0。如下图所示，在这个场景里，有四种因果结构，一对一，一对多，多对一，总闸模式，因是开关，果是灯，而初始的时候，开关和灯的关联是没有的，也就是下图中的带箭头的黑线是没有的。     接着，我们会有一个时间序列，在这个时间序列里，我们会尝试不同的操作(action)。如下图所示，t=1的时候，会有一个场景图，在执行了a1这个动作后，场景图产生了变化，转变成了t=2下面的场景图。每个场景图会通过一个编码器(Observation Encoder)转换成一个编码s，两个场景编码之间的差则为R1，表示场景因动作而产生的变化。R1和a1随后会经过一个过渡编码器(Transition Encoder)融合场景变化和动作信息，再经过一个边解码器(Edge Decoder)转换成因果之间的对应关系∆C^。 所以新的因果结构更新为：  &lt;div align=center&gt;，&lt;/div&gt; &lt;div align=center&gt;。&lt;/div&gt;  值得注意的是，最后的C^并不是C^H，C^H再经过一层转换才最终得到C^。可以看出边解码器(Edge Decoder)的输入可以是经过转换后的R和a，也可以是经过转换后的C^H。如下图所示，边解码器输出soft attention vector α (1 × N )，其中N是可以有的动作的数量，而∆e是边权重(edge weights)。α是用来权衡应该指向的点或者形成的边。公式中φ是过渡编码器(Transition Encoder)。 三、学习基于目标的策略(LEARNING GOAL-CONDITIONED POLICIES)     首先，策略要完成的事情是，给定初始状态图s0，目标状态图g，和因果结构C^，在一定步骤T内，使状态从s0变为g。     如图所示，目标图片和初始状态图片首先会经过一个编码器(Observation Encoder)，再经过一个全连接网络输出attention vector α，作用在N × N的因果结构C^上，输出一个大小为N的向量，表示选定的边。这个向量和图片编码后的向量再经过全连接层，最后输出需要实施的动作。 φi指全连接网络。 记： 第一次写论文的笔记，发现很多单词翻译起来实在疲惫，翻译不好，不尽义，因此很多词躲懒没翻，以后可能会越来越懒哦。 公众号不能插入公式，所以有些符号会稍微变形。 这篇论文恰好有释出源代码，所以训练，实验部分会结合代码分析做个下篇 最近因为看了几页《The Book of Why》，对因果方向的研究稍感兴趣了些，查了一下相关研究，19年似乎就这么一篇，门庭如此冷落，大家要踩踩啊。 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019" />
+<meta property="og:description" content="能让机器拥有智慧的，可能既不是机器学习，也不是深度学习。              今天我们来说一说这篇文章：     什么是因果，《The Book of Why》中举了两个例子，公鸡打鸣，太阳升起，那么公鸡打鸣是太阳升起的因吗？显然不是，如果公鸡打鸣，太阳升起，但有一天你按住了公鸡的嘴，让它打不了鸣，那天太阳居然没有升起，则公鸡打鸣才可能是太阳升起的因。另一个例子，现在有一种疾病，服用药物D的人比不服用药物D的人存活时间要长，那么你可以判断服用药物D是患病的人存活时间较长的因吗？显然也不可以，因为很有可能不是因为服用了药物D，而是因为买得起药物D的人能获得更好的医疗资源来延长寿命。因此，如果要确认药物D是不是这个因，则需要对照实验。《The Book of Why》这本书更认为，发现因果的能力即智能，而我们现在构建的深度学习，机器学习，只能提取事物之间的相关性，并没有发现因果的能力。     能改变果的元素才是因，这个元素可以不单一。人类天生就有从与世界的互动中提取因果的能力，这也是一项基本生存技能。那么怎么赋予机器这种能力呢？              今天的这个系统则尝试赋予智能系统因果归纳和推理的能力，以便在视觉环境内完成目标导向的任务。     想象一下，有天，你买了一个机器人回家做家务，它第一次来到陌生的你的家，如果你事先没有和它说家的情况，它就需要自己理清开关和灯之间的关系，这之后你才能给它下达开关灯的命令。它自己触碰开关，理清开关和灯之间的关系的这个过程叫做因果归纳。在它理清之后，你下达命令，它根据之前归纳的因果关系，推理触碰哪个开关，则称之为因果推理。怎么让你的机器人拥有这项基本的因果归纳和推理的能力呢？  一、问题定义     首先，定义问题，用(S, A, p, G, r, γ)定义一个基于目标的马可夫决策过程(Goal-Conditioned Markov Decision Process)[可以先了解一下马可夫决策过程再看这篇]，其中S是状态域，A是动作域，p: S × A → S 是状态域随采取动作的变化(transition dynamics)，G是目标域，r : S × A × G → R 是收益方程，每行动一次，根据结果，有的即时收益。γ是discount factor。这个问题的解是可以使过程获得最大收益的策略πG: S × G → A。收益的计算方式如下：     t是时间或者步骤编号。     在这里我们不止有一个MDP，而是有K个有着不同的p: S × A → S的MDP，用M = {M(1), M(2), . . . , M(K)}表示。M(k) 则是(S, A, p(k), G, r, γ)。p(k) 定义了动作和状态之间的因果关系。遵循不同的p(k)则在同样的状态下做同样的动作，会转换到不同的状态。 &lt;div align=center&gt;&lt;/div&gt;    如上图所示，因果归纳有两个步骤，第一步，我们执行交互策略πI来收集一系列转变τ = {(s1 , a1 ), (s2 , a2 ), . . .}，这一系列转变会被用来训练因果归纳模型(causal induction model) F，生成潜在因果模型(latent causal model)C^ = F (τ )模型。第二步，环境不变，用第一步得到的C^来得到πG，这样系统就可以用新的策略来交互。我们将所有的MDP的集合M分成两个不相交的子集，分别是Mtrain和Mtest，在训练过程中，我们用Mtrain来学习因果归纳模型F和基于目标的策略πG，在测试过程中，我们会评估模型F是否能够通过观察交互数据来为新的MDP解出最佳策略πG。 二、迭代因果归纳网络(ITERATIVE CAUSAL INDUCTION NETWORK)     这个网络的目标是理清因和果的对应关系，即理清行动会对环境造成的影响。     刚开始的时候，在我们的因果结构C^里，是没有因果之间的连接的，也就是所有关系的初始权值是0。如下图所示，在这个场景里，有四种因果结构，一对一，一对多，多对一，总闸模式，因是开关，果是灯，而初始的时候，开关和灯的关联是没有的，也就是下图中的带箭头的黑线是没有的。     接着，我们会有一个时间序列，在这个时间序列里，我们会尝试不同的操作(action)。如下图所示，t=1的时候，会有一个场景图，在执行了a1这个动作后，场景图产生了变化，转变成了t=2下面的场景图。每个场景图会通过一个编码器(Observation Encoder)转换成一个编码s，两个场景编码之间的差则为R1，表示场景因动作而产生的变化。R1和a1随后会经过一个过渡编码器(Transition Encoder)融合场景变化和动作信息，再经过一个边解码器(Edge Decoder)转换成因果之间的对应关系∆C^。 所以新的因果结构更新为：  &lt;div align=center&gt;，&lt;/div&gt; &lt;div align=center&gt;。&lt;/div&gt;  值得注意的是，最后的C^并不是C^H，C^H再经过一层转换才最终得到C^。可以看出边解码器(Edge Decoder)的输入可以是经过转换后的R和a，也可以是经过转换后的C^H。如下图所示，边解码器输出soft attention vector α (1 × N )，其中N是可以有的动作的数量，而∆e是边权重(edge weights)。α是用来权衡应该指向的点或者形成的边。公式中φ是过渡编码器(Transition Encoder)。 三、学习基于目标的策略(LEARNING GOAL-CONDITIONED POLICIES)     首先，策略要完成的事情是，给定初始状态图s0，目标状态图g，和因果结构C^，在一定步骤T内，使状态从s0变为g。     如图所示，目标图片和初始状态图片首先会经过一个编码器(Observation Encoder)，再经过一个全连接网络输出attention vector α，作用在N × N的因果结构C^上，输出一个大小为N的向量，表示选定的边。这个向量和图片编码后的向量再经过全连接层，最后输出需要实施的动作。 φi指全连接网络。 记： 第一次写论文的笔记，发现很多单词翻译起来实在疲惫，翻译不好，不尽义，因此很多词躲懒没翻，以后可能会越来越懒哦。 公众号不能插入公式，所以有些符号会稍微变形。 这篇论文恰好有释出源代码，所以训练，实验部分会结合代码分析做个下篇 最近因为看了几页《The Book of Why》，对因果方向的研究稍感兴趣了些，查了一下相关研究，19年似乎就这么一篇，门庭如此冷落，大家要踩踩啊。 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019" />
+<link rel="canonical" href="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/" />
+<meta property="og:url" content="http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/" />
+<meta property="og:site_name" content="Chaos万有引力" />
+<meta property="og:image" content="http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/3.png" />
+<meta property="og:type" content="article" />
+<meta property="article:published_time" content="2020-03-29T00:00:00+08:00" />
+<script type="application/ld+json">
+{"description":"能让机器拥有智慧的，可能既不是机器学习，也不是深度学习。              今天我们来说一说这篇文章：     什么是因果，《The Book of Why》中举了两个例子，公鸡打鸣，太阳升起，那么公鸡打鸣是太阳升起的因吗？显然不是，如果公鸡打鸣，太阳升起，但有一天你按住了公鸡的嘴，让它打不了鸣，那天太阳居然没有升起，则公鸡打鸣才可能是太阳升起的因。另一个例子，现在有一种疾病，服用药物D的人比不服用药物D的人存活时间要长，那么你可以判断服用药物D是患病的人存活时间较长的因吗？显然也不可以，因为很有可能不是因为服用了药物D，而是因为买得起药物D的人能获得更好的医疗资源来延长寿命。因此，如果要确认药物D是不是这个因，则需要对照实验。《The Book of Why》这本书更认为，发现因果的能力即智能，而我们现在构建的深度学习，机器学习，只能提取事物之间的相关性，并没有发现因果的能力。     能改变果的元素才是因，这个元素可以不单一。人类天生就有从与世界的互动中提取因果的能力，这也是一项基本生存技能。那么怎么赋予机器这种能力呢？              今天的这个系统则尝试赋予智能系统因果归纳和推理的能力，以便在视觉环境内完成目标导向的任务。     想象一下，有天，你买了一个机器人回家做家务，它第一次来到陌生的你的家，如果你事先没有和它说家的情况，它就需要自己理清开关和灯之间的关系，这之后你才能给它下达开关灯的命令。它自己触碰开关，理清开关和灯之间的关系的这个过程叫做因果归纳。在它理清之后，你下达命令，它根据之前归纳的因果关系，推理触碰哪个开关，则称之为因果推理。怎么让你的机器人拥有这项基本的因果归纳和推理的能力呢？  一、问题定义     首先，定义问题，用(S, A, p, G, r, γ)定义一个基于目标的马可夫决策过程(Goal-Conditioned Markov Decision Process)[可以先了解一下马可夫决策过程再看这篇]，其中S是状态域，A是动作域，p: S × A → S 是状态域随采取动作的变化(transition dynamics)，G是目标域，r : S × A × G → R 是收益方程，每行动一次，根据结果，有的即时收益。γ是discount factor。这个问题的解是可以使过程获得最大收益的策略πG: S × G → A。收益的计算方式如下：     t是时间或者步骤编号。     在这里我们不止有一个MDP，而是有K个有着不同的p: S × A → S的MDP，用M = {M(1), M(2), . . . , M(K)}表示。M(k) 则是(S, A, p(k), G, r, γ)。p(k) 定义了动作和状态之间的因果关系。遵循不同的p(k)则在同样的状态下做同样的动作，会转换到不同的状态。 &lt;div align=center&gt;&lt;/div&gt;    如上图所示，因果归纳有两个步骤，第一步，我们执行交互策略πI来收集一系列转变τ = {(s1 , a1 ), (s2 , a2 ), . . .}，这一系列转变会被用来训练因果归纳模型(causal induction model) F，生成潜在因果模型(latent causal model)C^ = F (τ )模型。第二步，环境不变，用第一步得到的C^来得到πG，这样系统就可以用新的策略来交互。我们将所有的MDP的集合M分成两个不相交的子集，分别是Mtrain和Mtest，在训练过程中，我们用Mtrain来学习因果归纳模型F和基于目标的策略πG，在测试过程中，我们会评估模型F是否能够通过观察交互数据来为新的MDP解出最佳策略πG。 二、迭代因果归纳网络(ITERATIVE CAUSAL INDUCTION NETWORK)     这个网络的目标是理清因和果的对应关系，即理清行动会对环境造成的影响。     刚开始的时候，在我们的因果结构C^里，是没有因果之间的连接的，也就是所有关系的初始权值是0。如下图所示，在这个场景里，有四种因果结构，一对一，一对多，多对一，总闸模式，因是开关，果是灯，而初始的时候，开关和灯的关联是没有的，也就是下图中的带箭头的黑线是没有的。     接着，我们会有一个时间序列，在这个时间序列里，我们会尝试不同的操作(action)。如下图所示，t=1的时候，会有一个场景图，在执行了a1这个动作后，场景图产生了变化，转变成了t=2下面的场景图。每个场景图会通过一个编码器(Observation Encoder)转换成一个编码s，两个场景编码之间的差则为R1，表示场景因动作而产生的变化。R1和a1随后会经过一个过渡编码器(Transition Encoder)融合场景变化和动作信息，再经过一个边解码器(Edge Decoder)转换成因果之间的对应关系∆C^。 所以新的因果结构更新为：  &lt;div align=center&gt;，&lt;/div&gt; &lt;div align=center&gt;。&lt;/div&gt;  值得注意的是，最后的C^并不是C^H，C^H再经过一层转换才最终得到C^。可以看出边解码器(Edge Decoder)的输入可以是经过转换后的R和a，也可以是经过转换后的C^H。如下图所示，边解码器输出soft attention vector α (1 × N )，其中N是可以有的动作的数量，而∆e是边权重(edge weights)。α是用来权衡应该指向的点或者形成的边。公式中φ是过渡编码器(Transition Encoder)。 三、学习基于目标的策略(LEARNING GOAL-CONDITIONED POLICIES)     首先，策略要完成的事情是，给定初始状态图s0，目标状态图g，和因果结构C^，在一定步骤T内，使状态从s0变为g。     如图所示，目标图片和初始状态图片首先会经过一个编码器(Observation Encoder)，再经过一个全连接网络输出attention vector α，作用在N × N的因果结构C^上，输出一个大小为N的向量，表示选定的边。这个向量和图片编码后的向量再经过全连接层，最后输出需要实施的动作。 φi指全连接网络。 记： 第一次写论文的笔记，发现很多单词翻译起来实在疲惫，翻译不好，不尽义，因此很多词躲懒没翻，以后可能会越来越懒哦。 公众号不能插入公式，所以有些符号会稍微变形。 这篇论文恰好有释出源代码，所以训练，实验部分会结合代码分析做个下篇 最近因为看了几页《The Book of Why》，对因果方向的研究稍感兴趣了些，查了一下相关研究，19年似乎就这么一篇，门庭如此冷落，大家要踩踩啊。 参考论文： Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019","url":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/","image":"http://localhost:4000/assets/images/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_%20%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/3.png","@type":"BlogPosting","headline":"换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)","dateModified":"2020-03-29T00:00:00+08:00","datePublished":"2020-03-29T00:00:00+08:00","mainEntityOfPage":{"@type":"WebPage","@id":"http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/"},"publisher":{"@type":"Organization","logo":{"@type":"ImageObject","url":"http://localhost:4000/assets/images/logo.png"},"name":"Luna"},"author":{"@type":"Person","name":"Luna"},"@context":"https://schema.org"}</script>
+<!-- End Jekyll SEO tag -->
+
+    
+<link href='/assets/css/syntax.css' rel='stylesheet' type='text/css'/>
+<link href="/assets/css/prism.css" rel="stylesheet">
+
+<link href="/assets/css/theme.css" rel="stylesheet">
+<script src="/assets/js/jquery.min.js"></script>
+
+</head>
+<!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=UA-172775777-1"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'UA-172775777-1');
+</script>
+
+
+
+
+
+
+
+
+<body>
+	<!-- defer loading of font and font awesome -->
+	<noscript id="deferred-styles">
+		<link href="https://fonts.googleapis.com/css?family=Sen:400,700&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC&display=swap" rel="stylesheet"> 
+        <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css" integrity="sha384-DNOHZ68U8hZfKXOrtjWvjxusGo9WQnrNx2sqG0tfsghAvtVlRW3tvkXWZh58N9jp" crossorigin="anonymous">
+	</noscript>
+
+<!-- Begin Sidebar Navigation
+================================================== -->
+
+<div class="sidebar">    
+</div>   
+<div class="nav-icon">
+    <div class="hamburger-bar"></div>
+</div>
+<div id="blackover-nav" class="blackover"></div>
+<nav id="menu">
+    <ul>
+        <h3>Navigation</h3>
+        <li><a href="/">Home</a></li>
+        <li><a href="/about">About </a></li>
+        <li><a href="/categories">Categories</a></li>
+        <li><a href="/tags">Tags</a></li>
+        <li><a href="/wechat">WeChat Public Account</a></li>
+        <li><a href="/authors">Authors</a></li>
+        <li><a href="/contact">Contact</a></li>       
+    </ul>   
+</nav>
+
+<script src="/assets/js/lunr.js"></script>
+
+<style>
+    
+</style>
+
+<div class="wrap-search">
+    <div class="d-flex align-items-center ml-auto">
+        <i class="fas fa-search show-search"></i>
+        <form class="bd-search ml-3" onSubmit="return lunr_search(document.getElementById('lunrsearch').value);">
+            <input type="text" class="form-control bigradius text-small launch-modal-search" id="lunrsearch" name="q" maxlength="255" value="" placeholder="Type and enter..."/>
+        </form>
+    </div>
+</div>
+
+<div id="lunrsearchresults">
+    <ul></ul>
+</div>
+
+<script src="/assets/js/lunrsearchengine.js"></script>
+
+
+<!-- End Sidebar Navigation
+================================================== -->
+
+<div class="site-content ">
+
+<div class="container">
+
+    <!-- Site Logo/Name
+    ================================================== -->
+  
+    <!-- div style = "display: inline-flex"--> 
+    <a class="navbar-brand" href="/">
+        <img src="/assets/images/logo.png" alt="Chaos万有引力">
+    </a>  
+   
+
+    <!-- Site Tag
+    ================================================== -->
+    
+    <!--/div-->
+
+    <!-- Content
+    ================================================== -->
+    <div class="main-content">
+        <div class="entry-header">
+    <!-- Post Title -->
+    <h1 class="posttitle">换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)</h1>
+    <!-- Author & Date  Box -->
+    
+    
+    <div class="d-flex align-items-center mt-4">
+        <div>
+            
+            <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+            
+        </div>            
+        <div>
+        Written by <a target="_blank" class="text-dark" href="https://chaos-gravity.github.io/">Luna</a> on 
+        <span class="post-date"><time class="post-date" datetime="2020-03-29">29 Mar 2020</time></span>           
+        
+        </div>            
+    </div>
+    
+    
+</div>
+
+<!-- Adsense under title if enabled from _config.yml (change your pub id and slot) -->
+
+    <script data-ad-client="ca-pub-6110174571048791" async src="//pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"></script>
+<!-- Under Header -->
+<!--
+<ins class="adsbygoogle"
+    style="display:block"
+    data-ad-client="ca-pub-6110174571048791"
+    data-ad-slot=""
+    data-ad-format="auto"
+    data-full-width-responsive="true"></ins>
+<script>
+(adsbygoogle = window.adsbygoogle || []).push({});
+</script>
+<br/>
+-->
+
+
+
+
+<!-- Featured Image -->
+<!--
+
+<div class="entry-featured-image">
+    
+    <img class="featured-image " src="/assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/3.png" alt="换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)">
+    
+</div>
+
+-->
+
+<!-- Content -->
+<!-- Post, Page Content
+================================================== -->
+<div class="article-post">
+    <!-- Toc if any -->
+    
+    <!-- End Toc -->
+    <div class="article-post-content">
+    <p><strong>能让机器拥有智慧的，可能既不是机器学习，也不是深度学习。</strong></p>
+
+<p>        </p>
+
+<p>    今天我们来说一说这篇文章：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/1.png" style="zoom:80%;" /></p>
+
+<p>    什么是因果，《The Book of Why》中举了两个例子，公鸡打鸣，太阳升起，那么公鸡打鸣是太阳升起的因吗？显然不是，如果公鸡打鸣，太阳升起，但有一天你按住了公鸡的嘴，让它打不了鸣，那天太阳居然没有升起，则公鸡打鸣才可能是太阳升起的因。另一个例子，现在有一种疾病，服用药物D的人比不服用药物D的人存活时间要长，那么你可以判断服用药物D是患病的人存活时间较长的因吗？显然也不可以，因为很有可能不是因为服用了药物D，而是因为买得起药物D的人能获得更好的医疗资源来延长寿命。因此，如果要确认药物D是不是这个因，则需要对照实验。《The Book of Why》<strong>这本书更认为，发现因果的能力即智能，而我们现在构建的深度学习，机器学习，只能提取事物之间的相关性，并没有发现因果的能力。</strong></p>
+
+<p>    能改变果的元素才是因，这个元素可以不单一。人类天生就有从与世界的互动中提取因果的能力，这也是一项基本生存技能。那么怎么赋予机器这种能力呢？</p>
+
+<p>        </p>
+
+<p>    今天的这个系统则尝试赋予智能系统因果归纳和推理的能力，以便在视觉环境内完成目标导向的任务。</p>
+
+<p>    想象一下，有天，你买了一个机器人回家做家务，它第一次来到陌生的你的家，如果你事先没有和它说家的情况，它就需要自己理清开关和灯之间的关系，这之后你才能给它下达开关灯的命令。它自己触碰开关，理清开关和灯之间的关系的这个过程叫做因果归纳。在它理清之后，你下达命令，它根据之前归纳的因果关系，推理触碰哪个开关，则称之为因果推理。怎么让你的机器人拥有这项基本的因果归纳和推理的能力呢？ </p>
+
+<p><strong>一、问题定义</strong></p>
+
+<p>    首先，定义问题，用(S, A, p, G, r, γ)定义一个基于目标的<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483712&amp;idx=1&amp;sn=2225629d3f475fb0b08cfc0c47646738&amp;chksm=c0676382f710ea94d51f3ff951c7012a68fbeaeb9ff284162b9e916b24066b9a2141cbdf30bb&amp;scene=21#wechat_redirect">马可夫决策过程</a>(Goal-Conditioned Markov Decision Process)[<strong>可以先了解一下<a href="http://mp.weixin.qq.com/s?__biz=Mzg5ODIwMTUxNw==&amp;mid=2247483712&amp;idx=1&amp;sn=2225629d3f475fb0b08cfc0c47646738&amp;chksm=c0676382f710ea94d51f3ff951c7012a68fbeaeb9ff284162b9e916b24066b9a2141cbdf30bb&amp;scene=21#wechat_redirect">马可夫决策过程</a>再看这篇</strong>]，其中S是状态域，A是动作域，p: S × A → S 是状态域随采取动作的变化(transition dynamics)，G是目标域，r : S × A × G → R 是收益方程，每行动一次，根据结果，有的即时收益。γ是discount factor。这个问题的解是可以使过程获得最大收益的策略πG: S × G → A。收益的计算方式如下：</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/2.png" style="zoom: 33%;" /></p>
+
+<p>    t是时间或者步骤编号。</p>
+
+<p>    在这里我们不止有一个MDP，而是有K个有着不同的p: S × A → S的MDP，用M = {M(1), M(2), . . . , M(K)}表示。M(k) 则是(S, A, p(k), G, r, γ)。p(k) 定义了动作和状态之间的因果关系。遵循不同的p(k)则在同样的状态下做同样的动作，会转换到不同的状态。</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/3.png" style="zoom:67%;" />&lt;/div&gt;   </p>
+
+<p>如上图所示，因果归纳有两个步骤，第一步，我们执行交互策略πI来收集一系列转变τ = {(s1 , a1 ), (s2 , a2 ), . . .}，这一系列转变会被用来训练因果归纳模型(causal induction model) F，生成潜在因果模型(latent causal model)C^ = F (τ )模型。第二步，环境不变，用第一步得到的C^来得到πG，这样系统就可以用新的策略来交互。我们将所有的MDP的集合M分成两个不相交的子集，分别是Mtrain和Mtest，在训练过程中，我们用Mtrain来学习因果归纳模型F和基于目标的策略πG，在测试过程中，我们会评估模型F是否能够通过观察交互数据来为新的MDP解出最佳策略πG。</p>
+
+<p><strong>二、迭代因果归纳网络(ITERATIVE CAUSAL INDUCTION NETWORK)</strong></p>
+
+<p>    这个网络的目标是理清因和果的对应关系，即理清行动会对环境造成的影响。</p>
+
+<p>    刚开始的时候，在我们的因果结构C^里，是没有因果之间的连接的，也就是所有关系的初始权值是0。如下图所示，在这个场景里，有四种因果结构，一对一，一对多，多对一，总闸模式，因是开关，果是灯，而初始的时候，开关和灯的关联是没有的，也就是下图中的带箭头的黑线是没有的。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/4.png" style="zoom:50%;" /></p>
+
+<p>    接着，我们会有一个时间序列，在这个时间序列里，我们会尝试不同的操作(action)。如下图所示，t=1的时候，会有一个场景图，在执行了a1这个动作后，场景图产生了变化，转变成了t=2下面的场景图。每个场景图会通过一个编码器(Observation Encoder)转换成一个编码s，两个场景编码之间的差则为R1，表示场景因动作而产生的变化。R1和a1随后会经过一个过渡编码器(Transition Encoder)融合场景变化和动作信息，再经过一个边解码器(Edge Decoder)转换成因果之间的对应关系∆C^。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/5.png" style="zoom:67%;" /></p>
+
+<p>所以新的因果结构更新为： </p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/6.png" style="zoom: 20%;" />，&lt;/div&gt;</p>
+
+<p>&lt;div align=center&gt;<img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/7.png" style="zoom:40%;" />。&lt;/div&gt; </p>
+
+<p>值得注意的是，最后的C^并不是C^H，C^H再经过一层转换才最终得到C^。可以看出边解码器(Edge Decoder)的输入可以是经过转换后的R和a，也可以是经过转换后的C^H。如下图所示，边解码器输出soft attention vector α (1 × N )，其中N是可以有的动作的数量，而∆e是边权重(edge weights)。α是用来权衡应该指向的点或者形成的边。公式中φ是过渡编码器(Transition Encoder)。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/8.png" style="zoom: 33%;" /></p>
+
+<p><strong>三、学习基于目标的策略(LEARNING GOAL-CONDITIONED POLICIES)</strong></p>
+
+<p>    首先，策略要完成的事情是，给定初始状态图s0，目标状态图g，和因果结构C^，在一定步骤T内，使状态从s0变为g。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/9.png" style="zoom:67%;" /></p>
+
+<p>    如图所示，目标图片和初始状态图片首先会经过一个编码器(Observation Encoder)，再经过一个全连接网络输出attention vector α，作用在N × N的因果结构C^上，输出一个大小为N的向量，表示选定的边。这个向量和图片编码后的向量再经过全连接层，最后输出需要实施的动作。</p>
+
+<p><img src="../assets/images/换个思路实现人工智能_ 在视觉环境中用因果归纳完成目标导向的任务(上)/10.png" style="zoom:67%;" /></p>
+
+<p>φi指全连接网络。</p>
+
+<p><strong>记</strong>：</p>
+<ol>
+  <li>第一次写论文的笔记，发现很多单词翻译起来实在疲惫，翻译不好，不尽义，因此很多词躲懒没翻，以后可能会越来越懒哦。</li>
+  <li>公众号不能插入公式，所以有些符号会稍微变形。</li>
+  <li>这篇论文恰好有释出源代码，所以训练，实验部分会结合代码分析做个下篇</li>
+  <li>最近因为看了几页《The Book of Why》，对因果方向的研究稍感兴趣了些，查了一下相关研究，19年似乎就这么一篇，门庭如此冷落，大家要踩踩啊。</li>
+</ol>
+
+<p>参考论文：</p>
+
+<p>Suraj Nair, Yuke Zhu, Silvio Savarese, Li Fei-Fei, Stanford University, CAUSAL INDUCTION FROM VISUAL OBSERVATIONS FOR GOAL DIRECTED TASKS, 2019</p>
+
+
+    </div>
+</div>
+
+
+<!-- Rating -->
+
+
+<!-- Author Box if enabled from _config.yml -->
+<!-- Author Box -->
+
+
+
+
+<!-- Comments if not disabled with comments: false -->
+<!-- Comments
+================================================== -->
+ 
+<div class="comments">
+    <button class="btn btn-dark show-comments">Load Comments</button>         
+    <div id="comments">  
+        <h4 class="mb-4">Comments</h4>                 
+            <section class="disqus">
+    <div id="disqus_thread"></div>
+    <script type="text/javascript">
+        var disqus_shortname = 'chaos-gravity'; 
+        var disqus_developer = 0;
+        (function() {
+            var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+            dsq.src = window.location.protocol + '//' + disqus_shortname + '.disqus.com/embed.js';
+            (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+        })();
+    </script>
+    <noscript>Please enable JavaScript to view the <a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a></noscript>
+    <a href="http://disqus.com" class="dsq-brlink">comments powered by <span class="logo-disqus">Disqus</span></a>
+</section>
+     
+    <div class="clearfix"></div>              
+    </div>    
+</div>       
+
+
+<!-- Share -->
+<div class="share">
+    <p>
+        Share
+    </p>
+    <ul>
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://twitter.com/intent/tweet?text=换个思路实现人工智能: 在视觉环境中用因果归纳完成目标导向的任务(上)&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/" onclick="window.open(this.href, 'twitter-share', 'width=550,height=235');return false;">
+                <i class="fab fa-twitter"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://facebook.com/sharer.php?u=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/" onclick="window.open(this.href, 'facebook-share', 'width=550,height=435');return false;">
+                <i class="fab fa-facebook-f"></i>
+            </a>
+        </li>
+
+        <li class="ml-1 mr-1">
+            <a target="_blank" href="https://www.linkedin.com/shareArticle?mini=true&url=http://localhost:4000/%E6%8D%A2%E4%B8%AA%E6%80%9D%E8%B7%AF%E5%AE%9E%E7%8E%B0%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD_-%E5%9C%A8%E8%A7%86%E8%A7%89%E7%8E%AF%E5%A2%83%E4%B8%AD%E7%94%A8%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%AE%8C%E6%88%90%E7%9B%AE%E6%A0%87%E5%AF%BC%E5%90%91%E7%9A%84%E4%BB%BB%E5%8A%A1(%E4%B8%8A)/" onclick="window.open(this.href, 'width=550,height=435');return false;">
+                <i class="fab fa-linkedin-in"></i>
+            </a>
+        </li>
+
+    </ul>
+</div>
+
+
+<!-- Related Post -->
+<!-- Related Posts
+================================================== -->
+<div class=" related-posts ">  
+
+    
+    <h2 class="text-center mb-4">Explore more like this</h2>
+    
+    
+    <div class="d-flex justify-content-center align-items-center">
+    
+    <!-- Categories -->
+    
+    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/categories#Causality">Causality</a>                
+    
+
+    <!-- Tags -->  
+    
+                    
+    <a class="smoothscroll badge badge-primary text-capitalize" href="/tags#Goal-Directed-Task">Goal Directed Task</a>               
+    
+
+    </div>
+
+    
+    
+    
+    <div class="blog-grid-container">
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation/6.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8BDomain-Adaptation/">MIT因果迷你课笔记 — 因果归纳和机器学习之Domain Adaptation</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分，</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">20 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习/1.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8B%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0/">MIT因果迷你课笔记 — 因果归纳和机器学习之强化学习</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression
+
+    这是这门课最后一部分的内容，因果归纳和</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">19 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+            
+        
+        
+        
+            
+            
+        
+            
+        
+            
+            <!-- begin post -->
+
+
+<div class="blog-grid-item">
+    <div class="card h-100">
+        <div class="maxthumb">
+            <a href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">
+                
+
+                    
+                        <img class="img-thumb" src="/assets/images/MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression/5.png" alt="MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression"> 
+                    
+
+                
+            </a>
+        </div>
+        <div class="card-body">
+            <h2 class="card-title">
+                <a class="text-dark" href="/MIT%E5%9B%A0%E6%9E%9C%E8%BF%B7%E4%BD%A0%E8%AF%BE%E7%AC%94%E8%AE%B0-%E5%9B%A0%E6%9E%9C%E5%BD%92%E7%BA%B3%E5%92%8C%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E4%B9%8Bhalf-sibling-regression/">MIT因果迷你课笔记 — 因果归纳和机器学习之half-sibling regression</a>
+                
+            </h2>
+            <h4 class="card-text">系列首篇：MIT因果迷你课笔记 —— 相关和因果
+
+上篇：MIT因果迷你课笔记 — 因果归纳和机器学习之半监督学习
+
+    这是这门课最后一部分的内容，因果归纳和机器学习。
+
+    总共分四个部分</h4>
+        </div>
+        <div class="card-footer bg-white">
+            <div class="wrapfooter">
+                
+                <span class="meta-footer-thumb">
+                
+                <img class="author-thumb" src="/assets/images/Luna.jpg" alt="Luna">
+                
+                </span>
+                <span class="author-meta">
+                <span class="post-name"><a target="_blank" href="https://chaos-gravity.github.io/">Luna</a></span> 
+                
+                <span class="post-date">18 Mar 2021</span>
+                </span>
+                <div class="clearfix"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end post -->
+
+            
+            
+                
+        </div>        
+</div>
+
+<!-- Review with LD-JSON, adapt it for your needs if you like, but make sure you test the generated HTML source code first: 
+https://search.google.com/structured-data/testing-tool/u/0/
+================================================== -->
+
+
+    </div>
+
+    
+    <!-- Newsletter
+    ================================================== -->
+    <div class="newsletter text-center">
+        <span class="h4"><img src="/assets/images/logo.png" class="newsletter-logo" alt="Chaos万有引力"> &nbsp; Never miss a piece of <b>information</b> from us, subscribe to our newsletter</span>
+        <form action="https://github.us10.list-manage.com/subscribe/post?u=af33f9baa54232f085e579b0f&amp;id=1548279ad6" method="post" name="mc-embedded-subscribe-form" class="wj-contact-form validate" target="_blank" novalidate>
+            <div class="mc-field-group d-inline-flex">
+            <input type="email" placeholder="Your e-mail" name="EMAIL" class="required email" id="mce-EMAIL" autocomplete="on" required>
+            <input type="submit" value="Subscribe" name="subscribe" class="heart">
+            </div>
+        </form>
+    </div>
+    
+    
+</div>
+
+<!-- Begin Footer
+================================================== -->
+<footer class="footer">
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6 col-sm-12 text-center text-lg-left">
+                Copyright © 2022 Chaos万有引力 
+            </div>
+            <div class="col-md-6 col-sm-12 text-center text-lg-right">    
+                <a target="_blank" href="https://chaos-gravity.github.io/">Chaos-Gravity</a> by Beer
+            </div>
+        </div>
+    </div>
+</footer>
+<!-- End Footer
+================================================== -->
+
+</div> <!-- /.site-content -->
+
+<!-- Scripts (if you need bootstrap.js, please add it yourself. I didn't use it for performance reasons, it was not needed in this theme)
+================================================== -->
+
+<script src="/assets/js/prism.js"></script>
+
+<script src="/assets/js/theme.js"></script>
+
+
+
+
+<script id="dsq-count-scr" src="//chaos-gravity.disqus.com/count.js"></script>
+
+
+</body>
+</html>
